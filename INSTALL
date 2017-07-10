@@ -1,0 +1,62 @@
+# Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
+# Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+# See file COPYRIGHT for details.
+#
+# This file is part of the ParElag library. For more information and source code
+# availability see http://github.com/LLNL/parelag.
+#
+# ParElag is free software; you can redistribute it and/or modify it under the
+# terms of the GNU Lesser General Public License (as published by the Free
+# Software Foundation) version 2.1 dated February 1999.
+
+       Element-Agglomeration Algebraic Multigrid and Upscaling Library
+                                 version 1.0
+ 
+            ________              _______________________________
+            ___  __ \_____ __________  ____/__  /___    |_  ____/
+            __  /_/ /  __ `/_  ___/_  __/  __  / __  /| |  / __  
+            _  ____// /_/ /_  /   _  /___  _  /___  ___ / /_/ /  
+            /_/     \__,_/ /_/    /_____/  /_____/_/  |_\____/   
+                               
+                         http://elag.googlecode.com
+
+The ParElag requires a MPI C++ compiler, as well as the
+following external libraries:
+
+- BLAS (http://www.netlib.org/blas/)
+- LAPACK (http://www.netlib.org/lapack/)
+- MFEM v3.0 (http://mfem.googlecode.com/)
+- METIS v5.1 (http://glaros.dtc.umn.edu/gkhome/metis/metis/overview)
+- HYPRE v2.10.0b (http://www.llnl.gov/CASC/hypre)
+- SuiteSparse v4.2 (http://www.cise.ufl.edu/research/sparse/SuiteSparse/)
+
+The OpenGL visualization tool GLvis (www.glvis.googlecode.com) is required to
+visualize the results.
+
+Building with 'gmake'
+=====================
+The build system of ParELAG uses GNUMakefile.
+It allows to specify the path to the required software or to automatically download and build dependencies (if an internet connection is available).
+
+Compilers and paths to ParELAG's dependencies can be specified by generating and editing the Makefile.in.
+
+NOTE:
+    a) One can edit the Makefile.in by providing the absolute path to some of the ELAG dependencies.
+       If some paths are set to MISSING, the missing dependency will be automatically downloaded and build.
+    b) OpenMP support is still experimental and therefore one should not be used.
+    c) MFEM needs to be build with MPI, METIS_5, SUITESPARSE, and LAPACK support enabled. 
+
+Some of the available 'make' targets are:
+
+make              -> Builds the libelag.a library.
+make debug        -> Builds the libelag.a library in debug mode.
+make deps-install -> Downloads and compiles BLAS, LAPACK, METIS_5, HYPRE, SuiteSparse, and MFEM.
+make doc          -> Builds the documentation
+make clean        -> Cleans the build of libelag.a and the examples
+
+Examples
+========
+
+To compile and run the examples execute "make" (optimize mode) or "make debug" (debug mode) in the examples folder.
+If an example is executed without command line arguments the default settings will be used.
+
