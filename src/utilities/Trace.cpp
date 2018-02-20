@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -12,7 +12,6 @@
 */
 
 #include "Trace.hpp"
-#include "elag_utilities.hpp"
 
 #ifdef ELAG_USE_TRACE
 
@@ -22,7 +21,7 @@ char Trace::indent_symbol('*');
 
 void Trace::Init(MPI_Comm comm, const std::string & tname)
 {
-	logger.open( AppendProcessId(comm, tname, "tr").c_str() );
+    logger.open( AppendProcessId(comm, tname, "tr").c_str() );
 }
 
 #endif

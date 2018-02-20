@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -14,15 +14,8 @@
 #ifndef ELAG_TOPOLOGY_HPP_
 #define ELAG_TOPOLOGY_HPP_
 
-#include <mfem.hpp>
-using namespace mfem;
-
-#include "../utilities/elag_utilities.hpp"
-#include "../structures/elag_structures.hpp"
-#include "../linalg/elag_linalg.hpp"
-
 #include "TopologyTable.hpp"
 #include "Topology.hpp"
 #include "AgglomeratedTopologyCheck.hpp"
 
-#endif /* ELAG_TOPOLOGY_HPP_ */
+#endif // ELAG_TOPOLOGY_HPP_

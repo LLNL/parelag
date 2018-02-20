@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -26,10 +26,10 @@
 class Trace
 {
 public:
-	static std::ofstream logger;
-	static int indent;
-	static char indent_symbol;
-	static void Init(MPI_Comm comm, const std::string & tname = "trace");
+    static std::ofstream logger;
+    static int indent;
+    static char indent_symbol;
+    static void Init(MPI_Comm comm, const std::string & tname = "trace");
 };
 #else
 

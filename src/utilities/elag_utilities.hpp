@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -14,12 +14,13 @@
 #ifndef ELAG_UTILITIES_HPP_
 #define ELAG_UTILITIES_HPP_
 
-#include <mfem.hpp>
-using namespace mfem;
-
-#include "GetPot.hpp"
 #include "elagError.hpp"
+#include "MemoryUtils.hpp"
 #include "mpiUtils.hpp"
 #include "Trace.hpp"
+#include "UpscalingPieces.hpp"
 
-#endif /* ELAG_UTILITIES_HPP_ */
+#include "ParELAG_TimeManager.hpp"
+#include "ParELAG_SimpleXMLParameterListReader.hpp"
+
+#endif // ELAG_UTILITIES_HPP_
