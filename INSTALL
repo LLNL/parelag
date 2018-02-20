@@ -1,16 +1,5 @@
-# Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-# Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
-# See file COPYRIGHT for details.
-#
-# This file is part of the ParElag library. For more information and source code
-# availability see http://github.com/LLNL/parelag.
-#
-# ParElag is free software; you can redistribute it and/or modify it under the
-# terms of the GNU Lesser General Public License (as published by the Free
-# Software Foundation) version 2.1 dated February 1999.
-
        Element-Agglomeration Algebraic Multigrid and Upscaling Library
-                                 version 1.0
+                                 version 2.0
  
             ________              _______________________________
             ___  __ \_____ __________  ____/__  /___    |_  ____/
@@ -18,45 +7,107 @@
             _  ____// /_/ /_  /   _  /___  _  /___  ___ / /_/ /  
             /_/     \__,_/ /_/    /_____/  /_____/_/  |_\____/   
                                
-                         http://elag.googlecode.com
+                         https://github.com/llnl/parelag
 
-The ParElag requires a MPI C++ compiler, as well as the
-following external libraries:
+Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
+See file COPYRIGHT for details.
 
+==================================================
+Configuring with "cmake":
+==================================================
+
+CMake can be used to generate the build system for ParELAG. We require
+version 2.8.11 or newer (though this is largely arbitrarily set as the
+minimum version that I found on local machines).
+
+*PLEASE* DO NOT DO AN IN-SOURCE BUILD! This will overwrite the legacy
+Makefile system that has been left intact for the time being;
+moreover, it will pollute your source tree with various files
+generated and used by CMake. It is best practice to create a build
+directory, even <parelag-root>/build is fine, and invoke CMake from
+there.
+
+The CMake system maintains an infrastructure to find and properly link
+the required libraries when building the ParELAG library (see the
+"Dependencies" section below for a complete list of the required and
+optional libraries).
+
+Some important flags/options are (defaults are in [brackets]):
+
+  -- CMAKE_BUILD_TYPE={[None],Debug,Release,RelWithDebInfo,MinSizeRel}
+
+     As a legacy feature, ParELAG uses the preprocessor macro
+     "ELAG_DEBUG" to enable certain runtime assertions. This macro is
+     only defined when this is set to "Debug".
+
+  -- ParElag_ENABLE_OPENMP:BOOL={ON,[OFF]}
+
+     This sets the PARELAG_USE_OPENMP preprocessor macro and enables
+     OpenMP. This feature is HIGHLY experimental and OUGHT NOT TO BE
+     USED.
+
+  -- ParElag_ENABLE_PARMETIS:BOOL={ON,[OFF]}
+
+     This enables ParMETIS functionality. This is currently minimal;
+     if the use of ParMETIS in the library grows, this may become a
+     required dependency.
+
+The cmake/example_scripts directory contains some shell-script
+templates that provide guidance on invoking CMake. These are provided
+as a merely as a suggestion for different ways to build ParELAG. While
+a script provides a convenient way to repeat the same configuration
+repeatedly, command-line invocations are certainly
+fine. Alternatively, the "ccmake" GUI can be used to set variables
+manually. Note that directories need not be set for dependencies that
+are installed to "standard" locations (/usr, /usr/local and the like).
+
+After CMake configures and generates successfully, change to your
+build directory (the directory that is listed after "Build files have
+been written to: " at the bottom of the CMake output) and invoke the
+build system (i.e. call "make" or "ninja" or whatever). This should
+build the library and the examples.
+
+The installer has not been completed yet, and the "install" target is
+not defined. This is in the works.
+
+"make help" will output a list of targets. In the parelag root
+directory, this list should be more-or-less manageable; in src/, it
+will be terrible and ugly.
+
+
+==================================================
+Dependencies
+==================================================
+
+ParELAG requires the following:
+
+- A C++ compiler
+- An MPI implementation
 - BLAS (http://www.netlib.org/blas/)
 - LAPACK (http://www.netlib.org/lapack/)
-- MFEM v3.0 (http://mfem.googlecode.com/)
 - METIS v5.1 (http://glaros.dtc.umn.edu/gkhome/metis/metis/overview)
 - HYPRE v2.10.0b (http://www.llnl.gov/CASC/hypre)
 - SuiteSparse v4.2 (http://www.cise.ufl.edu/research/sparse/SuiteSparse/)
+- MFEM (http://mfem.org/)
 
-The OpenGL visualization tool GLvis (www.glvis.googlecode.com) is required to
-visualize the results.
+NOTE: MFEM must be built with parallel support (requires MPI, HYPRE,
+and METIS) and with SuiteSparse support.
 
-Building with 'gmake'
-=====================
-The build system of ParELAG uses GNUMakefile.
-It allows to specify the path to the required software or to automatically download and build dependencies (if an internet connection is available).
+ParELAG has optional support for:
 
-Compilers and paths to ParELAG's dependencies can be specified by generating and editing the Makefile.in.
+- SuperLU (I use v5.1.1; I think v4.* should maybe be ok?)
+    * If using SuperLU, you *MUST* disable SuperLU (or FEI) in Hypre
+      (pass "--without-superlu" or "--without-fei" to hypre's
+      configure script). Failure to do this will unleash several
+      nightmarish compiler and then linker errors. You've been warned.
+- ParMETIS v4.0.3
+- GLvis, for visualization of results (http://glvis.org)
 
-NOTE:
-    a) One can edit the Makefile.in by providing the absolute path to some of the ELAG dependencies.
-       If some paths are set to MISSING, the missing dependency will be automatically downloaded and build.
-    b) OpenMP support is still experimental and therefore one should not be used.
-    c) MFEM needs to be build with MPI, METIS_5, SUITESPARSE, and LAPACK support enabled. 
 
-Some of the available 'make' targets are:
-
-make              -> Builds the libelag.a library.
-make debug        -> Builds the libelag.a library in debug mode.
-make deps-install -> Downloads and compiles BLAS, LAPACK, METIS_5, HYPRE, SuiteSparse, and MFEM.
-make doc          -> Builds the documentation
-make clean        -> Cleans the build of libelag.a and the examples
-
+==================================================
 Examples
-========
+==================================================
 
-To compile and run the examples execute "make" (optimize mode) or "make debug" (debug mode) in the examples folder.
-If an example is executed without command line arguments the default settings will be used.
-
+The examples in the examples/ directory build automatically. Calling
+one without arguments uses default values.
