@@ -1,0 +1,46 @@
+<!-- My parameter list goes here -->
+<ParameterList name="Smoothers">
+
+  <ParameterList name="Hiptmair Smoother">
+    <Parameter name = "Type" type="string" value="Hiptmair"/>
+    <ParameterList name="Parameters">
+      <Parameter name="Primary Smoother" type="string" value="Gauss-Seidel"/>
+      <Parameter name="Auxiliary Smoother" type="string" value="Jacobi"/>
+    </ParameterList>
+    <!-- ParameterList "Parameters" -->
+  </ParameterList>
+  <!-- ParameterList "Hiptmair Smoother" -->
+
+  <ParameterList name="Gauss-Seidel">
+    <Parameter name="Type" type="string" value="HypreSmoother"/>
+    <ParameterList name="Parameters">
+      <Parameter name="Type" type="string" value="L1 Gauss-Seidel"/>
+      <Parameter name="Sweeps" type="int" value="1"/>
+      <Parameter name="Damping Factor" type="double" value="1.0"/>
+      <Parameter name="Omega" type="double" value="1.0"/>
+      <Parameter name="Cheby Poly Order" type="int" value="2"/>
+      <Parameter name="Cheby Poly Fraction" type="double" value="0.3"/>
+    </ParameterList>
+    <!-- ParameterList "Parameters" -->
+  </ParameterList>
+  <!-- ParameterList "Gauss-Seidel" -->
+
+  <ParameterList name="Jacobi">
+    <Parameter name="Type" type="string" value="HypreSmoother"/>
+    <ParameterList name="Parameters">
+      <Parameter name="Type" type="string" value="L1 Jacobi"/>
+      <Parameter name="Sweeps" type="int" value="1"/>
+      <Parameter name="Damping Factor" type="double" value="1.0"/>
+      <Parameter name="Omega" type="double" value="1.0"/>
+      <Parameter name="Cheby Poly Order" type="int" value="2"/>
+      <Parameter name="Cheby Poly Fraction" type="double" value="0.3"/>
+    </ParameterList>
+    <!-- ParameterList "Parameters" -->
+  </ParameterList>
+  <!-- ParameterList "Jacobi" -->
+
+  <Parameter name="Really long parameter name goes here" type="string"
+             value="really long parameter value goes here"/>
+
+</ParameterList>
+<!-- ParameterList "Smoothers" -->

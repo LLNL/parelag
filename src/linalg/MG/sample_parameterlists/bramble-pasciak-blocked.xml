@@ -1,0 +1,90 @@
+<!-- This will define a Bramble-Pasciak transformation solver and use
+     a blocked preconditioner for MINRES to solve the transformed
+     problem. This illustrates multiply-nested solvers. -->
+<ParameterList name="Default">
+  <!-- Define a library of available preconditioners -->
+  <ParameterList name="Preconditioner Library">
+
+    <!-- The parameters for Bramble-Pasciak, including a solver choice -->
+    <ParameterList name="Bramble-Pasciak BoomerAMG MINRES">
+      <Parameter name="Type" type="string" value="Bramble-Pasciak"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Transformation strategy" type="string"
+                   value="Assemble then transform"/>
+        <Parameter name="Solver" type="string"
+                   value="Block Jacobi MINRES"/>
+        <Parameter name="Solver is monolithic" type="bool" value="false"/>
+      </ParameterList>
+    </ParameterList>
+
+    <!-- The parameters for MINRES solver, with preconditioner choice -->
+    <ParameterList name="Block Jacobi MINRES">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="MINRES"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="Block Jacobi BoomerAMG"/>
+        <Parameter name="Print level" type="int" value="1"/>
+        <Parameter name="Maximum iterations" type="int" value="300"/>
+        <Parameter name="Relative tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Absolute tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+        <Parameter name="Time preconditioner setup" type="bool"
+                   value="true"/>
+        <Parameter name="Print final paragraph" type="bool" value="true"/>
+      </ParameterList>
+    </ParameterList>
+
+    <!-- A block-Jacobi type preconditioner with Gauss-Seidel smoothing
+         for the A^{-1} solver and BoomerAMG for the S^{-1} solver -->
+    <ParameterList name="Block Jacobi GS">
+      <Parameter name="Type" type="string" value="Block Jacobi"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="A00 Inverse" type="string" value="Gauss-Seidel"/>
+        <Parameter name="A11 Inverse" type="string" value="BoomerAMG Preconditioner"/>
+
+        <Parameter name="Alpha" type="double" value="1.0"/>
+        <Parameter name="S Type" type="string" value="Diagonal"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Block Jacobi GS" -->
+
+    <!-- BoomerAMG preconditioner -->
+    <ParameterList name="BoomerAMG Preconditioner">
+      <Parameter name="Type" type="string" value="BoomerAMG"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Aggressive coarsening levels" type="int" value="0"/>
+        <Parameter name="Coarsening type" type="int" value="10"/>
+        <Parameter name="Relaxation type" type="int" value="8"/>
+        <Parameter name="Theta" type="double" value="0.25"/>
+        <Parameter name="Interpolation type" type="int" value="6"/>
+        <Parameter name="P max" type="int" value="4"/>
+        <Parameter name="Print level" type="int" value="0"/>
+        <Parameter name="Maximum levels" type="int" value="25"/>
+      </ParameterList>
+      <!-- End ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- End ParameterList "BoomerAMG Preconditioner" -->
+
+    <!-- L1 Gauss-Seidel preconditioner -->
+    <ParameterList name="Gauss-Seidel">
+      <Parameter name="Type" type="string" value="Hypre"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Type" type="string" value="L1 Gauss-Seidel"/>
+        <Parameter name="Sweeps" type="int" value="1"/>
+        <Parameter name="Damping Factor" type="double" value="1.0"/>
+        <Parameter name="Omega" type="double" value="1.0"/>
+        <Parameter name="Cheby Poly Order" type="int" value="2"/>
+        <Parameter name="Cheby Poly Fraction" type="double" value="0.3"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Gauss-Seidel" -->
+
+  </ParameterList>
+  <!-- ParameterList "Preconditioner Library" -->
+</ParameterList>
+<!-- ParameterList "Default" -->

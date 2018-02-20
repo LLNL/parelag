@@ -1,0 +1,62 @@
+<!-- This will define a Bramble-Pasciak transformation solver and use
+     a monolithic solver/preconditioner for the transformed
+     problem. This illustrates the use of a nested solvers. -->
+<ParameterList name="Default">
+  <!-- Define a library of available preconditioners -->
+  <ParameterList name="Preconditioner Library">
+
+    <!-- The parameters for Bramble-Pasciak, including a solver choice -->
+    <ParameterList name="Bramble-Pasciak BoomerAMG MINRES">
+      <Parameter name="Type" type="string" value="Bramble-Pasciak"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Transformation strategy" type="string"
+                   value="Assemble then transform"/>
+        <Parameter name="Solver" type="string"
+                   value="BoomerAMG MINRES"/>
+        <Parameter name="Solver is monolithic" type="bool" value="true"/>
+      </ParameterList>
+    </ParameterList>
+
+    <!-- The parameters for MINRES solver, with preconditioner choice -->
+    <ParameterList name="BoomerAMG MINRES">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="MINRES"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="System BoomerAMG"/>
+        <Parameter name="Print level" type="int" value="1"/>
+        <Parameter name="Maximum iterations" type="int" value="300"/>
+        <Parameter name="Relative tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Absolute tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+        <Parameter name="Time preconditioner setup" type="bool"
+                   value="true"/>
+        <Parameter name="Print final paragraph" type="bool" value="true"/>
+      </ParameterList>
+    </ParameterList>
+
+    <!-- BoomerAMG preconditioner for systems-->
+    <ParameterList name="System BoomerAMG">
+      <Parameter name="Type" type="string" value="BoomerAMG"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Aggressive coarsening levels" type="int" value="0"/>
+        <Parameter name="Number of functions" type="int" value="2"/>
+        <Parameter name="Strong Threshold" type="double" value="0.5"/>
+        <Parameter name="Coarsening type" type="int" value="10"/>
+        <Parameter name="Relaxation type" type="int" value="8"/>
+        <Parameter name="Theta" type="double" value="0.25"/>
+        <Parameter name="Interpolation type" type="int" value="6"/>
+        <Parameter name="P max" type="int" value="4"/>
+        <Parameter name="Print level" type="int" value="0"/>
+        <Parameter name="Maximum levels" type="int" value="25"/>
+      </ParameterList>
+      <!-- End ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- End ParameterList "BoomerAMG Solver" -->
+
+  </ParameterList>
+  <!-- ParameterList "Preconditioner Library" -->
+</ParameterList>
+<!-- ParameterList "Default" -->

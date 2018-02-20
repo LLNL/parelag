@@ -1,0 +1,95 @@
+<!-- A block-2x2 Gauss-Seidel type approximate block factorization
+     preconditioner with Gauss-Seidel smoothing for the A_{00}^{-1}
+     approximation and BoomerAMG for the S^{-1} approximation -->
+<ParameterList name="Default">
+  <!-- Define a library of available preconditioners -->
+  <ParameterList name="Preconditioner Library">
+
+    <!-- The parameters for the AMGe multigrid method. -->
+    <ParameterList name="My AMGe Solver">
+      <Parameter name="Type" type="string" value="AMGe"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Maximum levels" type="int" value="-1"/>
+        <Parameter name="Forms" type="vector_int" value="2 3"/>
+        <Parameter name="PreSmoother" type="string"
+                   value="Block Gauss-Seidel with GS and BoomerAMG"/>
+        <Parameter name="PostSmoother" type="string"
+                   value="Block Gauss-Seidel with GS and BoomerAMG"/>
+        <Parameter name="Coarse solver" type="string"
+                   value="Coarse grid GMRES"/>
+        <Parameter name="Cycle type" type="string" value="V-cycle"/>
+      </ParameterList>
+      <!-- ParameterList "SolverParameters" -->
+    </ParameterList>
+
+    <!-- The parameters for block 2x2 Gauss-Seidel, including two
+         subsolvers -->
+    <ParameterList name="Block Gauss-Seidel with GS and BoomerAMG">
+      <Parameter name="Type" type="string" value="Block GS"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="A00 Inverse" type="string" value="Gauss-Seidel"/>
+        <Parameter name="A11 Inverse" type="string"
+                   value="BoomerAMG Preconditioner"/>
+        
+        <!-- Options are "Lower" and "Upper", not case-sensitive -->
+        <Parameter name="Use triangle" type="string" value="Upper"/>
+
+        <Parameter name="Alpha" type="double" value="1.0"/>
+        <Parameter name="S Type" type="string" value="Diagonal"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Block Jacobi GS" -->
+
+    <!-- BoomerAMG preconditioner -->
+    <ParameterList name="BoomerAMG Preconditioner">
+      <Parameter name="Type" type="string" value="BoomerAMG"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Aggressive coarsening levels" type="int" value="0"/>
+        <Parameter name="Coarsening type" type="int" value="10"/>
+        <Parameter name="Relaxation type" type="int" value="8"/>
+        <Parameter name="Theta" type="double" value="0.25"/>
+        <Parameter name="Interpolation type" type="int" value="6"/>
+        <Parameter name="P max" type="int" value="4"/>
+        <Parameter name="Print level" type="int" value="0"/>
+        <Parameter name="Maximum levels" type="int" value="25"/>
+      </ParameterList>
+      <!-- End ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- End ParameterList "BoomerAMG Preconditioner" -->
+
+    <!-- L1 Gauss-Seidel preconditioner -->
+    <ParameterList name="Gauss-Seidel">
+      <Parameter name="Type" type="string" value="Hypre"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Type" type="string" value="L1 Gauss-Seidel"/>
+        <Parameter name="Sweeps" type="int" value="1"/>
+        <Parameter name="Damping Factor" type="double" value="1.0"/>
+        <Parameter name="Omega" type="double" value="1.0"/>
+        <Parameter name="Cheby Poly Order" type="int" value="2"/>
+        <Parameter name="Cheby Poly Fraction" type="double" value="0.3"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Gauss-Seidel" -->
+
+    <!-- The coarse grid GMRES method. -->
+    <ParameterList name="Coarse Grid GMRES">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="GMRES"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="Block Gauss-Seidel with GS and BoomerAMG"/>
+        <Parameter name="Print level" type="int" value="-1"/>
+        <Parameter name="Maximum iterations" type="int" value="3"/>
+        <Parameter name="Relative tolerance" type="double" value="0.0"/>
+        <Parameter name="Absolute tolerance" type="double" value="0.0"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+
+  </ParameterList>
+  <!-- ParameterList "Preconditioner Library" -->
+</ParameterList>
+<!-- ParameterList "Default" -->

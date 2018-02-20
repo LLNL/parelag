@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -11,34 +11,26 @@
   Software Foundation) version 2.1 dated February 1999.
 */
 
-#ifndef ELGA_LINALG_HPP_
-#define ELGA_LINALG_HPP_
+#ifndef ELAG_LINALG_HPP_
+#define ELAG_LINALG_HPP_
 
-#include <mfem.hpp>
-using namespace mfem;
+#include "dense/ParELAG_Eigensolver.hpp"
+#include "dense/ParELAG_InnerProduct.hpp"
+#include "dense/ParELAG_LAPACK.hpp"
+#include "dense/ParELAG_LDLCalculator.hpp"
+#include "dense/ParELAG_MultiVector.hpp"
+#include "dense/ParELAG_SVDCalculator.hpp"
 
-#include "../utilities/elag_utilities.hpp"
+#include "legacy/ParELAG_AuxHypreSmoother.hpp"
+#include "legacy/ParELAG_HypreExtension.hpp"
+#include "legacy/ParELAG_MLDivFree.hpp"
+#include "legacy/ParELAG_MLHiptmairSolver.hpp"
 
-#include "MultiVector.hpp"
+#include "solver_core/ParELAG_SymmetrizedUmfpack.hpp"
+#include "solver_core/ParELAG_SolverLibrary.hpp"
 
-#include "SVDCalculator.hpp"
-#include "Eigensolver.hpp"
-#include "LDLCalculator.hpp"
+#include "utilities/ParELAG_MatrixUtils.hpp"
+#include "utilities/ParELAG_SubMatrixExtraction.hpp"
+#include "utilities/ParELAG_MfemBlockOperator.hpp"
 
-#include "InnerProduct.hpp"
-
-#include "MatrixUtils.hpp"
-#include "SubMatrixExtraction.hpp"
-
-#include "MA57BlockOperator.hpp"
-#include "SymmetrizedUmfpack.hpp"
-
-#include "HypreExtension.hpp"
-
-#include "AuxHypreSmoother.hpp"
-#include "BlockLDL2x2.hpp"
-#include "RankOneOperator.hpp"
-#include "MLDivFree.hpp"
-#include "MLHiptmairSolver.hpp"
-
-#endif /* ELGA_LINALG_HPP_ */
+#endif // ELAG_LINALG_HPP_
