@@ -11,22 +11,12 @@
   Software Foundation) version 2.1 dated February 1999.
 */
 
-#ifndef ELAG_HPP_
-#define ELAG_HPP_
+#ifndef PARELAG_CONSTANTS_HPP_
+#define PARELAG_CONSTANTS_HPP_
 
-#include "ParELAG_Config.h"
+namespace parelag
+{
+const size_t MAX_CODIMENSION = 4;
+}
 
-#include "elag_typedefs.hpp"
-#include "ParELAG_Constants.hpp"
-
-#include "amge/elag_amge.hpp"
-#include "hypreExtension/hypreExtension.hpp"
-#include "linalg/elag_linalg.hpp"
-#include "partitioning/elag_partitioning.hpp"
-#include "structures/elag_structures.hpp"
-#include "topology/elag_topology.hpp"
-#include "utilities/elag_utilities.hpp"
-
-#include "SPE10/InversePermeabilityFunction.hpp"
-
-#endif /* ELAG_HPP_ */
+#endif /* PARELAG_CONSTANTS_HPP_ */

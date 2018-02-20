@@ -1,0 +1,36 @@
+/*
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
+  See file COPYRIGHT for details.
+
+  This file is part of the ParElag library. For more information and source code
+  availability see http://github.com/LLNL/parelag.
+
+  ParElag is free software; you can redistribute it and/or modify it under the
+  terms of the GNU Lesser General Public License (as published by the Free
+  Software Foundation) version 2.1 dated February 1999.
+*/
+
+// Configuration options for ParELAG
+#ifndef PARELAG_CONFIG_H_
+#define PARELAG_CONFIG_H_
+
+#define PARELAG_VERSION_MAJOR @ParELAG_VERSION_MAJOR@
+#define PARELAG_VERSION_MINOR @ParELAG_VERSION_MINOR@
+
+#cmakedefine ParELAG_ENABLE_OPENMP
+
+#cmakedefine ParELAG_ENABLE_PARMETIS
+#cmakedefine ParELAG_ENABLE_PETSC
+
+#cmakedefine ParELAG_ENABLE_SUPERLU
+#cmakedefine ParELAG_SuperLU_HAVE_VERSION_5
+
+#cmakedefine ParELAG_ENABLE_SUPERLUDIST
+#cmakedefine ParELAG_SuperLUDist_HAVE_VERSION_5
+
+#cmakedefine ParELAG_ENABLE_STRUMPACK
+
+#cmakedefine ParELAG_HAVE_PRETTY_FUNCTION
+
+#endif
