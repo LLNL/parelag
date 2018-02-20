@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -24,14 +24,15 @@ hypre_CSRMatrixMatvecBoolInt( int           alpha,
    HYPRE_Int        *A_i      = hypre_CSRMatrixI(A);
    HYPRE_Int        *A_j      = hypre_CSRMatrixJ(A);
    HYPRE_Int         num_rows = hypre_CSRMatrixNumRows(A);
-   HYPRE_Int         num_cols = hypre_CSRMatrixNumCols(A);
+   //HYPRE_Int         num_cols = hypre_CSRMatrixNumCols(A);
 
    HYPRE_Int        *A_rownnz = hypre_CSRMatrixRownnz(A);
    HYPRE_Int         num_rownnz = hypre_CSRMatrixNumRownnz(A);
 
    int      temp, tempx;
 
-   HYPRE_Int         i, j, jj;
+   HYPRE_Int         i, jj;
+   //HYPRE_Int         i, j, jj;
 
    HYPRE_Int         m;
 
@@ -69,16 +70,16 @@ hypre_CSRMatrixMatvecBoolInt( int           alpha,
 #ifdef HYPRE_USING_OPENMP
 #pragma omp parallel for private(i) HYPRE_SMP_SCHEDULE
 #endif
-	 for (i = 0; i < num_rows; i++)
-	    y[i] = 0.0;
+     for (i = 0; i < num_rows; i++)
+        y[i] = 0.0;
       }
       else
       {
 #ifdef HYPRE_USING_OPENMP
 #pragma omp parallel for private(i) HYPRE_SMP_SCHEDULE
 #endif
-	 for (i = 0; i < num_rows; i++)
-	    y[i] *= temp;
+     for (i = 0; i < num_rows; i++)
+        y[i] *= temp;
       }
    }
 
@@ -99,7 +100,7 @@ hypre_CSRMatrixMatvecBoolInt( int           alpha,
          m = A_rownnz[i];
          tempx = 0.0;
          for (jj = A_i[m]; jj < A_i[m+1]; jj++)
-        	 tempx +=  x[A_j[jj]];
+             tempx +=  x[A_j[jj]];
          y[m] += tempx;
       }
 
@@ -111,7 +112,7 @@ hypre_CSRMatrixMatvecBoolInt( int           alpha,
 #endif
       for (i = 0; i < num_rows; i++)
       {
-    	  temp = 0.0;
+          temp = 0.0;
           for (jj = A_i[i]; jj < A_i[i+1]; jj++)
              temp += x[A_j[jj]];
           y[i] += temp;
@@ -129,7 +130,7 @@ hypre_CSRMatrixMatvecBoolInt( int           alpha,
 #pragma omp parallel for private(i) HYPRE_SMP_SCHEDULE
 #endif
       for (i = 0; i < num_rows; i++)
-	 y[i] *= alpha;
+     y[i] *= alpha;
    }
 
    return ierr;
@@ -138,18 +139,18 @@ hypre_CSRMatrixMatvecBoolInt( int           alpha,
 
 HYPRE_Int
 hypre_ParCSRMatrixMatvecBoolInt(
-		         int alpha,
-		         hypre_ParCSRMatrix *A,
+                 int alpha,
+                 hypre_ParCSRMatrix *A,
                  int *x_local,
-		         int beta,
+                 int beta,
                  int *y_local )
 {
    hypre_ParCSRCommHandle	*comm_handle;
    hypre_ParCSRCommPkg	*comm_pkg = hypre_ParCSRMatrixCommPkg(A);
    hypre_CSRMatrix      *diag   = hypre_ParCSRMatrixDiag(A);
    hypre_CSRMatrix      *offd   = hypre_ParCSRMatrixOffd(A);
-   HYPRE_Int         num_rows = hypre_ParCSRMatrixGlobalNumRows(A);
-   HYPRE_Int         num_cols = hypre_ParCSRMatrixGlobalNumCols(A);
+   //HYPRE_Int         num_rows = hypre_ParCSRMatrixGlobalNumRows(A);
+   //HYPRE_Int         num_cols = hypre_ParCSRMatrixGlobalNumCols(A);
 
    HYPRE_Int	    num_cols_offd = hypre_CSRMatrixNumCols(offd);
    HYPRE_Int        ierr = 0;

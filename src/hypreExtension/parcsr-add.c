@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -93,7 +93,7 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
    if (nrows_A != nrows_B || ncols_A != ncols_B)
    {
               hypre_printf("Warning! incompatible matrix dimensions!\n");
-	      return NULL;
+          return NULL;
    }
 
 
@@ -101,28 +101,28 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
    C_i = hypre_CTAlloc(HYPRE_Int, nrows_A+1);
 
    for (ia = 0; ia < ncols_A; ia++)
-	marker[ia] = -1;
+    marker[ia] = -1;
 
    num_nonzeros = 0;
    C_i[0] = 0;
    for (ic = 0; ic < nrows_A; ic++)
    {
-	for (ia = A_i[ic]; ia < A_i[ic+1]; ia++)
-	{
-		jcol = A_j[ia];
-		marker[jcol] = ic;
-		num_nonzeros++;
-	}
-	for (ib = B_i[ic]; ib < B_i[ic+1]; ib++)
-	{
-		jcol = B_j[ib];
-		if (marker[jcol] != ic)
-		{
-			marker[jcol] = ic;
-			num_nonzeros++;
-		}
-   	}
-	C_i[ic+1] = num_nonzeros;
+    for (ia = A_i[ic]; ia < A_i[ic+1]; ia++)
+    {
+        jcol = A_j[ia];
+        marker[jcol] = ic;
+        num_nonzeros++;
+    }
+    for (ib = B_i[ic]; ib < B_i[ic+1]; ib++)
+    {
+        jcol = B_j[ib];
+        if (marker[jcol] != ic)
+        {
+            marker[jcol] = ic;
+            num_nonzeros++;
+        }
+    }
+    C_i[ic+1] = num_nonzeros;
    }
 
    C = hypre_CSRMatrixCreate(nrows_A, ncols_A, num_nonzeros);
@@ -132,34 +132,34 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
    C_data = hypre_CSRMatrixData(C);
 
    for (ia = 0; ia < ncols_A; ia++)
-	marker[ia] = -1;
+    marker[ia] = -1;
 
    pos = 0;
    for (ic = 0; ic < nrows_A; ic++)
    {
-	for (ia = A_i[ic]; ia < A_i[ic+1]; ia++)
-	{
-		jcol = A_j[ia];
-		C_j[pos] = jcol;
-		C_data[pos] = a*A_data[ia];
-		marker[jcol] = pos;
-		pos++;
-	}
-	for (ib = B_i[ic]; ib < B_i[ic+1]; ib++)
-	{
-		jcol = B_j[ib];
-		if (marker[jcol] < C_i[ic])
-		{
-			C_j[pos] = jcol;
-			C_data[pos] = b*B_data[ib];
-			marker[jcol] = pos;
-			pos++;
-		}
-		else
-		{
-			C_data[marker[jcol]] += b*B_data[ib];
-		}
-   	}
+    for (ia = A_i[ic]; ia < A_i[ic+1]; ia++)
+    {
+        jcol = A_j[ia];
+        C_j[pos] = jcol;
+        C_data[pos] = a*A_data[ia];
+        marker[jcol] = pos;
+        pos++;
+    }
+    for (ib = B_i[ic]; ib < B_i[ic+1]; ib++)
+    {
+        jcol = B_j[ib];
+        if (marker[jcol] < C_i[ic])
+        {
+            C_j[pos] = jcol;
+            C_data[pos] = b*B_data[ib];
+            marker[jcol] = pos;
+            pos++;
+        }
+        else
+        {
+            C_data[marker[jcol]] += b*B_data[ib];
+        }
+    }
    }
 
    hypre_TFree(marker);

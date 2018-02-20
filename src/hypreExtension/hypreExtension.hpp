@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -27,23 +27,16 @@ hypre_CSRMatrix * hypre_ZerosCSRMatrix( HYPRE_Int nrows, HYPRE_Int ncols);
 hypre_CSRMatrix * hypre_IdentityCSRMatrix( HYPRE_Int nrows);
 
 hypre_CSRMatrix * hypre_DiagonalCSRMatrix( HYPRE_Int nrows, double * d);
-hypre_ParCSRMatrix * hypre_IdentityParCSRMatrix( MPI_Comm comm, HYPRE_Int global_num_rows, 
-																 HYPRE_Int * row_starts);
-hypre_ParCSRMatrix * hypre_IdentityParCSRMatrixOffsets( MPI_Comm comm, HYPRE_Int global_num_rows, 
-																		  HYPRE_Int * row_starts, HYPRE_Int * col_starts);
-hypre_ParCSRMatrix * hypre_DiagonalParCSRMatrix( MPI_Comm comm, HYPRE_Int global_num_rows, 
-																 HYPRE_Int * row_starts, double * d);
-
-HYPRE_Int
-hypre_ParCSRMatrixAssembly( hypre_ParCSRMatrix  *RT,
-                                    hypre_ParCSRMatrix  *A,
-                                    hypre_ParCSRMatrix  *P,
-                                    int ignoreNonLocalRows,
-                                    hypre_ParCSRMatrix **RAP_ptr );
+hypre_ParCSRMatrix * hypre_IdentityParCSRMatrix( MPI_Comm comm, HYPRE_Int global_num_rows,
+                                                                 HYPRE_Int * row_starts);
+hypre_ParCSRMatrix * hypre_IdentityParCSRMatrixOffsets( MPI_Comm comm, HYPRE_Int global_num_rows,
+                                                                          HYPRE_Int * row_starts, HYPRE_Int * col_starts);
+hypre_ParCSRMatrix * hypre_DiagonalParCSRMatrix( MPI_Comm comm, HYPRE_Int global_num_rows,
+                                                                 HYPRE_Int * row_starts, double * d);
 
 HYPRE_Int
 hypre_RDP(hypre_ParCSRMatrix  *RT,
-		double * d,
+        double * d,
         hypre_ParCSRMatrix  *P,
         hypre_ParCSRMatrix **RDP_ptr);
 
