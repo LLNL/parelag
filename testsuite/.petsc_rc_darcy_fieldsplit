@@ -1,0 +1,34 @@
+# KSP
+-ksp_type minres
+-ksp_view
+-ksp_monitor
+
+# PCFIELDSPLIT
+-parelag_levels_pc_fieldsplit_type schur 
+-parelag_levels_pc_fieldsplit_schur_fact_type diag
+-parelag_levels_pc_fieldsplit_schur_precondition selfp
+-parelag_levels_fieldsplit_0_ksp_type preonly
+-parelag_levels_fieldsplit_0_pc_type jacobi
+-parelag_levels_fieldsplit_1_ksp_type preonly
+-parelag_levels_fieldsplit_1_pc_type hypre
+#-parelag_level0_pc_fieldsplit_type schur 
+#-parelag_level0_pc_fieldsplit_schur_fact_type diag
+#-parelag_level0_pc_fieldsplit_schur_precondition selfp
+#-parelag_level0_fieldsplit_0_ksp_type preonly
+#-parelag_level0_fieldsplit_0_pc_type jacobi
+#-parelag_level0_fieldsplit_1_ksp_type preonly
+#-parelag_level0_fieldsplit_1_pc_type hypre
+#-parelag_level1_pc_fieldsplit_type schur 
+#-parelag_level1_pc_fieldsplit_schur_fact_type diag
+#-parelag_level1_pc_fieldsplit_schur_precondition selfp
+#-parelag_level1_fieldsplit_0_ksp_type preonly
+#-parelag_level1_fieldsplit_0_pc_type jacobi
+#-parelag_level1_fieldsplit_1_ksp_type preonly
+#-parelag_level1_fieldsplit_1_pc_type hypre
+#-parelag_level2_pc_fieldsplit_type schur 
+#-parelag_level2_pc_fieldsplit_schur_fact_type diag
+#-parelag_level2_pc_fieldsplit_schur_precondition selfp
+#-parelag_level2_fieldsplit_0_ksp_type preonly
+#-parelag_level2_fieldsplit_0_pc_type jacobi
+#-parelag_level2_fieldsplit_1_ksp_type preonly
+#-parelag_level2_fieldsplit_1_pc_type hypre

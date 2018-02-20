@@ -1,0 +1,39 @@
+# this options file is with 3 levels
+
+# we monitor singular values so that you can test different thresholds for
+# the adaptive generation of BDDC coarse spaces
+-parelag_level0_ksp_view
+-parelag_level0_ksp_monitor_singular_value
+-parelag_level1_ksp_view
+-parelag_level1_ksp_monitor_singular_value
+-parelag_level2_ksp_view
+-parelag_level2_ksp_monitor_singular_value
+
+# deluxe scaling is very important with irregular meshes
+# However, an efficient implementation needs MUMPS
+
+-parelag_level0_pc_bddc_use_deluxe_scaling
+# uncomment if conductivities are discontinuos at the finest level (needs MUMPS)
+-parelag_level0_pc_bddc_adaptive_threshold 1.5
+-parelag_level0_pc_bddc_schur_exact
+
+-parelag_level1_pc_bddc_use_deluxe_scaling
+# the aggregated conductivites are smooth, we should not need an adaptive coarse space
+-parelag_level1_pc_bddc_adaptive_threshold 1.2
+-parelag_level1_pc_bddc_schur_exact
+
+-parelag_level2_pc_bddc_use_deluxe_scaling
+# the aggregated conductivites are smooth, we should not need an adaptive coarse space
+-parelag_level2_pc_bddc_adaptive_threshold 1.2
+-parelag_level2_pc_bddc_schur_exact
+-sub_schurs_mat_mumps_icntl_14 500
+
+# local solvers customization (unneded when using deluxe scaling)
+#-pc_bddc_dirichlet_pc_type cholesky
+#-pc_bddc_dirichlet_pc_factor_mat_solver_package mumps
+#-pc_bddc_neumann_pc_type cholesky
+#-pc_bddc_neumann_pc_factor_mat_solver_package mumps
+
+# coarse solver customization (parallel cholesky, needs MUMPS or superlu_dist)
+#-pc_bddc_dirichlet_pc_type cholesky
+#-pc_bddc_dirichlet_pc_factor_mat_solver_package mumps

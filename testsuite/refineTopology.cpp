@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -20,60 +20,55 @@
 
 #include <fstream>
 #include <sstream>
-#include "mfem.hpp"
-#include "../src/topology/elag_topology.hpp"
-#include "../src/partitioning/elag_partitioning.hpp"
+#include <mfem.hpp>
+#include "elag.hpp"
+
+using namespace mfem;
+using namespace parelag;
+using std::unique_ptr;
+using std::shared_ptr;
+using std::make_shared;
 
 int main (int argc, char *argv[])
 {
+    // 1. Initialize MPI
+    mpi_session sess(argc, argv);
+    MPI_Comm comm = MPI_COMM_WORLD;
 
-   int num_procs, myid;
+    int num_procs, myid;
+    MPI_Comm_size(comm, &num_procs);
+    MPI_Comm_rank(comm, &myid);
 
-   // 1. Initialize MPI
-   MPI_Init(&argc, &argv);
-   MPI_Comm comm = MPI_COMM_WORLD;
-   MPI_Comm_size(comm, &num_procs);
-   MPI_Comm_rank(comm, &myid);
+    if (argc == 1)
+    {
+        if (myid == 0)
+            std::cerr << "\nUsage: mpirun -np <np> topology <mesh_file>\n\n";
+        return EXIT_FAILURE;
+    }
 
-   Mesh *mesh;
+    shared_ptr<ParMesh> pmesh;
+    {
+        // 2. Read the (serial) mesh from the given mesh file on all processors.
+        //    We can handle triangular, quadrilateral, tetrahedral or hexahedral
+        //    elements with the same code.
+        std::ifstream imesh(argv[1]);
+        if (!imesh)
+        {
+            if (myid == 0)
+                std::cerr << "\nCan not open mesh file: " << argv[1] << "\n\n";
+            return EXIT_FAILURE;
+        }
+        auto mesh = make_unique<Mesh>(imesh, 1, 1);
+        imesh.close();
 
-   if (argc == 1)
-   {
-      if (myid == 0)
-         std::cout << "\nUsage: mpirun -np <np> topology <mesh_file>\n" << std::endl;
-      MPI_Finalize();
-      return 1;
-   }
+        // 4. Define a parallel mesh by a partitioning of the serial mesh. Refine
+        //    this mesh further in parallel to increase the resolution. Once the
+        //    parallel mesh is defined, the serial mesh can be deleted.
+        pmesh = make_shared<ParMesh>(comm, *mesh);
+    }
 
-   // 2. Read the (serial) mesh from the given mesh file on all processors.
-   //    We can handle triangular, quadrilateral, tetrahedral or hexahedral
-   //    elements with the same code.
-   std::ifstream imesh(argv[1]);
-   if (!imesh)
-   {
-      if (myid == 0)
-         std::cerr << "\nCan not open mesh file: " << argv[1] << '\n' << std::endl;
-      MPI_Finalize();
-      return 2;
-   }
-   mesh = new Mesh(imesh, 1, 1);
-   imesh.close();
+    auto topo = make_shared<AgglomeratedTopology>(pmesh, pmesh->Dimension());
+    auto finetopo = topo->UniformRefinement();
 
-   // 4. Define a parallel mesh by a partitioning of the serial mesh. Refine
-   //    this mesh further in parallel to increase the resolution. Once the
-   //    parallel mesh is defined, the serial mesh can be deleted.
-   ParMesh *pmesh = new ParMesh(comm, *mesh);
-   delete mesh;
-
-   AgglomeratedTopology * topo = new AgglomeratedTopology(pmesh, pmesh->Dimension());
-   AgglomeratedTopology * finetopo = topo->UniformRefinement();
-
-   delete finetopo;
-   delete topo;
-   delete pmesh;
-
-   MPI_Finalize();
-
-   return 0;
-
+    return EXIT_SUCCESS;
 }

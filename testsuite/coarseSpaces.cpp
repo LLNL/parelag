@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -31,204 +31,188 @@
 #include <fstream>
 #include <sstream>
 
-#include "../src/topology/elag_topology.hpp"
-#include "../src/partitioning/elag_partitioning.hpp"
-#include "../src/amge/elag_amge.hpp"
+#include "elag.hpp"
+
+using namespace mfem;
+using namespace parelag;
+using std::unique_ptr;
+using std::shared_ptr;
+using std::make_shared;
 
 // argv[1] - mesh file
 // argv[2] - orderfe
 // argv[3] - serial refinement
-// argv[4] - coarsering factor
+// argv[4] - coarsening factor
 
 int main (int argc, char *argv[])
 {
+    // 1. Initialize MPI
+    mpi_session sess(argc, argv);
+    MPI_Comm comm = MPI_COMM_WORLD;
 
-	int num_procs, myid;
+    int num_procs, myid;
+    MPI_Comm_size(comm, &num_procs);
+    MPI_Comm_rank(comm, &myid);
 
-	// 1. Initialize MPI
-	MPI_Init(&argc, &argv);
-	MPI_Comm comm = MPI_COMM_WORLD;
-	MPI_Comm_size(comm, &num_procs);
-	MPI_Comm_rank(comm, &myid);
+    if (argc == 1)
+    {
+        if (myid == 0)
+            std::cerr << "\nUsage: mpirun -np <np> topology <mesh_file>\n\n";
+        return EXIT_FAILURE;
+    }
 
-	Mesh *mesh;
+    shared_ptr<ParMesh> pmesh;
+    {
+        // 2. Read the (serial) mesh from the given mesh file on all
+        //    processors.  We can handle triangular, quadrilateral,
+        //    tetrahedral or hexahedral elements with the same code.
+        std::ifstream imesh(argv[1]);
+        if (!imesh)
+        {
+            if (myid == 0)
+                std::cerr << "\nCan not open mesh file: " << argv[1] << "\n\n";
+            return EXIT_FAILURE;
+        }
+        Mesh mesh(imesh, 1, 1);
+        imesh.close();
 
-	if (argc == 1)
-	{
-		if (myid == 0)
-			std::cout << "\nUsage: mpirun -np <np> topology <mesh_file>\n" << std::endl;
-	    MPI_Finalize();
-	    return 1;
-	}
+        // 3. Refine the serial mesh on all processors to increase the
+        //    resolution. In this example we do 'ref_levels' of
+        //    uniform refinement. We choose 'ref_levels' to be the
+        //    largest number that gives a final mesh with no more than
+        //    10,000 elements.
+        {
+            const int ref_levels = 0;
+            //(int)floor(log(10000./mesh->GetNE())/log(2.)/mesh->Dimension());
+            for (int l = 0; l < ref_levels; l++)
+                mesh.UniformRefinement();
+        }
 
-	// 2. Read the (serial) mesh from the given mesh file on all processors.
-	//    We can handle triangular, quadrilateral, tetrahedral or hexahedral
-	//    elements with the same code.
-	std::ifstream imesh(argv[1]);
-	if (!imesh)
-	{
-	   if (myid == 0)
-	      std::cerr << "\nCan not open mesh file: " << argv[1] << '\n' << std::endl;
-	   MPI_Finalize();
-	   return 2;
-	}
-	mesh = new Mesh(imesh, 1, 1);
-	imesh.close();
+        // 4. Define a parallel mesh by a partitioning of the serial
+        //    mesh. Refine this mesh further in parallel to increase
+        //    the resolution. Once the parallel mesh is defined, the
+        //    serial mesh can be deleted.
+        pmesh = make_shared<ParMesh>(comm, mesh);
+    }
 
-	// 3. Refine the serial mesh on all processors to increase the resolution. In
-	//    this example we do 'ref_levels' of uniform refinement. We choose
-	//    'ref_levels' to be the largest number that gives a final mesh with no
-	//    more than 10,000 elements.
-	{
-	   int ref_levels = 0;
-	   //(int)floor(log(10000./mesh->GetNE())/log(2.)/mesh->Dimension());
-	   for (int l = 0; l < ref_levels; l++)
-	      mesh->UniformRefinement();
-	}
+    const int nDimensions = pmesh->Dimension();
+    const int par_ref_levels = 2;
+    Array<int> level_nElements(par_ref_levels+1);
+    for (int l = 0; l < par_ref_levels; l++)
+    {
+        level_nElements[par_ref_levels-l] = pmesh->GetNE();
+        pmesh->UniformRefinement();
+    }
+    level_nElements[0] = pmesh->GetNE();
+    const int nLevels = par_ref_levels + 1;
 
-	// 4. Define a parallel mesh by a partitioning of the serial mesh. Refine
-	//    this mesh further in parallel to increase the resolution. Once the
-	//    parallel mesh is defined, the serial mesh can be deleted.
-	ParMesh *pmesh = new ParMesh(comm, *mesh);
-	delete mesh;
-	int par_ref_levels = 2;
-	Array<int> level_nElements(par_ref_levels+1);
+    std::vector<shared_ptr<AgglomeratedTopology>> topo(nLevels);
 
-	for (int l = 0; l < par_ref_levels; l++)
-	{
-	    level_nElements[par_ref_levels-l] = pmesh->GetNE();
-	    pmesh->UniformRefinement();
-	}
-	level_nElements[0] = pmesh->GetNE();
-	int nLevels = par_ref_levels + 1;
-    Array<AgglomeratedTopology *> topo(nLevels);
-    topo = static_cast<AgglomeratedTopology *>(NULL);
-    topo[0] = new AgglomeratedTopology(pmesh, pmesh->Dimension());
+    topo[0] = make_shared<AgglomeratedTopology>(pmesh, nDimensions);
 
-	MFEMRefinedMeshPartitioner partitioner(pmesh->Dimension());
-	for(int ilevel = 0; ilevel < nLevels-1; ++ilevel)
-	{
-		Array<int> partitioning(topo[ilevel]->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT));
-		partitioner.Partition(topo[ilevel]->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT), level_nElements[ilevel+1], partitioning);
-		topo[ilevel+1] = topo[ilevel]->CoarsenLocalPartitioning(partitioning, 0, 0);
-	}
+    MFEMRefinedMeshPartitioner partitioner(nDimensions);
+    constexpr auto at_elem = AgglomeratedTopology::ELEMENT;
+    for(int ilevel = 0; ilevel < nLevels-1; ++ilevel)
+    {
+        Array<int> partitioning(
+            topo[ilevel]->GetNumberLocalEntities(at_elem));
+        partitioner.Partition(topo[ilevel]->GetNumberLocalEntities(at_elem),
+                              level_nElements[ilevel+1], partitioning);
+        topo[ilevel+1] =
+            topo[ilevel]->CoarsenLocalPartitioning(partitioning, 0, 0);
+    }
 
-//-----------------------------------------------------//
-	int nDimensions = pmesh->Dimension();
-	int feorder = 0;
-	Array<DeRhamSequence *> sequence(topo.Size() );
-	int upscalingOrder = feorder;
-	if(nDimensions == 2)
-		sequence[0] = new DeRhamSequence2D_Hdiv_FE(topo[0], pmesh, feorder);
-	else
-		sequence[0] = new DeRhamSequence3D_FE(topo[0], pmesh, feorder);
+    const int feorder = 0;
+    std::vector<shared_ptr<DeRhamSequence>> sequence(topo.size());
+    const int upscalingOrder = feorder;
+    if(nDimensions == 2)
+        sequence[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(
+            topo[0], pmesh.get(), feorder);
+    else
+        sequence[0] =
+            make_shared<DeRhamSequence3D_FE>(topo[0], pmesh.get(), feorder);
 
-	Array< MultiVector *> targets( sequence[0]->GetNumberOfForms() );
+    DeRhamSequenceFE* DRSequence_FE = sequence[0]->FemSequence();
+    std::vector<unique_ptr<MultiVector>>
+        targets(sequence[0]->GetNumberOfForms());
 
-	if(nDimensions == 2)
-	{
-		Array<Coefficient *> H1coeff, L2coeff;
-		Array<VectorCoefficient *> Hdivcoeff;
+    if(nDimensions == 2)
+    {
+        Array<Coefficient *> H1coeff, L2coeff;
+        Array<VectorCoefficient *> Hdivcoeff;
 
-		fillCoefficientArray(nDimensions, upscalingOrder+1, H1coeff);
-		fillRTVectorCoefficientArray(nDimensions, upscalingOrder,Hdivcoeff);
-		fillCoefficientArray(nDimensions, upscalingOrder, L2coeff);
+        fillCoefficientArray(nDimensions, upscalingOrder+1, H1coeff);
+        fillRTVectorCoefficientArray(nDimensions, upscalingOrder,Hdivcoeff);
+        fillCoefficientArray(nDimensions, upscalingOrder, L2coeff);
 
-		int jform(0);
+        targets[0] = DRSequence_FE->InterpolateScalarTargets(0, H1coeff);
+        targets[1] = DRSequence_FE->InterpolateVectorTargets(1, Hdivcoeff);
+        targets[2] = DRSequence_FE->InterpolateScalarTargets(2, L2coeff);
 
-		targets[jform] = dynamic_cast<DeRhamSequenceFE *>(sequence[0])->InterpolateScalarTargets(jform, H1coeff);
-		++jform;
+        freeCoeffArray(H1coeff);
+        freeCoeffArray(Hdivcoeff);
+        freeCoeffArray(L2coeff);
+    }
+    else
+    {
+        Array<Coefficient *> H1coeff, L2coeff;
+        Array<VectorCoefficient *> Hcurlcoeff, Hdivcoeff;
 
-		targets[jform] = dynamic_cast<DeRhamSequenceFE *>(sequence[0])->InterpolateVectorTargets(jform, Hdivcoeff);
-		++jform;
+        fillCoefficientArray(nDimensions, upscalingOrder+1, H1coeff);
+        fillVectorCoefficientArray(nDimensions, upscalingOrder, Hcurlcoeff);
+        fillVectorCoefficientArray(nDimensions, upscalingOrder, Hdivcoeff);
+        fillCoefficientArray(nDimensions, upscalingOrder, L2coeff);
 
-		targets[jform] = dynamic_cast<DeRhamSequenceFE *>(sequence[0])->InterpolateScalarTargets(jform, L2coeff);
-		++jform;
+        targets[0] = DRSequence_FE->InterpolateScalarTargets(0, H1coeff);
+        targets[1] = DRSequence_FE->InterpolateVectorTargets(1, Hcurlcoeff);
+        targets[2] = DRSequence_FE->InterpolateVectorTargets(2, Hdivcoeff);
+        targets[3] = DRSequence_FE->InterpolateScalarTargets(3, L2coeff);
 
-		freeCoeffArray(H1coeff);
-		freeCoeffArray(Hdivcoeff);
-		freeCoeffArray(L2coeff);
-	}
-	else
-	{
-		Array<Coefficient *> H1coeff, L2coeff;
-		Array<VectorCoefficient *> Hcurlcoeff, Hdivcoeff;
+        freeCoeffArray(H1coeff);
+        freeCoeffArray(Hcurlcoeff);
+        freeCoeffArray(Hdivcoeff);
+        freeCoeffArray(L2coeff);
+    }
 
-		fillCoefficientArray(nDimensions, upscalingOrder+1, H1coeff);
-		fillVectorCoefficientArray(nDimensions, upscalingOrder, Hcurlcoeff);
-		fillVectorCoefficientArray(nDimensions, upscalingOrder, Hdivcoeff);
-		fillCoefficientArray(nDimensions, upscalingOrder, L2coeff);
+    Array<MultiVector*> targets_in(targets.size());
+    for (int ii = 0; ii < targets_in.Size(); ++ii)
+        targets_in[ii] = targets[ii].get();
 
+    sequence[0]->SetjformStart(0);
+    sequence[0]->SetTargets(targets_in);
 
-		int jform(0);
+    for(int i(0); i < nLevels-1; ++i)
+    {
+        sequence[i+1] = sequence[i]->Coarsen();
+        sequence[i]->CheckInvariants();
+    }
+    // FIXME: ARE THESE TESTED ANYWAY??
+    //sequence.back()->CheckD();
+    //sequence.back()->CheckTrueD();
 
-		targets[jform] = dynamic_cast<DeRhamSequenceFE *>(sequence[0])->InterpolateScalarTargets(jform, H1coeff);
-		++jform;
+    for(int jf = 0; jf < nDimensions+1; ++jf)
+    {
+        DeRhamSequence::DeRhamSequence_os << "Interpolation Error Form "
+                                          << jf << "\n";
+        sequence[0]->ComputeSpaceInterpolationError(jf, *(targets[jf]));
+    }
 
-		targets[jform] = dynamic_cast<DeRhamSequenceFE *>(sequence[0])->InterpolateVectorTargets(jform, Hcurlcoeff);
-		++jform;
+    SerializedOutput(comm,std::cout,DeRhamSequence::DeRhamSequence_os.str());
 
-		targets[jform] = dynamic_cast<DeRhamSequenceFE *>(sequence[0])->InterpolateVectorTargets(jform, Hdivcoeff);
-		++jform;
+    /*
+      for(int i(0); i < sequence.Size()-1; ++i)
+      sequence[i]->ShowProjector(nDimensions);
 
-		targets[jform] = dynamic_cast<DeRhamSequenceFE *>(sequence[0])->InterpolateScalarTargets(jform, L2coeff);
-		++jform;
+      for(int i(0); i < sequence.Size()-1; ++i)
+      {
+      sequence[i]->ShowProjector(nDimensions-1);
+      sequence[i]->ShowDerProjector(nDimensions-1);
+      }
+    */
+    sequence[sequence.size()-2]->ShowProjector(nDimensions-1);
+    sequence[sequence.size()-2]->ShowDerProjector(nDimensions-1);
 
-		freeCoeffArray(H1coeff);
-		freeCoeffArray(Hcurlcoeff);
-		freeCoeffArray(Hdivcoeff);
-		freeCoeffArray(L2coeff);
-	}
+    //sequence[sequence.Size()-2]->ShowProjector(nDimensions-1);
 
-	int jstart = 0;
-
-	sequence[0]->SetjformStart( jstart );
-	sequence[0]->SetTargets( targets );
-
-	for(int i(0); i < nLevels-1; ++i)
-	{
-		sequence[i+1] = sequence[i]->Coarsen();
-		sequence[i]->CheckInvariants();
-	}
-	sequence.Last()->CheckD();
-	sequence.Last()->CheckTrueD();
-
-	for(int jf(jstart); jf < nDimensions+1; ++jf)
-	{
-		DeRhamSequence::DeRhamSequence_os << "Interpolation Error Form " << jf << "\n";
-		sequence[0]->ComputeSpaceInterpolationError(jf, *(targets[jf] ) );
-	}
-
-	SerializedOutput(comm, std::cout, DeRhamSequence::DeRhamSequence_os.str());
-
-/*
-for(int i(0); i < sequence.Size()-1; ++i)
-	sequence[i]->ShowProjector(nDimensions);
-
-for(int i(0); i < sequence.Size()-1; ++i)
-{
-	sequence[i]->ShowProjector(nDimensions-1);
-	sequence[i]->ShowDerProjector(nDimensions-1);
-}
-*/
-sequence[sequence.Size()-2]->ShowProjector(nDimensions-1);
-sequence[sequence.Size()-2]->ShowDerProjector(nDimensions-1);
-
-//sequence[sequence.Size()-2]->ShowProjector(nDimensions-1);
-
-	for(int i(0); i < sequence.Size(); ++i)
-		delete sequence[i];
-
-	for(int i(0); i < targets.Size(); ++i)
-		delete targets[i];
-
-//----------------------------------------------------//
-   for(int i(0); i < topo.Size(); ++i)
-	   delete topo[i];
-
-   MPI_Finalize();
-
-   delete pmesh;
-
-   return 0;
+    return EXIT_SUCCESS;
 }

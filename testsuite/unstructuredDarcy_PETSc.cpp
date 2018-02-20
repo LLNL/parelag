@@ -53,16 +53,22 @@ int main (int argc, char *argv[])
         std::cout << std::endl << "------" << std::endl;
     }
 
+#ifndef ParELAG_ENABLE_PETSC
+    if (!myid) std::cerr << "This test requires PETSc" << std::endl;
+    return 1;
+#else
+
     // Program options
     const char* meshfile_c = "mesh.mesh3d";
+    const char* petsc_opts_c = "";
     int ser_ref_levels = 0;
     int par_ref_levels = 2;
     int coarseningFactor = 8;
     int feorder = 0;
     int upscalingOrder = 0;
     int aggressiveLevels = 1;
-    int topoalgo = 0;
     bool do_visualize = true;
+    bool unassembled = false;
     OptionsParser args(argc, argv);
     args.AddOption(&meshfile_c, "-m", "--mesh",
                    "MFEM mesh file to load.");
@@ -78,10 +84,13 @@ int main (int argc, char *argv[])
                    "Factor by which to coarsen mesh at each level.");
     args.AddOption(&aggressiveLevels, "--aggressive-levels", "--aggressive-levels",
                    "Number of levels of aggressive coarsening.");
-    args.AddOption(&topoalgo, "--topo-algo", "--topo-algo",
-                   "Topological algorithm, 0 is old, 2 is from Vassilevski book.");
     args.AddOption(&do_visualize, "-v", "--do-visualize", "-nv", "--no-visualize",
                    "Do interactive GLVis visualization.");
+    args.AddOption(&petsc_opts_c, "--petsc_opts", "--petsc_opts",
+                   "Options file for PETSc solvers etc.");
+    args.AddOption(&unassembled, "--unassembled", "--unassembled",
+                   "--assembled", "--assembled",
+                   "Whether to use PETSc unassembled or fully assembled matrix format.");
     args.Parse();
     if (!args.Good())
     {
@@ -91,14 +100,26 @@ int main (int argc, char *argv[])
     }
     PARELAG_ASSERT(args.Good());
     std::string meshfile(meshfile_c);
+    std::string petsc_opts(petsc_opts_c);
 
-    // Default linear solver options
-    constexpr int print_iter = 0;
+    Operator::Type petsc_tid;
+    if (unassembled)
+        petsc_tid = Operator::PETSC_MATIS;
+    else
+        petsc_tid = Operator::PETSC_MATAIJ;
+    if (!petsc_opts.size())
+    {
+        PetscInitialize(NULL, NULL, NULL, NULL);
+    }
+    else
+    {
+        PetscInitialize(NULL, NULL, petsc_opts.c_str(), NULL);
+    }
+
+    // default linear solver options
     constexpr int max_num_iter = 5000;
     constexpr double rtol = 1e-6;
     constexpr double atol = 1e-12;
-
-    StopWatch chrono;
 
     if (myid == 0)
     {
@@ -109,15 +130,14 @@ int main (int argc, char *argv[])
         std::cout << "Upscaling order " << upscalingOrder << "\n";
         std::cout << "Coarsening Factor " << coarseningFactor << "\n";
         std::cout << "Number of Aggressive Levels " << aggressiveLevels << "\n";
-        std::cout << "Topology algorithm " << topoalgo << "\n";
-        std::cout << "Number of mpi processes: " << num_procs << " (affects results) \n";
     }
 
-    shared_ptr<ParMesh> pmesh;
+    StopWatch chrono;
+    std::shared_ptr<ParMesh> pmesh;
     {
         // 2. Read the (serial) mesh from the given mesh file and
         // uniformly refine it.
-        unique_ptr<Mesh> mesh;
+        std::unique_ptr<Mesh> mesh;
         std::ifstream imesh(meshfile.c_str());
         if (imesh)
         {
@@ -147,7 +167,8 @@ int main (int argc, char *argv[])
         partitioner.setFlags(MetisGraphPartitioner::KWAY);// BISECTION
         partitioner.setOption(METIS_OPTION_SEED, 0);// Fix the seed
         partitioner.setOption(METIS_OPTION_CONTIG,1);// Contiguous partitions
-        partitioner.doPartition(mesh->ElementToElementTable(), num_procs, partitioning);
+        partitioner.doPartition(mesh->ElementToElementTable(),
+                                num_procs, partitioning);
         pmesh = make_shared<mfem::ParMesh>(comm, *mesh, partitioning);
 
         // The above should just be:
@@ -203,7 +224,7 @@ int main (int argc, char *argv[])
             *(topology[ilevel]->LocalElementElementTable()),
             topology[ilevel]->Weight(at_elem),level_NE[ilevel+1], partitioning);
         topology[ilevel+1] =
-            topology[ilevel]->CoarsenLocalPartitioning(partitioning,false,false, topoalgo);
+            topology[ilevel]->CoarsenLocalPartitioning(partitioning,false,false);
     }
 
     chrono.Stop();
@@ -224,10 +245,35 @@ int main (int argc, char *argv[])
     sequence[0]->FemSequence()->ReplaceMassIntegrator(
         at_elem, 2, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
 
-    // set up coefficients / targets
+    // okay, people, we have coeffL2 and L2coeff ???
+    Array<Coefficient *> L2coeff;
+    Array<VectorCoefficient *> Hdivcoeff;
+    fillVectorCoefficientArray(nDimensions, upscalingOrder, Hdivcoeff);
+    fillCoefficientArray(nDimensions, upscalingOrder, L2coeff);
+
+    std::vector<std::unique_ptr<MultiVector>>
+        targets(sequence[0]->GetNumberOfForms());
+
+    int jform(0);
+    ++jform;
+    ++jform;
+    targets[jform] =
+        sequence[0]->FemSequence()->InterpolateVectorTargets(jform, Hdivcoeff);
+    ++jform;
+    targets[jform] =
+        sequence[0]->FemSequence()->InterpolateScalarTargets(jform, L2coeff);
+    ++jform;
+
+    freeCoeffArray(L2coeff);
+    freeCoeffArray(Hdivcoeff);
+
+    Array<MultiVector *> targets_in(targets.size());
+    for (int ii = 0; ii < targets_in.Size(); ++ii)
+        targets_in[ii] = targets[ii].get();
+
     const int jFormStart = nDimensions-1;
     sequence[0]->SetjformStart(jFormStart);
-    sequence[0]->FemSequence()->SetUpscalingTargets(nDimensions, upscalingOrder);
+    sequence[0]->SetTargets(targets_in);
 
     chrono.Clear();
     chrono.Start();
@@ -333,7 +379,7 @@ int main (int argc, char *argv[])
         p[2] = p[1] + sequence[k]->GetNumberOfDofs(pform);
     }
 
-    std::vector<unique_ptr<BlockVector>> rhs(nLevels);
+    std::vector<std::unique_ptr<BlockVector>> rhs(nLevels);
     rhs[0] = make_unique<BlockVector>(blockOffsets[0]);
     rhs[0]->GetBlock(0) = b;
     rhs[0]->GetBlock(1) = q;
@@ -380,37 +426,84 @@ int main (int argc, char *argv[])
         hdiv_dofTrueDof.Assemble(rhs[k]->GetBlock(0), prhs.GetBlock(0));
         l2_dofTrueDof.Assemble(rhs[k]->GetBlock(1), prhs.GetBlock(1));
 
-        auto pM = Assemble(hdiv_dofTrueDof, *M, hdiv_dofTrueDof);
-        auto pB = Assemble(l2_dofTrueDof, *B, hdiv_dofTrueDof);
-        auto pBt = Assemble(hdiv_dofTrueDof, *Bt, l2_dofTrueDof);
+        auto pM = AssemblePetsc(hdiv_dofTrueDof, *M, hdiv_dofTrueDof,petsc_tid);
+        auto pB = AssemblePetsc(l2_dofTrueDof, *B, hdiv_dofTrueDof,petsc_tid);
+        auto pBt = AssemblePetsc(hdiv_dofTrueDof, *Bt, l2_dofTrueDof,petsc_tid);
 
-        BlockOperator op(trueBlockOffsets);
-        op.owns_blocks = 0;
-        op.SetBlock(0,0, pM.get());
-        op.SetBlock(0,1, pBt.get());
-        op.SetBlock(1,0, pB.get());
-
-        unique_ptr<HypreParMatrix> S;
+        std::unique_ptr<PetscParMatrix> op;
         {
-            auto tmp = Assemble(hdiv_dofTrueDof, *Bt, l2_dofTrueDof);
-            Vector diag(pM->Height());
-            pM->GetDiag(diag);
+            // We construct the block operator as in Darcy case
+            BlockOperator bop(trueBlockOffsets);
+            bop.owns_blocks = 0;
+            bop.SetBlock(0,0, pM.get());
+            bop.SetBlock(0,1, pBt.get());
+            bop.SetBlock(1,0, pB.get());
 
-            for (int i = 0; i < diag.Size(); ++i)
-                diag(i) = 1./diag(i);
-
-            tmp->ScaleRows(diag);
-            S = ToUnique(ParMult(pB.get(), tmp.get()));
+            // And convert the block operator to a PetscParMatrix here
+            if (unassembled)
+            {
+                op = make_unique<PetscParMatrix>(pM->GetComm(), &bop,
+                                                 Operator::PETSC_MATIS);
+            }
+            else
+            {
+                op = make_unique<PetscParMatrix>(pM->GetComm(), &bop,
+                                                 Operator::PETSC_MATAIJ);
+            }
         }
 
-        auto Mprec = make_unique<HypreDiagScale>(*pM);
-        auto Sprec = make_unique<HypreBoomerAMG>(*S);
-        Sprec->SetPrintLevel(0);
+        std::unique_ptr<PetscPreconditioner> prec;
 
-        BlockDiagonalPreconditioner prec(trueBlockOffsets);
-        prec.owns_blocks = 0;
-        prec.SetDiagonalBlock(0,Mprec.get());
-        prec.SetDiagonalBlock(1,Sprec.get());
+        // different prefix for each level
+        //std::string prefix = "parelag_level" + std::to_string(k) + "_";
+        // same prefix for all levels
+        std::string prefix = "parelag_levels_";
+        if (unassembled)
+        {
+            // For saddle point problems, we need to provide BDDC the list of
+            // essential and boundary dofs.
+            // Since the velocity_space is the only space that may have boundary
+            // dofs and it is ordered first then the pressure space, we don't
+            // need any offset when specifying the dofs.
+            Array<int> bdr_dof;
+            bool local = true;
+            if (pmesh->bdr_attributes.Size())
+            {
+               Array<int> bdr(pmesh->bdr_attributes.Max());
+               bdr = 1;
+               bdr_dof.SetSize(hdiv_dofTrueDof.GetLocalSize(),0);
+               sequence[k]->GetDofHandler(uform)->MarkDofsOnSelectedBndr(bdr, bdr_dof);
+               bdr_dof.SetSize(hdiv_dofTrueDof.GetLocalSize() + l2_dofTrueDof.GetLocalSize(),0);
+#if 0
+               Array<int> bdr_tdof(hdiv_dofTrueDof.GetTrueLocalSize());
+               hdiv_dofTrueDof.IgnoreNonLocal(bdr_dof,bdr_tdof);
+               bdr_dof.SetSize(bdr_tdof.Size());
+               int cum = 0;
+               for (int i = 0; i<bdr_tdof.Size(); i++)
+               {
+                  if (bdr_tdof[i]) bdr_dof[cum++] = i;
+               }
+               bdr_dof.SetSize(cum);
+               local = false;
+#endif
+            }
+            else
+            {
+               MFEM_ABORT("Need to know the boundary dofs");
+            }
+  
+            PetscBDDCSolverParams opts;
+            // boundary dofs are specified in local vdofs ordering
+            opts.SetNatBdrDofs(&bdr_dof,local);
+            // See also command line options .petsc_rc_darcy_bddc
+            prec = make_unique<PetscBDDCSolver>(pM->GetComm(),*op,opts,prefix.c_str());
+        }
+        else
+        {
+            // With PETSc, we can construct the (same) block-diagonal solver with
+            // command line options (see .petsc_rc_darcy_fieldsplit)
+            prec = make_unique<PetscFieldSplitSolver>(pM->GetComm(),*op,prefix.c_str());
+        }
 
         chrono.Stop();
         tdiff = chrono.RealTime();
@@ -422,9 +515,6 @@ int main (int argc, char *argv[])
 
         ndofs[k] = pM->GetGlobalNumRows() + pB->GetGlobalNumRows();
         nnzs[k] = pM->NNZ() + pB->NNZ();
-        // could multiply B by 2, but don't think that's actually the
-        // appropriate measure
-
         // Solver
         {
             chrono.Clear();
@@ -434,7 +524,7 @@ int main (int argc, char *argv[])
                 BlockVector x( trueBlockOffsets );
                 BlockVector y( trueBlockOffsets );
                 x = 1.0; y = 0.;
-                prec.Mult(x,y);
+                prec->Mult(x,y);
             }
 
             chrono.Stop();
@@ -447,39 +537,50 @@ int main (int argc, char *argv[])
 
             BlockVector psol( trueBlockOffsets );
             psol = 0.;
-            MINRESSolver minres(comm);
-            minres.SetPrintLevel(print_iter);
-            minres.SetMaxIter(max_num_iter);
-            minres.SetRelTol(rtol);
-            minres.SetAbsTol(atol);
-            minres.SetOperator(op );
-            minres.SetPreconditioner( prec );
+            std::string solvertype;
+            std::unique_ptr<PetscLinearSolver> solver;
+            if (unassembled)
+            {
+               // We can use conjugate gradients to solve the problem
+               solver = make_unique<PetscPCGSolver>(MPI_COMM_WORLD);
+               solvertype = "PCG";
+            }
+            else
+            {
+               solver = make_unique<PetscLinearSolver>(MPI_COMM_WORLD);
+               solvertype = "MINRES";
+            }
+            solver->SetOperator(*op);
+            solver->SetPreconditioner(*prec);
+            solver->SetAbsTol(atol);
+            solver->SetRelTol(rtol);
+            solver->SetMaxIter(max_num_iter);
             chrono.Clear();
             chrono.Start();
-            minres.Mult(prhs, psol );
+            solver->Mult(prhs, psol );
             chrono.Stop();
             tdiff = chrono.RealTime();
             if (myid == 0)
-                std::cout << "Timing MINRES_LEVEL " << k
+                std::cout << "Timing " << solvertype << "_LEVEL " << k
                           << ": Solver done in " << tdiff << "s. \n";
             timings(k,SOLVER) = tdiff;
 
             if (myid == 0)
             {
-                if (minres.GetConverged())
-                    std::cout << "Minres converged in "
-                              << minres.GetNumIterations()
+                if (solver->GetConverged())
+                    std::cout << solvertype << " converged in "
+                              << solver->GetNumIterations()
                               << " with a final residual norm "
-                              << minres.GetFinalNorm() << "\n";
+                              << solver->GetFinalNorm() << "\n";
                 else
-                    std::cout << "Minres did not converge in "
-                              << minres.GetNumIterations()
+                    std::cout << solvertype << " did not converge in "
+                              << solver->GetNumIterations()
                               << ". Final residual norm is "
-                              << minres.GetFinalNorm() << "\n";
+                              << solver->GetFinalNorm() << "\n";
             }
             hdiv_dofTrueDof.Distribute(psol.GetBlock(0), sol[k]->GetBlock(0));
             l2_dofTrueDof.Distribute(psol.GetBlock(1), sol[k]->GetBlock(1));
-            iter[k] = minres.GetNumIterations();
+            iter[k] = solver->GetNumIterations();
         }
 
         // ERROR NORMS
@@ -526,7 +627,7 @@ int main (int argc, char *argv[])
         }
 
         // visualize solution
-        if (do_visualize)
+        if (1)
         {
             MultiVector u(sol[k]->GetData(), 1, sol[k]->GetBlock(0).Size());
             sequence[k]->show(uform, u);
@@ -543,5 +644,7 @@ int main (int argc, char *argv[])
                                    p_errors_L2_2, p_norm_L2_2,
                                    errors_div_2, norm_div_2);
 
+    PetscFinalize();
     return EXIT_SUCCESS;
+#endif
 }

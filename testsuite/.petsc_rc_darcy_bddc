@@ -1,0 +1,55 @@
+# KSP options
+
+-ksp_view
+-ksp_converged_reason
+-ksp_monitor_singular_value
+
+# Internal use (don't remove it)
+-matis_convert_local_nest
+
+# PCBDDC options
+
+# mandatory options
+
+# activate support for saddle point problems
+-parelag_levels_pc_bddc_benign_trick
+
+# primal space customization
+-parelag_levels_pc_bddc_nonetflux
+
+# dofs connectivity
+-parelag_levels_pc_bddc_use_local_mat_graph 0
+-parelag_levels_pc_bddc_detect_disconnected
+
+# additional options
+
+# verbose output
+#-parelag_levels_pc_bddc_check_level 1
+
+# local solvers (needs MUMPS or UMFPACK)
+# default solvers may fail
+# MUMPS
+-parelag_levels_pc_bddc_neumann_pc_type cholesky
+-parelag_levels_pc_bddc_neumann_pc_factor_mat_solver_package mumps
+-parelag_levels_pc_bddc_dirichlet_pc_type cholesky
+-parelag_levels_pc_bddc_dirichlet_pc_factor_mat_solver_package mumps
+
+# UMFPACK
+#-parelag_levels_pc_bddc_neumann_pc_type lu 
+#-parelag_levels_pc_bddc_neumann_pc_factor_mat_solver_package umfpack 
+#-parelag_levels_pc_bddc_dirichlet_pc_type lu
+#-parelag_levels_pc_bddc_dirichlet_pc_factor_mat_solver_package umfpack
+
+# coarse solver (needs MUMPS)
+# default solver may fail
+-parelag_levels_pc_bddc_coarse_pc_factor_mat_solver_package mumps
+-parelag_levels_pc_bddc_coarse_pc_type cholesky
+
+# deluxe scaling (needs MUMPS)
+-parelag_levels_pc_bddc_use_deluxe_scaling
+-parelag_levels_pc_bddc_deluxe_zerorows
+-sub_schurs_mat_mumps_icntl_14 500
+
+# adaptive generation of primal space (needs MUMPS)
+#-parelag_levels_pc_bddc_adaptive_threshold 5
+#-parelag_levels_pc_bddc_schur_exact

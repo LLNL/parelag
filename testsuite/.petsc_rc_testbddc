@@ -1,0 +1,18 @@
+-parelag_level0_ksp_view
+-parelag_level0_ksp_monitor_singular_value
+-parelag_level1_ksp_view
+-parelag_level1_ksp_monitor_singular_value
+-parelag_level2_ksp_view
+-parelag_level2_ksp_monitor_singular_value
+
+-parelag_level0_pc_bddc_use_deluxe_scaling
+# This is needed by forms 1 and 2 only
+-parelag_level0_pc_bddc_use_local_mat_graph 0
+
+-parelag_level1_pc_bddc_use_deluxe_scaling
+# This is needed by forms 1 and 2 only
+-parelag_level1_pc_bddc_use_local_mat_graph 0
+
+-parelag_level2_pc_bddc_use_deluxe_scaling
+# This is needed by forms 1 and 2 only
+-parelag_level2_pc_bddc_use_local_mat_graph 0
