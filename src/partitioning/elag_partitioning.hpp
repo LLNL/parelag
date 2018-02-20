@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -14,16 +14,14 @@
 #ifndef ELAG_PARTITIONING_HPP_
 #define ELAG_PARTITIONING_HPP_
 
-#include <mfem.hpp>
-using namespace mfem;
-
-#include "metis.h"
-
-#include "../utilities/elag_utilities.hpp"
-#include "../structures/elag_structures.hpp"
-
-#include "MFEMRefinedMeshPartitioner.hpp"
+#include "CartesianPartitioner.hpp"
+#include "LogicalPartitioner.hpp"
 #include "MetisGraphPartitioner.hpp"
+#include "MFEMRefinedMeshPartitioner.hpp"
+#include "GeometricBoxPartitioner.hpp"
+
+#ifdef ParELAG_ENABLE_PARMETIS
 #include "ParmetisGraphPartitioner.hpp"
+#endif /* ParELAG_ENABLE_PARMETIS */
 
 #endif /* ELAG_PARTITIONING_HPP_ */
