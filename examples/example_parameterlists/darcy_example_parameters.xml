@@ -1,0 +1,180 @@
+<!-- This is an example parameter list in which I've tried to include
+     every parameter for every component that I could
+     remember. Individual applications will certainly only require a
+     subset of these. However, no application should complain that
+     there are too many parameters in a given list; rather, extraneous
+     parameters should be (silently!) ignored. -->
+<ParameterList name="Default">
+  <ParameterList name="Problem parameters">
+
+    <!-- Mesh name -->
+    <Parameter name="Mesh file" type="string"
+               value="/path/to/meshes/inline-hex.mesh"/>
+
+    <!-- Number of times to refine in serial. Set to -1 to refine the
+         minimum amount of times to probably get a good parallel
+         distribution (experimentally, until the number of elements is
+         six times the number of processes in the communicator). -->
+    <Parameter name="Serial refinement levels" type="int" value="-1"/>
+
+    <!-- Number of times to refine in parallel. This determines the
+         number of levels in the AMGe hierarchy. -->
+    <Parameter name="Parallel refinement levels" type="int" value="3"/>
+
+    <!-- The order of the Hdiv and L2 finite element spaces. H1 and
+         Hcurl will have order one higher than this. -->
+    <Parameter name="Finite element order" type="int" value="0"/>
+
+    <!-- Order of polynomials to include in the upscaled spaces. -->
+    <Parameter name="Upscaling order" type="int" value="0"/>
+
+    <!-- Level in the AMGe hierarchy at which to solve the problem. -->
+    <Parameter name="Solve level" type="int" value="0"/>
+
+    <!-- Whether or not to apply a mesh deformation. -->
+    <Parameter name="Deformation" type="bool" value="false"/>
+    
+    <!-- The linear solver to use to solve the problem at "Solve level". -->
+    <Parameter name="Linear solver" type="string"
+               value="GMRES-AMGe-BlkJacobi-GS-AMG"/>
+    
+  </ParameterList>
+  <!-- ParameterList "Problem parameters" -->
+
+  <!-- Control the visualization and timing output -->
+  <ParameterList name="Output control">
+    <!-- Control whether the solution should be displayed via GLVis. A
+         GLVis server must be listening or this will fail. -->
+    <Parameter name="Visualize solution" type="bool" value="false"/>
+
+    <!-- Control whether timing information is summarized at the end
+         of a run. -->
+    <Parameter name="Print timings" type="bool" value="true"/>
+
+    <!-- Control whether to print progress information from rank 0 to
+         stdout during the course of a run. -->
+    <Parameter name="Show progress" type="bool" value="true"/>
+  </ParameterList>
+  <!-- ParameterList "Output control" -->
+
+  <!-- Define a library of available preconditioners -->
+  <ParameterList name="Preconditioner Library">
+
+    <!-- GMRES preconditioned with block-Jacobi preconditioner as a
+         coarse-grid solver. This won't work super well. :/ -->
+    <ParameterList name="GMRES-AMGe-BlkJacobi-GS-AMG">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="GMRES"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="AMGe-BlkJacobi-GS-AMG"/>
+        <Parameter name="Print level" type="int" value="1"/>
+        <Parameter name="Maximum iterations" type="int" value="300"/>
+        <Parameter name="Relative tolerance" type="double" value="1e-6"/>
+        <Parameter name="Absolute tolerance" type="double" value="1e-6"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "GMRES-BlkJacobi-GS-AMG_CG" -->
+
+    <!-- AMGe for the Darcy problem using Block-Jacobi as a smoother. -->
+    <ParameterList name="AMGe-BlkJacobi-GS-AMG">
+      <Parameter name="Type" type="string" value="AMGe"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Maximum levels" type="int" value="-1"/>
+        <Parameter name="Forms" type="vector_int" value="2 3"/>
+        <Parameter name="PreSmoother" type="string" value="BlkJacobi-GS-AMG"/>
+        <Parameter name="PostSmoother" type="string" value="BlkJacobi-GS-AMG"/>
+        <Parameter name="Coarse solver" type="string"
+                   value="GMRES-BlkJacobi-GS-AMG_CG"/>
+        <Parameter name="Cycle type" type="string" value="V-cycle"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "AMGe-BS-GS" -->
+
+    <!-- A block-Jacobi type preconditioner with Gauss-Seidel smoothing
+         for the A^{-1} solver and BoomerAMG for the S^{-1}
+         solver. Also, uses diag(A)^{-1} to compute S explicitly. -->
+    <ParameterList name="BlkJacobi-GS-AMG">
+      <Parameter name="Type" type="string" value="Block Jacobi"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="A00 Inverse" type="string" value="Gauss-Seidel"/>
+        <Parameter name="A11 Inverse" type="string" value="BoomerAMG Solver"/>
+
+        <Parameter name="Alpha" type="double" value="1.0"/>
+        <Parameter name="S Type" type="string" value="Diagonal"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Block Jacobi GS" -->
+
+    <!-- GMRES preconditioned with block-Jacobi preconditioner as a
+         coarse-grid solver. This won't work super well. :/ -->
+    <ParameterList name="GMRES-BlkJacobi-GS-AMG_CG">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="GMRES"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="BlkJacobi-GS-AMG"/>
+        <Parameter name="Print level" type="int" value="-1"/>
+        <Parameter name="Maximum iterations" type="int" value="5"/>
+        <Parameter name="Relative tolerance" type="double" value="0.0"/>
+        <Parameter name="Absolute tolerance" type="double" value="0.0"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "GMRES-BlkJacobi-GS-AMG_CG" -->
+
+    <!-- L1 Gauss-Seidel preconditioner -->
+    <ParameterList name="Gauss-Seidel">
+      <Parameter name="Type" type="string" value="Hypre"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Type" type="string" value="L1 Gauss-Seidel"/>
+        <Parameter name="Sweeps" type="int" value="1"/>
+        <Parameter name="Damping Factor" type="double" value="1.0"/>
+        <Parameter name="Omega" type="double" value="1.0"/>
+        <Parameter name="Cheby Poly Order" type="int" value="2"/>
+        <Parameter name="Cheby Poly Fraction" type="double" value="0.3"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Gauss-Seidel" -->
+
+    <!-- BoomerAMG preconditioner -->
+    <ParameterList name="BoomerAMG Solver">
+      <Parameter name="Type" type="string" value="BoomerAMG"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Coarsening type" type="int" value="10"/>
+        <Parameter name="Aggressive coarsening levels" type="int" value="1"/>
+        <Parameter name="Relaxation type" type="int" value="8"/>
+        <Parameter name="Theta" type="double" value="0.25"/>
+        <Parameter name="Interpolation type" type="int" value="6"/>
+        <Parameter name="P max" type="int" value="4"/>
+        <Parameter name="Print level" type="int" value="0"/>
+        <Parameter name="Dim" type="int" value="1"/>
+        <Parameter name="Maximum levels" type="int" value="25"/>
+        <Parameter name="Tolerance" type="double" value="0.0"/>
+        <Parameter name="Maximum iterations" type="int" value="1"/>
+      </ParameterList>
+      <!-- End ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- End ParameterList "BoomerAMG Solver" -->
+
+    <!-- Sequential SuperLU sparse direct solver -->
+    <ParameterList name="SuperLU">
+      <Parameter name="Type" type="string" value="Direct"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Name" type="string" value="SuperLU"/>
+        <!-- There are plenty. I don't remember right now. -->
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "SuperLU" -->
+
+  </ParameterList>
+  <!-- ParameterList "Preconditioner Library" -->
+</ParameterList>
+<!-- ParameterList "Default" -->

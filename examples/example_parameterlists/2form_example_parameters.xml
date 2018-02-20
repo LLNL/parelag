@@ -1,0 +1,295 @@
+<!-- This is an example parameter list in which I've tried to include
+     every parameter for every component that I could
+     remember. Individual applications will certainly only require a
+     subset of these. However, no application should complain that
+     there are too many parameters in a given list; rather, extraneous
+     parameters should be (silently!) ignored. -->
+<ParameterList name="Default">
+  <ParameterList name="Problem parameters">
+
+    <!-- Mesh name -->
+    <Parameter name="Mesh file" type="string"
+               value="/path/to/meshes/inline-hex.mesh"/>
+
+    <!-- Number of times to refine in serial. Set to -1 to refine the
+         minimum amount of times to probably get a good parallel
+         distribution (experimentally, until the number of elements is
+         six times the number of processes in the communicator). -->
+    <Parameter name="Serial refinement levels" type="int" value="-1"/>
+
+    <!-- Number of times to refine in parallel. This determines the
+         number of levels in the AMGe hierarchy. -->
+    <Parameter name="Parallel refinement levels" type="int" value="3"/>
+
+    <!-- The order of the Hdiv and L2 finite element spaces. H1 and
+         Hcurl will have order one higher than this. -->
+    <Parameter name="Finite element order" type="int" value="0"/>
+
+    <!-- Order of polynomials to include in the upscaled spaces. -->
+    <Parameter name="Upscaling order" type="int" value="0"/>
+
+    <!-- Level in the AMGe hierarchy at which to start solving. This
+         will solve the (upscaled) problem at each level between this
+         level and "Stop level". -->
+    <Parameter name="Start level" type="int" value="0"/>
+
+    <!-- Level in the AMGe hierarchy at which to stop solving. Set to
+         "-1" to solve at every level below "Start level". -->
+    <Parameter name="Stop level" type="int" value="-1"/>
+
+    <!-- The frequency parameter in the equations. -->
+    <Parameter name="Frequency" type="double" value="0.1"/>
+
+    <!-- The number of (fine grid) subdomains to be assigned a random
+         coefficient. This is leftover from some tests I ran once. -->
+    <Parameter name="Coefficient subdomains" type="int" value="2"/>
+
+    <!-- A list of solvers to apply. The driver will loop over these
+         solvers on each level, which must be entries in the "Preconditioner
+         Library", and solve the system with each one in turn. -->
+    <Parameter name="List of linear solvers" type="list(string)"
+               value="PCG with AMGe-GS Preconditioner,
+                      PCG with Auxiliary Space Preconditioner"/>
+
+  </ParameterList>
+  <!-- ParameterList "Problem parameters" -->
+
+  <!-- Control the visualization and timing output -->
+  <ParameterList name="Output control">
+    <!-- Control whether the solution should be displayed via GLVis. A
+         GLVis server must be listening or this will fail. -->
+    <Parameter name="Visualize solution" type="bool" value="false"/>
+
+    <!-- Control whether timing information is summarized at the end
+         of a run. -->
+    <Parameter name="Print timings" type="bool" value="true"/>
+
+    <!-- Control whether to print progress information from rank 0 to
+         stdout during the course of a run. -->
+    <Parameter name="Show progress" type="bool" value="true"/>
+  </ParameterList>
+  <!-- ParameterList "Output control" -->
+
+  <!-- Define a library of available preconditioners -->
+  <ParameterList name="Preconditioner Library">
+    <!-- PCG preconditioned with AMGe using Gauss-Seidel
+         smoothers. This is not a suitable for an H-div problem, and
+         its performance, relative to the Auxiliary Space method,
+         should be poor for this problem. -->
+    <ParameterList name="PCG with AMGe-GS Preconditioner">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="PCG"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="AMGe-GS"/>
+        <Parameter name="Print level" type="int" value="1"/>
+        <Parameter name="Maximum iterations" type="int" value="300"/>
+        <Parameter name="Relative tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Absolute tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "PCG with AMGe-GS Preconditioner" -->
+
+    <!-- PCG preconditioned with a multilevel auxiliary space
+         preconditioner. This is the correct preconditioner for this
+         problem, and its performance should be superior to that of
+         the AMGe-GS preconditioner. -->
+    <ParameterList name="PCG with Auxiliary Space Preconditioner">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="PCG"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="AMGe-HIP-GS_2"/>
+        <Parameter name="Print level" type="int" value="1"/>
+        <Parameter name="Maximum iterations" type="int" value="300"/>
+        <Parameter name="Relative tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Absolute tolerance" type="double"
+                   value="1e-6"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "PCG with AMGe-GS Preconditioner" -->
+
+    <!-- AMGe for the 0-form (Poisson) problem using L1-Gauss-Seidel
+         for the pre- and post-smoothing steps, with
+         BoomerAMG-preconditioned CG for the coarse-grid solve -->
+    <ParameterList name="AMGe-GS">
+      <Parameter name="Type" type="string" value="AMGe"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Maximum levels" type="int" value="-1"/>
+        <Parameter name="Forms" type="vector(int)" value="2"/>
+        <Parameter name="PreSmoother" type="string" value="Gauss-Seidel"/>
+        <Parameter name="PostSmoother" type="string" value="Gauss-Seidel"/>
+        <Parameter name="Coarse solver" type="string" value="PCG-AMG"/>
+        <Parameter name="Cycle type" type="string" value="V-cycle"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "AMGe-GS" -->
+
+    <!-- AMGe for the 2-form (H(div)) problem using Hiptmair
+         (auxiliary space) smoothing with L1 Gauss-Seidel for the
+         primary and the auxiliary solver for the pre- and
+         post-smoothing steps, with ADS-preconditioned CG for the
+         coarse-grid solve -->
+    <ParameterList name="AMGe-HIP-GS_2">
+      <Parameter name="Type" type="string" value="AMGe"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Maximum levels" type="int" value="-1"/>
+        <Parameter name="Forms" type="vector(int)" value="2"/>
+        <Parameter name="PreSmoother" type="string" value="Hiptmair-GS-GS"/>
+        <Parameter name="PostSmoother" type="string" value="Hiptmair-GS-GS"/>
+        <Parameter name="Coarse solver" type="string" value="PCG-ADS"/>
+        <Parameter name="Cycle type" type="string" value="V-cycle"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "AMGe-HIP-GS_2" -->
+
+    <!-- Hiptmair smoother with L1 Gauss-Seidel as the primary and
+         auxiliary space smoother -->
+    <ParameterList name="Hiptmair-GS-GS">
+      <Parameter name = "Type" type="string" value="Hiptmair"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Primary Smoother" type="string"
+                   value="Gauss-Seidel"/>
+        <Parameter name="Auxiliary Smoother" type="string"
+                   value="Gauss-Seidel"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Hiptmair-GS-GS" -->
+
+    <!-- PCG preconditioned with BoomerAMG preconditioner -->
+    <ParameterList name="PCG-AMG">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="PCG"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="BoomerAMG Solver"/>
+        <Parameter name="Print level" type="int" value="-1"/>
+        <Parameter name="Maximum iterations" type="int" value="3"/>
+        <Parameter name="Relative tolerance" type="double"
+                   value="1e-4"/>
+        <Parameter name="Absolute tolerance" type="double"
+                   value="1e-4"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "PCG-AMG" -->
+
+    <!-- PCG preconditioned with ADS preconditioner -->
+    <ParameterList name="PCG-ADS">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="PCG"/>
+        <Parameter name="Preconditioner" type="string" value="ADS Solver"/>
+        <Parameter name="Print level" type="int" value="-1"/>
+        <Parameter name="Maximum iterations" type="int" value="3"/>
+        <Parameter name="Relative tolerance" type="double"
+                   value="1e-4"/>
+        <Parameter name="Absolute tolerance" type="double"
+                   value="1e-4"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "PCG-ADS" -->
+
+    <!-- L1 Gauss-Seidel preconditioner -->
+    <ParameterList name="Gauss-Seidel">
+      <Parameter name="Type" type="string" value="Hypre"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Type" type="string" value="L1 Gauss-Seidel"/>
+        <Parameter name="Sweeps" type="int" value="1"/>
+        <Parameter name="Damping Factor" type="double" value="1.0"/>
+        <Parameter name="Omega" type="double" value="1.0"/>
+        <Parameter name="Cheby Poly Order" type="int" value="2"/>
+        <Parameter name="Cheby Poly Fraction" type="double" value="0.3"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Gauss-Seidel" -->
+
+    <!-- BoomerAMG preconditioner -->
+    <ParameterList name="BoomerAMG Solver">
+      <Parameter name="Type" type="string" value="BoomerAMG"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Coarsening type" type="int" value="10"/>
+        <Parameter name="Aggressive coarsening levels" type="int" value="1"/>
+        <Parameter name="Relaxation type" type="int" value="8"/>
+        <Parameter name="Theta" type="double" value="0.25"/>
+        <Parameter name="Interpolation type" type="int" value="6"/>
+        <Parameter name="P max" type="int" value="4"/>
+        <Parameter name="Print level" type="int" value="0"/>
+        <Parameter name="Dim" type="int" value="1"/>
+        <Parameter name="Maximum levels" type="int" value="25"/>
+        <Parameter name="Tolerance" type="double" value="0.0"/>
+        <Parameter name="Maximum iterations" type="int" value="1"/>
+      </ParameterList>
+      <!-- End ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- End ParameterList "BoomerAMG Solver" -->
+
+    <!-- ADS preconditioner -->
+    <ParameterList name="ADS Solver">
+      <Parameter name="Type" type="string" value="ADS"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Cycle type" type="int" value="11"/>
+        <Parameter name="Tolerance" type="double" value="0.0"/>
+        <Parameter name="Maximum iterations" type="int" value="1"/>
+        <Parameter name="Print level" type="int" value="1"/>
+        <Parameter name="Relaxation type" type="int" value="2"/>
+        <Parameter name="Relaxation sweeps" type="int" value="1"/>
+        <Parameter name="Relaxation weight" type="double" value="1.0"/>
+        <Parameter name="Relaxation omega" type="double" value="1.0"/>
+        <ParameterList name="AMS Parameters">
+          <Parameter name="Cycle type" type="int" value="14"/>
+          <Parameter name="Relaxation type" type="int" value="2"/>
+          <Parameter name="Relaxation sweeps" type="int" value="1"/>
+          <Parameter name="Relaxation weight" type="double" value="1.0"/>
+          <Parameter name="Relaxation omega" type="double" value="1.0"/>
+          <Parameter name="beta_is_zero" type="bool" value="false"/>
+          <ParameterList name="PtAP AMG Parameters">
+            <Parameter name="Coarsening type" type="int" value="10"/>
+            <Parameter name="Aggressive coarsening levels" type="int" value="1"/>
+            <Parameter name="Relaxation type" type="int" value="6"/>
+            <Parameter name="Theta" type="double" value="0.25"/>
+            <Parameter name="Interpolation type" type="int" value="6"/>
+            <Parameter name="P max" type="int" value="4"/>
+            <Parameter name="Print level" type="int" value="0"/>
+            <Parameter name="Dim" type="int" value="1"/>
+            <Parameter name="Maximum levels" type="int" value="25"/>
+          </ParameterList>
+          <!-- End ParameterList "PtAP AMG Parameters" -->
+        </ParameterList>
+        <!-- End ParameterList "AMS Parameters" -->
+        <ParameterList name="AMG Parameters">
+          <Parameter name="Coarsening type" type="int" value="10"/>
+          <Parameter name="Aggressive coarsening levels" type="int" value="1"/>
+          <Parameter name="Relaxation type" type="int" value="6"/>
+          <Parameter name="Theta" type="double" value="0.25"/>
+          <Parameter name="Interpolation type" type="int" value="6"/>
+          <Parameter name="P max" type="int" value="4"/>
+          <Parameter name="Print level" type="int" value="0"/>
+          <Parameter name="Dim" type="int" value="1"/>
+          <Parameter name="Maximum levels" type="int" value="25"/>
+        </ParameterList>
+        <!-- End ParameterList "AMG Parameters" -->
+      </ParameterList>
+      <!-- End ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- End ParameterList "ADS Solver" -->
+
+  </ParameterList>
+  <!-- ParameterList "Preconditioner Library" -->
+
+</ParameterList>
+<!-- ParameterList "Default" -->

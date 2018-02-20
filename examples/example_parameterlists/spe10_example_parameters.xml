@@ -1,0 +1,200 @@
+<!-- This is an example parameter list in which I've tried to include
+     every parameter for every component that I could
+     remember. Individual applications will certainly only require a
+     subset of these. However, no application should complain that
+     there are too many parameters in a given list; rather, extraneous
+     parameters should be (silently!) ignored. -->
+<ParameterList name="Default">
+  <ParameterList name="Problem parameters">
+
+    <!-- No mesh file required for SPE10 -->
+    <!--Parameter name="Mesh file" type="string" value="none needed"/-->
+
+    <!-- Number of times to refine in serial. Set to -1 to refine the
+         minimum amount of times to probably get a good parallel
+         distribution (experimentally, until the number of elements is
+         six times the number of processes in the communicator). -->
+    <Parameter name="Serial refinement levels" type="int" value="-1"/>
+
+    <!-- Number of times to refine in parallel. This determines the
+         number of levels in the AMGe hierarchy. -->
+    <Parameter name="Parallel refinement levels" type="int" value="2"/>
+
+    <!-- The order of the Hdiv and L2 finite element spaces. H1 and
+         Hcurl will have order one higher than this. -->
+    <Parameter name="Finite element order" type="int" value="0"/>
+
+    <!-- Order of polynomials to include in the upscaled spaces. -->
+    <Parameter name="Upscaling order" type="int" value="0"/>
+
+    <!-- Level in the AMGe hierarchy at which to start solving. This
+         will solve the (upscaled) problem at each level between this
+         level and "Stop level". -->
+    <Parameter name="Start level" type="int" value="0"/>
+
+    <!-- Level in the AMGe hierarchy at which to stop solving. Set to
+         "-1" to solve at every level below "Start level". -->
+    <Parameter name="Stop level" type="int" value="-1"/>
+
+    <!-- Whether or not us derefinement. If value="false",
+         unstructured coarsening using METIS will occur. -->
+    <Parameter name="Use derefinement" type="bool" value="true"/>
+
+    <!-- If not using derefinement, this is the coarsening factor. -->
+    <Parameter name="Coarsening factor" type="int" value="8"/>
+
+    <!-- If not using derefinement, this is the number of levels of
+         aggressive coarsening, where the coarsening factor is squared
+         for these levels. -->
+    <Parameter name="Aggressive coarsening levels" type="int" value="1"/>
+
+    <!-- The linear solver to use to solve the problem at "Solve level". -->
+    <Parameter name="List of linear solvers" type="list(string)"
+               value="GMRES-AMGe-BlkGS-GS-AMG"/>
+
+  </ParameterList>
+  <!-- ParameterList "Problem parameters" -->
+
+  <ParameterList name="SPE10 problem parameters">
+    <Parameter name="nDimensions" type="int" value="3"/>
+    <Parameter name="SPE10 Slice" type="int" value="-1"/>
+    <Parameter name="SPE10 PermFile" type="string"
+               value="/path/to/data/spe_perm.dat"/>
+    <Parameter name="Number of elements" type="vector_int"
+               value="60 220 85"/>
+    <Parameter name="Element sizes" type="vector_int" value="120 220 17"/>
+    <Parameter name="Essential Attributes" type="vector_int"
+               value="1 0 1 0 1 1"/>
+    <Parameter name="Observational Attributes" type="vector_int"
+               value="0 1 0 0 0 0"/>
+    <Parameter name="Inflow Attributes" type="vector_int"
+               value="0 0 0 1 0 0"/>
+  </ParameterList>
+
+  <!-- Control the visualization and timing output -->
+  <ParameterList name="Output control">
+    <!-- Control whether the solution should be displayed via GLVis. A
+         GLVis server must be listening or this will fail. -->
+    <Parameter name="Visualize solution" type="bool" value="false"/>
+
+    <!-- Control whether timing information is summarized at the end
+         of a run. -->
+    <Parameter name="Print timings" type="bool" value="true"/>
+
+    <!-- Control whether to print progress information from rank 0 to
+         stdout during the course of a run. -->
+    <Parameter name="Show progress" type="bool" value="true"/>
+  </ParameterList>
+  <!-- ParameterList "Output control" -->
+
+  <!-- Define a library of available preconditioners -->
+  <ParameterList name="Preconditioner Library">
+    
+    <!-- GMRES preconditioned with block-Jacobi preconditioner as a
+         coarse-grid solver. This won't work super well. :/ -->
+    <ParameterList name="GMRES-Block-LDU-AMGe-GS">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="GMRES"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="Block-LDU-AMGe-GS"/>
+        <Parameter name="Print level" type="int" value="1"/>
+        <Parameter name="Maximum iterations" type="int" value="300"/>
+        <Parameter name="Relative tolerance" type="double" value="1e-6"/>
+        <Parameter name="Absolute tolerance" type="double" value="1e-6"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "GMRES-BlkGS-GS-AMG_CG" -->
+
+    <!-- A block-LDU approximate block-factorization method using the
+         AMGe-GS preconditioner for (one of the) A^{-1} solves and BoomerAMG for
+         the S^{-1} (approximate) solve. -->
+    <ParameterList name="Block-LDU-AMGe-GS">
+      <Parameter name="Type" type="string" value="Block LDU"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Damping Factor" type="double" value="0.775"/>
+        <Parameter name="A00_1 Inverse" type="string" value="AMGe-GS"/>
+        <Parameter name="A00_2 Inverse" type="string" value="AMGe-GS"/>
+        <Parameter name="A00_3 Inverse" type="string" value="AMGe-GS"/>
+        <Parameter name="Alpha" type="double" value="1.0"/>
+        <Parameter name="S Type" type="string" value="Diagonal"/>
+        <Parameter name="S Inverse" type="string" value="BoomerAMG Solver"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    
+    <!-- ParameterList "Block-LDU-AMGe-GS" -->
+    <!-- AMGe for the 0-form (Poisson) problem using L1-Gauss-Seidel
+         for the pre- and post-smoothing steps, with
+         GS-preconditioned CG for the coarse-grid solve -->
+    <ParameterList name="AMGe-GS">
+      <Parameter name="Type" type="string" value="AMGe"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Maximum levels" type="int" value="-1"/>
+        <Parameter name="Forms" type="vector_int" value="2"/>
+        <Parameter name="PreSmoother" type="string" value="Gauss-Seidel"/>
+        <Parameter name="PostSmoother" type="string" value="Gauss-Seidel"/>
+        <Parameter name="Coarse solver" type="string" value="PCG-GS"/>
+        <Parameter name="Cycle type" type="string" value="V-cycle"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "AMGe-GS" -->
+
+    <!-- PCG preconditioned with Gauss-Seidel preconditioner -->
+    <ParameterList name="PCG-GS">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="PCG"/>
+        <Parameter name="Preconditioner" type="string" value="Gauss-Seidel"/>
+        <Parameter name="Print level" type="int" value="-1"/>
+        <Parameter name="Maximum iterations" type="int" value="3"/>
+        <Parameter name="Relative tolerance" type="double"
+                   value="0"/>
+        <Parameter name="Absolute tolerance" type="double"
+                   value="0"/>
+        <Parameter name="Restart size" type="int" value="50"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "PCG-GS" -->
+
+    <!-- L1 Gauss-Seidel preconditioner -->
+    <ParameterList name="Gauss-Seidel">
+      <Parameter name="Type" type="string" value="Hypre"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Type" type="string" value="L1 Gauss-Seidel"/>
+        <Parameter name="Sweeps" type="int" value="1"/>
+        <Parameter name="Damping Factor" type="double" value="1.0"/>
+        <Parameter name="Omega" type="double" value="1.0"/>
+        <Parameter name="Cheby Poly Order" type="int" value="2"/>
+        <Parameter name="Cheby Poly Fraction" type="double" value="0.3"/>
+      </ParameterList>
+      <!-- ParameterList "Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "Gauss-Seidel" -->
+
+    <!-- BoomerAMG preconditioner -->
+    <ParameterList name="BoomerAMG Solver">
+      <Parameter name="Type" type="string" value="BoomerAMG"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Coarsening type" type="int" value="10"/>
+        <Parameter name="Aggressive coarsening levels" type="int" value="0"/>
+        <Parameter name="Relaxation type" type="int" value="8"/>
+        <Parameter name="Theta" type="double" value="0.25"/>
+        <Parameter name="Interpolation type" type="int" value="6"/>
+        <Parameter name="P max" type="int" value="4"/>
+        <Parameter name="Print level" type="int" value="0"/>
+        <Parameter name="Maximum levels" type="int" value="25"/>
+        <Parameter name="Maximum iterations" type="int" value="1"/>
+      </ParameterList>
+      <!-- End ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- End ParameterList "BoomerAMG Solver" -->
+
+  </ParameterList>
+  <!-- ParameterList "Preconditioner Library" -->
+</ParameterList>
+<!-- ParameterList "Default" -->

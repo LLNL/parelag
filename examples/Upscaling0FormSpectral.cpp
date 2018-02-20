@@ -27,7 +27,27 @@ using std::make_shared;
 enum {TOPOLOGY=0, SPACES, ASSEMBLY, PRECONDITIONER, SOLVER};
 
 const int NSTAGES = 5;
-const char * stage_names[] = {"TOPOLOGY", "SPACES", "ASSEMBLY","PRECONDITIONER","SOLVER"};
+const char * stage_names[] = {"TOPOLOGY", "SPACES", "ASSEMBLY","PRECONDITIONER",
+                              "SOLVER"};
+
+double checkboard_coeff(Vector& x)
+{
+    elag_assert(2 <= x.Size() && x.Size() <= 3);
+    double d = 10.;
+
+    if ((x.Size() == 2 &&
+         ((int)ceil(x(0)*d) & 1) == ((int)ceil(x(1)*d) & 1)) ||
+        (x.Size() == 3 &&
+         ((((int)ceil(x(2)*d) & 1) &&
+           ((int)ceil(x(0)*d) & 1) == ((int)ceil(x(1)*d) & 1)) ||
+          (!((int)ceil(x(2)*d) & 1) &&
+          ((int)ceil(x(0)*d) & 1) != ((int)ceil(x(1)*d) & 1)))))
+    {
+        return 1e6;
+    }
+    else
+        return 1e0;
+}
 
 int main (int argc, char *argv[])
 {
@@ -39,20 +59,21 @@ int main (int argc, char *argv[])
     MPI_Comm_size(comm, &num_procs);
     MPI_Comm_rank(comm, &myid);
 
-    elag_trace_init(comm);
-
     const char* meshfile_c = "../meshes/boxcyl.mesh3d";
     int ser_ref_levels = 0;
     int par_ref_levels = 4;
     int feorder = 0;
     int upscalingOrder = 0;
+    int max_evects = 10;
+    double spect_tol = 0.005;
     bool do_visualize = true;
+    int coarsening_step = 1;
     OptionsParser args(argc, argv);
-    args.AddOption(&meshfile_c, "-m", "--mesh",
+    args.AddOption(&meshfile_c, "-m", "--meshfile",
                    "MFEM mesh file to load.");
-    args.AddOption(&ser_ref_levels, "-sr", "--nref_serial",
+    args.AddOption(&ser_ref_levels, "-sr", "--ser_ref_levels",
                    "Number of times to refine serial mesh.");
-    args.AddOption(&par_ref_levels, "-pr", "--nref_parallel",
+    args.AddOption(&par_ref_levels, "-pr", "--par_ref_levels",
                    "Number of times to refine parallel mesh.");
     args.AddOption(&feorder, "-feo", "--feorder",
                    "Polynomial order of fine finite element space.");
@@ -60,6 +81,12 @@ int main (int argc, char *argv[])
                    "Target polynomial order of coarse space.");
     args.AddOption(&do_visualize, "-v", "--do-visualize", "-nv", "--no-visualize",
                    "Do interactive GLVis visualization.");
+    args.AddOption(&max_evects, "-mev", "--max_evects",
+                   "Maximum eigenvectors per agglomerate in spectral method.");
+    args.AddOption(&spect_tol, "-st", "--spect_tol",
+                   "Spectral tolerance for eigenvalues in spectral method.");
+    args.AddOption(&coarsening_step, "-cs", "--coarsening_step",
+                   "Number of refines to undo with a single coarsen.");
     args.Parse();
     if (!args.Good())
     {
@@ -76,41 +103,55 @@ int main (int argc, char *argv[])
     constexpr double rtol = 1e-6;
     constexpr double atol = 1e-12;
 
-    if(myid == 0)
+    if (myid == 0)
     {
         std::cout << "Read mesh " << meshfile << "\n";
         std::cout << "Finite Element Order " << feorder << "\n";
         std::cout << "Upscaling Order " << upscalingOrder << "\n";
         std::cout << "Refine mesh in serial " << ser_ref_levels << " times.\n";
         std::cout << "Refine mesh in parallel " << par_ref_levels << " times.\n";
+        std::cout << "Maximal number of eigenvectors " << max_evects << "\n";
+        std::cout << "Spectral tolerance " << spect_tol << "\n";
+        std::cout << "Coarsening step " << coarsening_step << "\n";
     }
 
     shared_ptr<ParMesh> pmesh;
     Array<int> ess_attr;
     {
         // 2. Read the (serial) mesh from the given mesh file and
-        // uniformly refine it.
+        // uniformly refine it. If we can't find a file on the command line
+        // we generate a boring structured mesh.
         std::ifstream imesh(meshfile.c_str());
-        if (!imesh)
+        unique_ptr<Mesh> mesh;
+        if (imesh)
         {
-            if(myid == 0)
-                std::cerr << "\nCan not open mesh file: " << meshfile << "\n\n";
-            return EXIT_FAILURE;
+            mesh = make_unique<Mesh>(imesh, 1, 1);
+            imesh.close();
         }
-        auto mesh = make_unique<Mesh>(imesh, 1, 1);
-        imesh.close();
+        else
+        {
+            if (myid == 0)
+            {
+                std::cout << "Could not find given mesh file: " << meshfile
+                          << std::endl << "Generating structured mesh."
+                          << std::endl;
+            }
+            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, 1);
+        }
         ess_attr.SetSize(mesh->bdr_attributes.Max());
-        ess_attr = 1;
+        ess_attr = 0;
+        ess_attr[0] = 1;
+        ess_attr[2] = 1;
 
         for (int l = 0; l < ser_ref_levels; l++)
             mesh->UniformRefinement();
 
         pmesh = make_shared<ParMesh>(comm, *mesh);
     }
-
     const int nDimensions = pmesh->Dimension();
-    const int nLevels = par_ref_levels+1;
-    Array<int> level_nElements(nLevels);
+
+    const int n_refine_levels = par_ref_levels+1;
+    Array<int> level_nElements(n_refine_levels);
     for (int l = 0; l < par_ref_levels; l++)
     {
         level_nElements[par_ref_levels-l] = pmesh->GetNE();
@@ -121,21 +162,21 @@ int main (int argc, char *argv[])
     if(nDimensions == 3)
         pmesh->ReorientTetMesh();
 
-    ConstantCoefficient coeffL2(1.);
-    ConstantCoefficient coeffHdiv(1.);
-    Vector ubdr_vect(pmesh->Dimension());
-    ubdr_vect = 0.0;
-    VectorConstantCoefficient ubdr(ubdr_vect);
-    Vector f_vect(pmesh->Dimension());
-    f_vect = 0.0;
-    f_vect[nDimensions-1] = 1.0;
-    VectorConstantCoefficient f(f_vect);
+    ConstantCoefficient coeffH1(1.);
+    FunctionCoefficient coeffDer(checkboard_coeff);
+    Vector bdr(ess_attr.Size());
+    bdr = 0.;
+    bdr(0) = 1.;
+    PWConstCoefficient ubdr(bdr);
+    ConstantCoefficient f(0);
 
+    const int nLevels = (par_ref_levels / coarsening_step) + 1;
     DenseMatrix timings(nLevels, NSTAGES);
     timings = 0.0;
 
     StopWatch chrono;
 
+    MFEMRefinedMeshPartitioner partitioner(nDimensions);
     std::vector<shared_ptr<AgglomeratedTopology>> topology(nLevels);
 
     StopWatch chronoInterior;
@@ -143,113 +184,146 @@ int main (int argc, char *argv[])
     chrono.Start();
     chronoInterior.Clear();
     chronoInterior.Start();
-    elag_trace("Generate Fine Grid Topology");
     topology[0] = make_shared<AgglomeratedTopology>(pmesh, nDimensions);
-    elag_trace("Generate Fine Grid Topology Finished");
     chronoInterior.Stop();
     timings(0,TOPOLOGY) = chronoInterior.RealTime();
 
     constexpr auto at_elem = AgglomeratedTopology::ELEMENT;
-    MFEMRefinedMeshPartitioner partitioner(nDimensions);
-    for(int ilevel = 0; ilevel < nLevels-1; ++ilevel)
+    for (int ilevel = 0; ilevel < nLevels-1; ++ilevel)
     {
         Array<int> partitioning(topology[ilevel]->GetNumberLocalEntities(at_elem));
         chronoInterior.Clear();
         chronoInterior.Start();
         partitioner.Partition(topology[ilevel]->GetNumberLocalEntities(at_elem),
-                              level_nElements[ilevel+1], partitioning);
+                              level_nElements[(ilevel+1)*coarsening_step],
+                              partitioning);
         topology[ilevel+1] =
-            topology[ilevel]->CoarsenLocalPartitioning(partitioning,0,0);
+            topology[ilevel]->CoarsenLocalPartitioning(partitioning, 0, 0);
         chronoInterior.Stop();
         timings(ilevel+1,TOPOLOGY) = chronoInterior.RealTime();
     }
     chrono.Stop();
     if(myid == 0)
-        std::cout <<"Timing ELEM_AGG: Mesh Agglomeration done in "
-                  << chrono.RealTime() << " seconds.\n";
+        std::cout<<"Timing ELEM_AGG: Mesh Agglomeration done in "
+                 << chrono.RealTime() << " seconds.\n";
 
     //-----------------------------------------------------//
 
     chronoInterior.Clear();
     chronoInterior.Start();
+    constexpr double tolSVD = 1e-9;
     std::vector<shared_ptr<DeRhamSequence>> sequence(topology.size());
-    sequence[0] = make_shared<DeRhamSequence3D_FE>(
-        topology[0], pmesh.get(), feorder);
+    if(nDimensions == 3)
+        sequence[0] = make_shared<DeRhamSequence3D_FE>(
+            topology[0], pmesh.get(), feorder);
+    else
+        sequence[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(
+            topology[0], pmesh.get(), feorder);
 
-    DeRhamSequenceFE* DRSequence_FE = sequence[0]->FemSequence();
+    DeRhamSequenceFE * DRSequence_FE = sequence[0]->FemSequence();
 
-    sequence[0]->SetjformStart(0);
+    constexpr int jFormStart = 0;
+    sequence[0]->SetjformStart(jFormStart);
 
     DRSequence_FE->ReplaceMassIntegrator(
-        at_elem, 3, make_unique<MassIntegrator>(coeffL2), false);
+        at_elem, 0, make_unique<MassIntegrator>(coeffH1), false);
     DRSequence_FE->ReplaceMassIntegrator(
-        at_elem, 2, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
+        at_elem, 1, make_unique<VectorFEMassIntegrator>(coeffDer), true);
 
-    Array<Coefficient *> L2coeff;
-    Array<VectorCoefficient *> Hdivcoeff;
-    fillVectorCoefficientArray(nDimensions, upscalingOrder, Hdivcoeff);
-    fillCoefficientArray(nDimensions, upscalingOrder, L2coeff);
-
-    std::vector<unique_ptr<MultiVector>>
-        targets(sequence[0]->GetNumberOfForms());
-
-    int jform = 0;
-    targets[jform] = nullptr;
-    ++jform;
-
-    targets[jform] = nullptr;
-    ++jform;
-
-    targets[jform] = DRSequence_FE->InterpolateVectorTargets(jform, Hdivcoeff);
-    ++jform;
-
-    targets[jform] = DRSequence_FE->InterpolateScalarTargets(jform, L2coeff);
-    ++jform;
-
-    freeCoeffArray(L2coeff);
-    freeCoeffArray(Hdivcoeff);
-
-    Array<MultiVector *> targets_in(targets.size());
-    for (int ii = 0; ii < targets_in.Size(); ++ii)
-        targets_in[ii] = targets[ii].get();
-
-    sequence[0]->SetTargets(targets_in);
+    // set up coefficients / targets
+    sequence[0]->FemSequence()->SetUpscalingTargets(nDimensions, upscalingOrder);
     chronoInterior.Stop();
     timings(0,SPACES) = chronoInterior.RealTime();
 
+    const int form = 0;
+    Array<SparseMatrix *> allP(nLevels-1);
+    Array<SparseMatrix *> allD(nLevels);
+
+    std::vector<unique_ptr<SparseMatrix>> Ml(nLevels);
+    std::vector<unique_ptr<SparseMatrix>> Wl(nLevels);
     chrono.Clear();
     chrono.Start();
-    constexpr double tolSVD = 1e-9;
     for(int i(0); i < nLevels-1; ++i)
     {
-        sequence[i]->SetSVDTol(tolSVD);
+        sequence[i]->SetSVDTol( tolSVD );
         StopWatch chronoInterior;
         chronoInterior.Clear();
         chronoInterior.Start();
+        allD[i] = sequence[i]->GetDerivativeOperator(form);
+        Ml[i] = sequence[i]->ComputeMassOperator(form);
+        Wl[i] = sequence[i]->ComputeMassOperator(form+1);
+
+        // XXX: The matrices in the eigenvalue problems need to be
+        // consistent with the systems solved bellow.
+        sequence[i]->AgglomerateDofs();
+        {
+            unique_ptr<SparseMatrix> DtWD_d;
+            {
+                auto W_d = AssembleAgglomerateMatrix(
+                    at_elem, *(sequence[i]->GetM(at_elem,form+1)),
+                    sequence[i]->GetDofAgg(form+1),
+                    sequence[i]->GetDofAgg(form+1));
+                auto D_d = DistributeAgglomerateMatrix(
+                    at_elem, *(allD[i]), sequence[i]->GetDofAgg(form+1),
+                    sequence[i]->GetDofAgg(form));
+                DtWD_d = ExampleRAP(*D_d, *W_d, *D_d);
+            }
+            auto M_d = AssembleAgglomerateMatrix(
+                at_elem,*(sequence[i]->GetM(at_elem,form)),
+                sequence[i]->GetDofAgg(form),sequence[i]->GetDofAgg(form));
+
+            elag_assert(DtWD_d->Height() == DtWD_d->Width());
+            elag_assert(M_d->Height() == M_d->Width());
+            elag_assert(DtWD_d->Height() == M_d->Height());
+
+            auto A_d = ToUnique(Add(*M_d, *DtWD_d));
+
+            if(myid == 0)
+                std::cout << "Computing local spectral targets for level "
+                          << i+1 << "...\n";
+
+            auto localH1functions = ComputeLocalSpectralTargetsFromAEntity(
+                at_elem,*A_d,sequence[i]->GetDofAgg(form),spect_tol,max_evects);
+            if(myid == 0)
+                std::cout << "Done computing local spectral targets for level "
+                          << i+1 << ".\n";
+
+            sequence[i]->OwnLocalTargets(at_elem, 0,std::move(localH1functions));
+            sequence[i]->PopulateLocalTargetsFromForm(0);
+        }
+
+        if (myid == 0)
+            std::cout << "Computing coarse basis for level " << i+1 << " ...\n";
+
         sequence[i+1] = sequence[i]->Coarsen();
+
+        if (myid == 0)
+            std::cout << "Done computing coarse basis for level " << i+1 << ".\n";
+        allP[i] = sequence[i]->GetP(form);
         chronoInterior.Stop();
         timings(i+1, SPACES) = chronoInterior.RealTime();
-        if(myid == 0)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i
-                      << ": Coarsening done in " << chronoInterior.RealTime()
-                      << " seconds.\n";
+        if (myid == 0)
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Coarsening done in "
+                      << chronoInterior.RealTime() << " seconds.\n";
     }
+
+    allD[nLevels-1] = sequence[nLevels-1]->GetDerivativeOperator(form);
+    Ml[nLevels-1] = sequence[nLevels-1]->ComputeMassOperator(form);
+    Wl[nLevels-1] = sequence[nLevels-1]->ComputeMassOperator(form+1);
     chrono.Stop();
 
     if(myid == 0)
-        std::cout << "Timing ELEM_AGG: Coarsening done in " << chrono.RealTime()
-                  << " seconds.\n";
-
-    constexpr int form = 2;
+        std::cout << "Timing ELEM_AGG: Coarsening done in "
+                  << chrono.RealTime() << " seconds.\n";
 
     // testUpscalingHdiv(sequence);
-    FiniteElementSpace * fespace = DRSequence_FE->GetFeSpace(form);
+    FiniteElementSpace * fespace = sequence[0]->FemSequence()->GetFeSpace(form);
     auto b = make_unique<LinearForm>(fespace);
-    b->AddDomainIntegrator(new VectorFEDomainLFIntegrator(f));
+    b->AddDomainIntegrator(new DomainLFIntegrator(f));
     b->Assemble();
 
     auto lift = make_unique<GridFunction>(fespace);
-    lift->ProjectBdrCoefficientNormal(ubdr, ess_attr);
+    lift->ProjectBdrCoefficient(ubdr, ess_attr);
 
     DenseMatrix errors_L2_2(nLevels, nLevels);
     errors_L2_2 = 0.0;
@@ -270,32 +344,6 @@ int main (int argc, char *argv[])
 
     double tdiff;
 
-    Array<SparseMatrix *> allP(nLevels-1);
-    Array<SparseMatrix *> allD(nLevels);
-
-    for(int i = 0; i < nLevels - 1; ++i)
-        allP[i] = sequence[i]->GetP(form);
-
-    for(int i = 0; i < nLevels; ++i)
-        allD[i] = sequence[i]->GetDerivativeOperator(form);
-
-    std::vector<unique_ptr<SparseMatrix>> Ml(nLevels);
-    std::vector<unique_ptr<SparseMatrix>> Wl(nLevels);
-
-    for(int k(0); k < nLevels; ++k)
-    {
-        chrono.Clear();
-        chrono.Start();
-        Ml[k] = sequence[k]->ComputeMassOperator(form);
-        Wl[k] = sequence[k]->ComputeMassOperator(form+1);
-        chrono.Stop();
-        tdiff = chrono.RealTime();
-        if(myid == 0)
-            std::cout << "Timing ELEM_AGG_LEVEL " << k
-                      << ": Assembly done in " << tdiff << "s.\n";
-        timings(k, ASSEMBLY) += tdiff;
-    }
-
     std::vector<unique_ptr<Vector>> rhs(nLevels);
     std::vector<unique_ptr<Vector>> ess_data(nLevels);
     rhs[0] = std::move(b);
@@ -306,8 +354,7 @@ int main (int argc, char *argv[])
         ess_data[i+1] = make_unique<Vector>(sequence[i+1]->GetNumberOfDofs(form));
         sequence[i]->GetP(form)->MultTranspose(*(rhs[i]), *(rhs[i+1]) );
         sequence[i]->GetPi(form)->ComputeProjector();
-        sequence[i]->GetPi(form)->GetProjectorMatrix().Mult(
-            *(ess_data[i]), *(ess_data[i+1]));
+        sequence[i]->GetPi(form)->GetProjectorMatrix().Mult(*(ess_data[i]), *(ess_data[i+1]) );
     }
 
     std::vector<unique_ptr<Vector>> sol(nLevels);
@@ -317,7 +364,7 @@ int main (int argc, char *argv[])
     {
         sol[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
         *(sol[k]) = 0.;
-        help[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
+        help[k] = make_unique<Vector>( sequence[k]->GetNumberOfDofs(form) );
         *(help[k]) = 0.;
     }
 
@@ -325,15 +372,18 @@ int main (int argc, char *argv[])
     {
         chrono.Clear();
         chrono.Start();
+        // XXX: The system matrix needs to be consistent with the
+        // hierarchy construction above.
+        SparseMatrix * M = Ml[k].get();
+        SparseMatrix * W = Wl[k].get();
+        SparseMatrix * D = allD[k];
+
+        const SharingMap & h1_dofTrueDof(
+            sequence[k]->GetDofHandler(0)->GetDofTrueDof());
 
         unique_ptr<HypreParMatrix> pA;
-        const SharingMap & hdiv_dofTrueDof(
-            sequence[k]->GetDofHandler(nDimensions-1)->GetDofTrueDof());
         {
-            SparseMatrix * M = Ml[k].get();
-            SparseMatrix * W = Wl[k].get();
-            SparseMatrix * D = allD[k];
-            auto A = ToUnique(Add(*M, *ExampleRAP(*D,*W,*D)));
+            auto A = ToUnique(Add(*M, *ExampleRAP(*D, *W, *D)));
 
             const int nlocdofs = A->Height();
             Array<int> marker(nlocdofs);
@@ -343,16 +393,14 @@ int main (int argc, char *argv[])
 
             for(int mm = 0; mm < nlocdofs; ++mm)
                 if(marker[mm])
-                    A->EliminateRowCol(
-                        mm, ess_data[k]->operator ()(mm), *(rhs[k]) );
-
-            pA = Assemble(hdiv_dofTrueDof, *A, hdiv_dofTrueDof);
+                    A->EliminateRowCol(mm, ess_data[k]->operator ()(mm), *(rhs[k]));
+            pA = Assemble(h1_dofTrueDof, *A, h1_dofTrueDof);
         }
 
-        Vector prhs( hdiv_dofTrueDof.GetTrueLocalSize() );
-        hdiv_dofTrueDof.Assemble(*(rhs[k]), prhs);
+        Vector prhs(h1_dofTrueDof.GetTrueLocalSize());
+        h1_dofTrueDof.Assemble(*(rhs[k]), prhs);
 
-        elag_assert(prhs.Size() == pA->Height() );
+        elag_assert(prhs.Size() == pA->Height());
 
         chrono.Stop();
         tdiff = chrono.RealTime();
@@ -365,11 +413,10 @@ int main (int argc, char *argv[])
         nnz[k] = pA->NNZ();
 
         iter[k] = UpscalingHypreSolver(
-            form, pA.get(), prhs,
-            sequence[k].get(),
+            form, pA.get(), prhs, sequence[k].get(),
             k, PRECONDITIONER, SOLVER,
             print_iter, max_num_iter, rtol, atol,
-            timings, hdiv_dofTrueDof, *(sol[k]));
+            timings, h1_dofTrueDof, *(sol[k]));
 
         //ERROR NORMS
         {
@@ -385,7 +432,7 @@ int main (int argc, char *argv[])
             for(int j(0); j < k; ++j)
             {
                 if(help[j]->Size() != sol[j]->Size() || sol[j]->Size() != allD[j]->Width() )
-                    mfem_error("ERROR: sizes don't match.\n");
+                    mfem_error("size don't match \n");
 
                 const int size  = sol[j]->Size();
                 const int dsize = allD[j]->Height();
@@ -402,6 +449,7 @@ int main (int argc, char *argv[])
             }
         }
 
+        //VISUALIZE SOLUTION
         if (do_visualize)
         {
             MultiVector tmp(sol[k]->GetData(), 1, sol[k]->Size() );
