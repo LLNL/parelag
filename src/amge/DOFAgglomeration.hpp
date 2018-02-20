@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -14,223 +14,242 @@
 #ifndef DOFAGGLOMERATION_HPP_
 #define DOFAGGLOMERATION_HPP_
 
+#include <memory>
+#include <vector>
+
+#include <mfem.hpp>
+
+#include "amge/DofHandler.hpp"
+#include "topology/Topology.hpp"
+
+namespace parelag
+{
 //! @class DofAgglomeration
 /**
-	@brief keeps track of how Dofs are aggregated, used in particular to make local agglomerate matrices for solving local problems 
+   @brief Keeps track of how Dofs are aggregated; used in particular
+   to make local agglomerate matrices for solving local problems
+
+   Most of this class revolves around AEntity_Dof, which tells you the *fine*
+   degrees of freedom that are contained in agglomerated (*coarse*) entities.
+   In addition, these are ordered with interior dofs first and shared dofs
+   are at the end, which makes solving local problems (e.g. extensions) easier
+   to manage.
 */
-class DofAgglomeration
+class DofAgglomeration final
 {
+    using index_type = int;
+    using range_type = std::pair<index_type,index_type>;
+    using entity_type = AgglomeratedTopology::Entity;
+
 public:
-	DofAgglomeration(AgglomeratedTopology * topo, DofHandler * dof );
+    explicit DofAgglomeration(
+        const std::shared_ptr<AgglomeratedTopology>& topo, DofHandler * dof);
 
-	virtual ~DofAgglomeration();
+    ~DofAgglomeration() = default;
 
-	void CheckAdof();
+    DofAgglomeration(DofAgglomeration const&) = delete;
+    DofAgglomeration& operator=(DofAgglomeration const&) = delete;
 
-	inline int GetNumberFineEntities(AgglomeratedTopology::EntityByCodim entity_type)
-	{
-		return fineTopo->GetNumberLocalEntities(entity_type);
-	}
+    DofAgglomeration(DofAgglomeration&&) = delete;
+    DofAgglomeration& operator=(DofAgglomeration&&) = delete;
 
-	inline int GetNumberCoarseEntities(AgglomeratedTopology::EntityByCodim entity_type)
-	{
-		return coarseTopo->GetNumberLocalEntities(entity_type);
-	}
+    void CheckAdof();
 
-	inline int GetNumberAgglomerateInternalDofs(AgglomeratedTopology::EntityByCodim entity_type, int entity_id)
-	{
-		int begin, end;
-		GetAgglomerateInternalDofRange(entity_type, entity_id, begin, end);
-		return end-begin;
-	}
+    inline int GetNumberFineEntities(entity_type entity)
+    {
+        return FineTopology_->GetNumberLocalEntities(entity);
+    }
 
-	DofHandler * GetDofHandler(){ return dof; }
-	SparseMatrix * GetAEntityDof(AgglomeratedTopology::EntityByCodim entity_type){ return AEntity_dof[entity_type]; }
-	const SparseMatrix & GetAEntityDofTable(AgglomeratedTopology::EntityByCodim entity_type){ return *(AEntity_dof[entity_type]); }
-	void GetAgglomerateInternalDofRange(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, int & begin, int & end);
-	void GetAgglomerateBdrDofRange(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, int & begin, int & end);
-	void GetAgglomerateDofRange(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, int & begin, int & end);
-	void GetViewAgglomerateInternalDofGlobalNumering(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, Array<int> & gdofs);
-	void GetViewAgglomerateBdrDofGlobalNumering(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, Array<int> & gdofs);
-	void GetViewAgglomerateDofGlobalNumering(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, Array<int> & gdofs);
-	int * GetAgglomerateInternalDofGlobalNumering(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, int * gdofs);
-	MultiVector * DistributeGlobalMultiVector(AgglomeratedTopology::EntityByCodim entity_type, const MultiVector & vg);
-	Vector * DistributeGlobalVector(AgglomeratedTopology::EntityByCodim entity_type, Vector & vg);
+    inline int GetNumberCoarseEntities(entity_type entity)
+    {
+        return CoarseTopology_->GetNumberLocalEntities(entity);
+    }
 
-	// Each row represents an entity of the Boundary: We first use PEAK (if any), the RIDGE (if any) and Finally FACETS.
-//	void MapDofFromLocalNumberingAEtoLocalNumberingBoundaryAE(AgglomeratedTopology::EntityByCodim entity_type, int entity_id, Table & map);
+    inline int GetNumberAgglomerateInternalDofs(
+        entity_type entity, index_type entity_id) const
+    {
+        auto range = GetAgglomerateInternalDofRange(entity, entity_id);
+        return range.second - range.first;
+    }
 
+    DofHandler * GetDofHandler() const noexcept { return Dof_; }
 
-	/*
-	 * input:
-	 * -- entity_type: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
-	 * -- M_e: entity matrix of size nrDof_range x nrDof_domain
-	 * -- rangeSpace:  index in the dof array corresponding to the range of the operator
-	 * -- domainSpace: index in the dof array corresponding to the domain of the operator
-	 * output:
-	 * -- Agglomerated Entity matrix of size nADof_range x nADof_domain
-	 *
-	 *  Description:
-	 *  Given M_e = diag( m_ei ) where:
-	 *  -- m_ei is the local matrix on entity i
-	 *  computes M_E =  diag( m_EJ ) where:
-	 *  -- m_EJ is the local matrix on agglomerated Entity J.
-	 *
-	 *  Implementation: M_E = RAP(rDof_ADof_range, M_e, rDof_ADof_domain)
-	 *  where rDof_RDof is the +1,-1 matrix that maps the set of repeated dof for each entity in fineTopo
-	 *  into the set Agglomerated dof for each Agglomerated entity in coarseTopo.
-	 *
-	 */
-	friend SparseMatrix * AssembleAgglomerateMatrix(AgglomeratedTopology::EntityByCodim entity_type, SparseMatrix & M_e, DofAgglomeration * range, DofAgglomeration * domain);
+    // FIXME (trb 12/16/15): So we allow access via a pointer, which
+    // allows the caller to do whatever they want to this thing,
+    // including call, say, LoseData(), rendering it useless, or
+    // moving the pointer to a new object, AND we allow access as a
+    // const reference, which prevents both of these travesties. Kinda
+    // sending mixed messages...
+    //mfem::SparseMatrix * GetAEntityDof(entity_type entity)
+    //{
+    //    return AEntity_Dof_[entity].get();
+    //}
 
-	friend SparseMatrix * AssembleAgglomerateRowsGlobalColsMatrix(AgglomeratedTopology::EntityByCodim entity_type, SparseMatrix & M_e, DofAgglomeration * range, DofHandler * domain);
+    const mfem::SparseMatrix & GetAEntityDof(entity_type entity) const
+    {
+        return *(AEntity_Dof_[entity]);
+    }
 
-	friend SparseMatrix * DistributeProjector(AgglomeratedTopology::EntityByCodim entity_type, SparseMatrix & P_t, DofHandler * range, DofAgglomeration * domain);
+    /// Get the range of internal dofs for the given agglomerated entity
+    range_type GetAgglomerateInternalDofRange(
+        entity_type entity, index_type entity_id) const;
 
-	/*
-	 * input:
-	 * -- entity_type: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
-	 * -- M_a: Agglomerated Entity matrix of size nADof_range x nADof_domain
-	 * -- rangeSpace:  index in the dof array corresponding to the range of the operator
-	 * -- domainSpace: index in the dof array corresponding to the domain of the operator
-	 * output:
-	 * -- M_g global matrix
-	 *
-	 *  Description:
-	 *  Given M_a = diag( m_ai ) where:
-	 *  -- m_ai is the local sparse matrix on agglomerate i
-	 *  computes M_g.
-	 *
-	 *  Implementation: M_g = Dof_ADof_range * M_a, ADof_Dof_domain
-	 *
-	 */
-	friend SparseMatrix * Assemble(AgglomeratedTopology::EntityByCodim entity_type, SparseMatrix & M_a, DofAgglomeration * range, DofAgglomeration * domain);
+    void GetAgglomerateInternalDofRange(
+        entity_type entity, index_type entity_id, int & begin, int & end) const;
 
-	/*
-	 * input:
-	 * -- entity_type: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
-	 * -- M_g: entity matrix of size nDof_range x nDof_domain
-	 * -- rangeSpace:  index in the dof array corresponding to the range of the operator
-	 * -- domainSpace: index in the dof array corresponding to the domain of the operator
-	 * output:
-	 * -- Agglomerated Entity matrix of size nADof_range x nADof_domain
-	 *
-	 *  Description:
-	 *  Given D_g the fully assembled finite element matrix
-	 *  computes D_E =  diag( d_EJ ) where:
-	 *  -- d_EJ is the local matrix on agglomerated Entity J.
-	 *
-	 *  Implementation: D_E = RAP(Dof_ADof_range', D_G, Dof_ADof_domain)
-	 *  where Dof_ADof is the +1,-1 matrix that maps the set of global dof
-	 *  into the set Agglomerate dof for each Agglomerated entity in coarseTopo.
-	 *
-	 */
-	friend SparseMatrix * DistributeAgglomerateMatrix(AgglomeratedTopology::EntityByCodim entity_type, SparseMatrix & D_g, DofAgglomeration * range, DofAgglomeration * domain);
+    /// Get the range of boundary dofs for the given agglomerated entity
+    range_type GetAgglomerateBdrDofRange(
+        entity_type entity, index_type entity_id) const;
 
-#if 0
-	/*
-	 * Computes the rectangular matrix M_BC of size nAdof x nDof
-	 * such that the rows are the same as in the Agglomerate Entity matrix M
-	 * and the columns are the same as the global matrix M.
-	 * That is
-	 * M_BC = RAP(rDof_ADof_range, M_e, rDof_dof_domain) of size nAdof x nDof,
-	 */
-	friend SparseMatrix * AssembleAgglomerateMatrixBC(Topology::entity entity_type, SparseMatrix & M_e, DofAgglomeration * range, DofAgglomeration * domain);
+    void GetAgglomerateBdrDofRange(
+        entity_type entity, index_type entity_id, int & begin, int & end) const;
 
+    /// Get the range of dofs for the given agglomerated entity
+    range_type GetAgglomerateDofRange(
+        entity_type entity, index_type entity_id) const;
 
+    void GetAgglomerateDofRange(
+        entity_type entity, index_type entity_id, int & begin, int & end) const;
 
-	/*
-	 * input:
-	 * -- entity_type: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
-	 * -- M_e: entity matrix of size nrDof_range x nrDof_domain
-	 * -- rangeSpace:  index in the dof array corresponding to the range of the operator
-	 * -- domainSpace: index in the dof array corresponding to the domain of the operator
-	 * output:
-	 * -- Agglomerated Entity matrix of size nRDof_range x nRDof_domain
-	 *
-	 *  Description:
-	 *  Given M_e = diag( m_ei ) where:
-	 *  -- m_ei is the local matrix on entity i
-	 *  computes M_E = PERM_range^T diag( m_EJ ) PERM_domain where:
-	 *  -- m_EJ is the local matrix on agglomerated Entity J.
-	 *  -- and PERM_range, PERM_domain are the permutation matrices so that
-	 *     the degree of freedom (of the domain and range space) that are shared among entities are last.
-	 *
-	 *  Implementation: M_E = RAP(rDof_RDof_range, M_e, rDof_RDof_domain)
-	 *  where rDof_RDof is the +1,-1 matrix that maps the set of repeated dof for each entity in fineTopo
-	 *  into the set Repeated dof for each Agglomerated entity in coarseTopo.
-	 *
-	 */
-	friend SparseMatrix * AssembleAgglomerateMatrix(Topology::entity entity_type, SparseMatrix & M_e, DofAgglomeration * range, DofAgglomeration * domain);
+    void GetViewAgglomerateInternalDofGlobalNumering(
+        entity_type entity, index_type entity_id, mfem::Array<int> & gdofs) const;
 
-	/*
-	 * input:
-	 * -- entity_type: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
-	 * -- M_e: entity matrix of size nrDof_range x nrDof_domain
-	 * -- rangeSpace:  index in the dof array corresponding to the range of the operator
-	 * -- domainSpace: index in the dof array corresponding to the domain of the operator
-	 * output:
-	 * -- Agglomerated Entity matrix of size nRDof_range x nRDof_domain
-	 *
-	 *  Description:
-	 *  Given M_e = diag( m_ei ) where:
-	 *  -- m_ei is the local matrix on entity i
-	 *  computes M_E = PERM_range^T diag( m_EJ ) PERM_domain where:
-	 *  -- m_EJ is the local matrix on agglomerated Entity J.
-	 *  -- and PERM_range, PERM_domain are the permutation matrices so that
-	 *     the degree of freedom (of the domain and range space) that are shared among entities are last.
-	 *
-	 *  Implementation: M_E = RAP(rDof_RDof_range, M_e, rDof_RDof_domain)
-	 *  where rDof_RDof is the +1,-1 matrix that maps the set of repeated dof for each entity in fineTopo
-	 *  into the set Repeated dof for each Agglomerated entity in coarseTopo.
-	 *
-	 */
-	friend SparseMatrix * AssembleAgglomerateMatrix(Topology::entity entity_type, SparseMatrix & M_e, DofAgglomeration * range, DofAgglomeration * domain);
+    void GetViewAgglomerateBdrDofGlobalNumering(
+        entity_type entity, index_type entity_id, mfem::Array<int> & gdofs) const;
 
+    void GetViewAgglomerateDofGlobalNumering(
+        entity_type entity, index_type entity_id, mfem::Array<int> & gdofs) const;
 
-	/*
-	 * Returns the principal submatrix of M_E of size nIdof x nIdof
-	 * consisting of only the dofs that belong to one and only Agglomerated Entity
-	 * That is:
-	 * M_ii = RAP(rDof_RDof_range(:, internalDOFS), M_e, rDof_RDof_domain(:, internalDOFS))
-	 */
-	friend SparseMatrix * AssembleAgglomerateMatrixInternalDof(Topology::entity entity_type, SparseMatrix & M_e, DofAgglomeration * range, DofAgglomeration * domain);
+    // FIXME (trb 06/28/16): This function is very unsafe
+    int * GetAgglomerateInternalDofGlobalNumering(
+        entity_type entity, index_type entity_id, int * gdofs);
 
-	/*
-	 * Computes the rectangular matrix M_BC of size nIdof x nDof
-	 * such that the rows are the same as in the Agglomerate Entity matrix M_ii
-	 * and the columns are the same as the global matrix M.
-	 * That is
-	 * M_BC = RAP(rDof_RDof_range(:, internalDOFS), M_e, rDof_dof) of size nIdof x nDof,
-	 */
-	friend SparseMatrix * AssembleAgglomerateMatrixBC(Topology::entity entity_type, SparseMatrix & M_e, DofAgglomeration * range, DofAgglomeration * domain);
-#endif
+    std::unique_ptr<MultiVector> DistributeGlobalMultiVector(
+        entity_type entity, const MultiVector & vg);
+
+    std::unique_ptr<mfem::Vector> DistributeGlobalVector(
+        entity_type entity, mfem::Vector & vg);
+
+    /*
+     * input:
+     * -- entity: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
+     * -- M_e: entity matrix of size nrDof_range x nrDof_domain
+     * -- rangeSpace: index in the dof array corresponding to the
+     *    range of the operator
+     *
+     * -- domainSpace: index in the dof array corresponding to the
+     *    domain of the operator
+     *
+     * output:
+     * -- Agglomerated Entity matrix of size nADof_range x nADof_domain
+     *
+     *  Description:
+     *  Given M_e = diag( m_ei ) where:
+     *  -- m_ei is the local matrix on entity i
+     *  computes M_E =  diag( m_EJ ) where:
+     *  -- m_EJ is the local matrix on agglomerated Entity J.
+     *
+     *  Implementation: M_E = RAP(rDof_ADof_range, M_e,
+     *  rDof_ADof_domain), where rDof_RDof is the +1,-1 matrix that
+     *  maps the set of repeated dof for each entity in FineTopology_ into
+     *  the set Agglomerated dof for each Agglomerated entity in
+     *  CoarseTopology_.
+     */
+    friend std::unique_ptr<mfem::SparseMatrix> AssembleAgglomerateMatrix(
+        entity_type entity, mfem::SparseMatrix & M_e,
+        DofAgglomeration * range, DofAgglomeration * domain);
+
+    friend std::unique_ptr<mfem::SparseMatrix>
+    AssembleAgglomerateRowsGlobalColsMatrix(
+        entity_type entity, mfem::SparseMatrix & M_e,
+        DofAgglomeration * range, DofHandler * domain);
+
+    friend std::unique_ptr<mfem::SparseMatrix> DistributeProjector(
+        entity_type entity, const mfem::SparseMatrix & P_t,
+        DofHandler * range, DofAgglomeration * domain);
+
+    /*
+     * input:
+     * -- entity: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
+     * -- M_a: Agglomerated Entity matrix of size nADof_range x nADof_domain
+     * -- rangeSpace: index in the dof array corresponding to the
+     *    range of the operator
+     * -- domainSpace: index in the dof array corresponding to the
+     *    domain of the operator
+     *
+     * output:
+     * -- M_g global matrix
+     *
+     *  Description:
+     *  Given M_a = diag( m_ai ) where:
+     *  -- m_ai is the local sparse matrix on agglomerate i
+     *  computes M_g.
+     *
+     *  Implementation: M_g = Dof_ADof_range * M_a, ADof_Dof_domain
+     */
+    friend std::unique_ptr<mfem::SparseMatrix> Assemble(
+        entity_type entity, const mfem::SparseMatrix & M_a,
+        DofAgglomeration * range, DofAgglomeration * domain);
+
+    /*
+     * input:
+     * -- entity: 0 -> Element, 1 -> Facet, 2 -> Ridge, 3 -> Peak
+     * -- M_g: entity matrix of size nDof_range x nDof_domain
+     * -- rangeSpace: index in the dof array corresponding to the
+     *    range of the operator
+     * -- domainSpace: index in the dof array corresponding to the
+     *    domain of the operator
+     *
+     * output:
+     * -- Agglomerated Entity matrix of size nADof_range x nADof_domain
+     *
+     *  Description:
+     *  Given D_g the fully assembled finite element matrix
+     *  computes D_E =  diag( d_EJ ) where:
+     *  -- d_EJ is the local matrix on agglomerated Entity J.
+     *
+     *  Implementation: D_E = RAP(Dof_ADof_range', D_G,
+     *  Dof_ADof_domain) where Dof_ADof is the +1,-1 matrix that maps
+     *  the set of global dof into the set Agglomerate dof for each
+     *  Agglomerated entity in CoarseTopology_.
+     *
+     */
+    friend std::unique_ptr<mfem::SparseMatrix> DistributeAgglomerateMatrix(
+        entity_type entity, const mfem::SparseMatrix & D_g,
+        DofAgglomeration * range, DofAgglomeration * domain);
+
 
 private:
-	// Reorder the j and val arrays of a so that the entries are ordered increasignly with respect to weights.
-	// It returns for each row the number of occurrencies of minWeight
-	int reorderRow(int nentries, int * j, double * a, int minWeight, int maxWeight, const Array<int> & weights);
+    // Reorder the j and val arrays of a so that the entries are
+    // ordered increasignly with respect to weights.
+    //
+    // It returns for each row the number of occurrencies of minWeight
+    int reorderRow(
+        int nentries,int * j,double * a,int minWeight,int maxWeight,
+        const std::vector<int> & weights);
 
-	AgglomeratedTopology * fineTopo;
-	AgglomeratedTopology * coarseTopo;
-	DofHandler * dof;
-	//! The index in this array represents the type of entity (0 = ELEMENT, 1 = FACET, 2 = RIDGE, 3 = PEAK).
-	// Each matrix has for each row the ids and the orientation of the dofs in AgglomeratedEntity i.
-	Array<SparseMatrix *> AEntity_dof;
-	Array<SparseMatrix *> ADof_Dof;
-	Array<SparseMatrix *> ADof_rDof;
-	Array<Array<int>* > AE_nInternalDof;
-	/*!
-	 * dof_separatorType[i] = 0 --> i belongs to the interior of an agglomerated element
-	 * dof_separatorType[i] = 1 --> i belongs to the interior of an agglomerated facet
-	 * dof_separatorType[i] = 2 --> i belongs to the interior of an agglomerated ridge
-	 * dof_separatorType[i] = 3 --> i belongs to an agglomerated peak
-	 *
-	 */
-	Array<int> dof_separatorType;
+    std::shared_ptr<AgglomeratedTopology> FineTopology_;
+    std::shared_ptr<AgglomeratedTopology> CoarseTopology_;
 
-	mutable Array<int> dofMapper;
+    DofHandler * Dof_;
+
+    // The index in this array represents the type of entity (0 =
+    // ELEMENT, 1 = FACET, 2 = RIDGE, 3 = PEAK).
+    //
+    // Each matrix has for each row the ids and the orientation of the
+    // dofs in AgglomeratedEntity i.
+    std::vector<std::unique_ptr<mfem::SparseMatrix>> AEntity_Dof_;
+
+    // The ADof_Dof_ matrix shares data with AEntity_Dof_; This is
+    // it's row_ptr array, which is not shared.
+    std::vector<std::vector<int>> ADof_Dof_I_;
+    std::vector<std::unique_ptr<mfem::SparseMatrix>> ADof_Dof_;
+    std::vector<std::unique_ptr<mfem::SparseMatrix>> ADof_rDof_;
+
+    std::vector<std::vector<int>> AE_nInternalDof_;
+
+    mutable std::vector<int> dofMapper_;
 
 };
-
+}//namespace parelag
 #endif /* DOFAGGLOMERATION_HPP_ */

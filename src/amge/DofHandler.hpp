@@ -1,6 +1,6 @@
 /*
-  Copyright (c) 2015, Lawrence Livermore National Security, LLC. Produced at the
-  Lawrence Livermore National Laboratory. LLNL-CODE-669695. All Rights reserved.
+  Copyright (c) 2018, Lawrence Livermore National Security, LLC. Produced at the
+  Lawrence Livermore National Laboratory. LLNL-CODE-745557. All Rights reserved.
   See file COPYRIGHT for details.
 
   This file is part of the ParElag library. For more information and source code
@@ -14,6 +14,19 @@
 #ifndef DOFHANDLER_HPP_
 #define DOFHANDLER_HPP_
 
+#include <array>
+#include <memory>
+#include <vector>
+
+#include <mfem.hpp>
+
+#include "ParELAG_Constants.hpp"
+
+#include "structures/SharingMap.hpp"
+#include "topology/Topology.hpp"
+
+namespace parelag
+{
 //! @class
 /*!
  * @brief Handles parallel numbering, including entityTrueEntity, dofTrueDof, etc.
@@ -23,118 +36,232 @@ class DofHandler
 {
 public:
 
-	typedef AgglomeratedTopology::EntityByCodim entity;
-	enum {SCALARSPACE = 0, VECTORSPACE = 1};
+    typedef AgglomeratedTopology::Entity entity;
+    enum {SCALARSPACE = 0, VECTORSPACE = 1};
 
-	DofHandler(MPI_Comm comm, int maxCodimensionBaseForDof, int nDim);
-	virtual ~DofHandler();
+    DofHandler(MPI_Comm comm, size_t maxCodimensionBaseForDof, size_t nDim);
 
-	int SpaceType(){ return (maxCodimensionBaseForDof == 0 || maxCodimensionBaseForDof == nDim) ? SCALARSPACE : VECTORSPACE; }
+    /// Constructor that assumes unique owership of user-provided
+    /// entity_dof tables. (Be sure to std::move the vector in)
+    DofHandler(
+        MPI_Comm comm,size_t maxCodimensionBaseForDof,size_t nDim,
+        std::vector<std::unique_ptr<mfem::SparseMatrix>>&& entity_dof_);
 
-	virtual void BuildEntityDofTables() = 0;
-	virtual void BuildEntityDofTable(entity type) = 0;
-	// bndrAttributesMarker boolean array [input]
-	// dofMarker: boolean array (size GetNDofs): selected dofs are marked with ones.
-	// return how many dofs were marked.
-	virtual int MarkDofsOnSelectedBndr(const Array<int> & bndrAttributesMarker, Array<int> & dofMarker) const = 0;
+    virtual ~DofHandler();
 
+    int SpaceType()
+    {
+        return (maxCodimensionBaseForDof == 0 ||
+                maxCodimensionBaseForDof == nDim) ? SCALARSPACE : VECTORSPACE;
+    }
 
-	const SparseMatrix & GetEntityDofTable(entity type) const;
-	int GetEntityNDof(entity type, int ientity) const { return GetEntityDofTable(type).RowSize(ientity); }
-	const SparseMatrix & GetEntityRDofTable(entity type);
-	// NOTE this routine assumes that rdof relative to the same entity are contiguous.
-	const SparseMatrix & GetrDofDofTable(entity type);
-	// NOTE this routine returns an array of rdof that is contiguous.
-	virtual void GetrDof(entity type, int ientity, Array<int> & dofs) const;
-	virtual void GetDofs(entity type, int ientity, Array<int> & dofs);
-	int GetNumberEntities(entity type) const;
-	int GetMaxCodimensionBaseForDof() const;
-	virtual int GetNumberInteriorDofs(entity type);
-	virtual void GetInteriorDofs(entity type, int ientity, Array<int> & dofs) = 0;
-	virtual void GetDofsOnBdr(entity type, int ientity, Array<int> & dofs) = 0;
+    virtual void BuildEntityDofTables() = 0;
+    virtual void BuildEntityDofTable(entity type) = 0;
 
-	SparseMatrix * AllocGraphElementMass(entity type);
+    // bndrAttributesMarker boolean array [input]
+    //
+    // dofMarker: boolean array (size GetNDofs): selected dofs are
+    // marked with ones.
+    //
+    // return how many dofs were marked.
+    virtual int MarkDofsOnSelectedBndr(
+        const mfem::Array<int> & bndrAttributesMarker,
+        mfem::Array<int> & dofMarker)
+        const = 0;
 
-	inline int GetNDofs() const {return entity_dof[0]->Width(); }
-	inline int GetNrDofs(entity entity_type) const { return entity_dof[entity_type]->NumNonZeroElems();/*rDof_dof[entity_type]->Size();*/ }
+    const mfem::SparseMatrix & GetEntityDofTable(entity type) const;
 
-	void Average(entity entity_type, const MultiVector & repV, MultiVector & globV);
-	void AssembleGlobalMultiVector(entity type, const MultiVector & local, MultiVector & global);
-	void AssembleGlobalMultiVectorFromInteriorDofs(entity type, const MultiVector & local, MultiVector & global);
+    int GetEntityNDof(entity type, int ientity) const
+    {
+        return GetEntityDofTable(type).RowSize(ientity);
+    }
 
-	friend SparseMatrix * Assemble(entity entity_type, SparseMatrix & M_e, DofHandler & range, DofHandler & domain);
-	friend SparseMatrix * Distribute(entity entity_type, SparseMatrix & M_g, DofHandler & range, DofHandler & domain);
+    /// Think about entity_dof. It has some columns with only one nonzero, which
+    /// means that dof is contained in one (and only one) entity. It also has
+    /// some columns with several nonzeros, which means the dof is shared across
+    /// more entities. This routine takes entity_dof and breaks apart the shared
+    /// dofs, so that in the returned entity_rdof matrix, every column has
+    /// exactly one nonzero.
+    const mfem::SparseMatrix & GetEntityRDofTable(entity type);
 
-	int Finalized(){ return finalized[0]; }
+    // NOTE this routine assumes that rdof relative to the same entity
+    // are contiguous.
+    const mfem::SparseMatrix & GetrDofDofTable(entity type);
 
-	virtual const SharingMap & GetEntityTrueEntity(int codim) const = 0;
-	SharingMap & GetDofTrueDof(){return dofTrueDof;}
-	const SharingMap & GetDofTrueDof() const {return dofTrueDof;}
+    // NOTE this routine returns an array of rdof that is contiguous.
+    virtual void GetrDof(entity type, int ientity,
+                         mfem::Array<int> & dofs) const;
 
+    virtual void GetDofs(entity type, int ientity,
+                         mfem::Array<int> & dofs);
 
-	void CheckInvariants() const;
+    int GetNumberEntities(entity type) const;
+
+    size_t GetMaxCodimensionBaseForDof() const;
+
+    virtual int GetNumberInteriorDofs(entity type);
+
+    virtual void GetInteriorDofs(entity type, int ientity,
+                                 mfem::Array<int> & dofs) = 0;
+
+    virtual void GetDofsOnBdr(entity type, int ientity,
+                              mfem::Array<int> & dofs) = 0;
+
+    std::unique_ptr<mfem::SparseMatrix> AllocGraphElementMass(entity type);
+
+    /// Number of vertices for jform[0] (H1), edges for jform[1] (Hcurl), etc.
+    inline int GetNDofs() const
+    {
+        return entity_dof[0]->Width();
+    }
+
+    /// this needs to be distinguished from GetNDofs and documented better
+    inline int GetNrDofs(entity entity_type) const
+    {
+        return entity_dof[entity_type]->NumNonZeroElems();
+    }
+
+    void Average(entity entity_type, const MultiVector & repV,
+                 MultiVector & globV);
+
+    void AssembleGlobalMultiVector(
+        entity type, const MultiVector & local, MultiVector & global);
+
+    void AssembleGlobalMultiVectorFromInteriorDofs(
+        entity type, const MultiVector & local, MultiVector & global);
+
+    // Friend functions
+    friend std::unique_ptr<mfem::SparseMatrix> Assemble(
+        entity entity_type, const mfem::SparseMatrix & M_e,
+        DofHandler & range, DofHandler & domain);
+
+    friend std::unique_ptr<mfem::SparseMatrix> Distribute(
+        entity entity_type, const mfem::SparseMatrix & M_g,
+        DofHandler & range, DofHandler & domain);
+
+    bool Finalized()
+    {
+        return finalized[0];
+    }
+
+    virtual const SharingMap & GetEntityTrueEntity(int codim) const = 0;
+
+    SharingMap & GetDofTrueDof()
+    {
+        return dofTrueDof;
+    }
+
+    const SharingMap & GetDofTrueDof() const
+    {
+        return dofTrueDof;
+    }
+
+    void CheckInvariants() const;
 
 protected:
 
-	virtual int getNumberOf(int type) const = 0;
-	virtual void checkMyInvariants() const = 0;
+    virtual int getNumberOf(int type) const = 0;
+    virtual void checkMyInvariants() const = 0;
 
-	int finalized[4];
-    int maxCodimensionBaseForDof;
-    int nDim;
+    std::array<bool,MAX_CODIMENSION> finalized { {false,false,false,false} };
+    size_t maxCodimensionBaseForDof;
+    size_t nDim;
 
-	Array<SparseMatrix *> entity_dof;
-	Array<SparseMatrix *> rDof_dof;
-	Array<SparseMatrix *> entity_rdof;
+    std::vector<std::unique_ptr<mfem::SparseMatrix>> entity_dof;
+    std::vector<std::unique_ptr<mfem::SparseMatrix>> rDof_dof;
+    std::vector<std::unique_ptr<mfem::SparseMatrix>> entity_rdof;
 
-	SharingMap dofTrueDof;
+    SharingMap dofTrueDof;
 };
 
-class DofHandlerFE : public DofHandler
+class DofHandlerFE final: public DofHandler
 {
 public:
 
-	typedef DofHandler super;
-	typedef super::entity entity;
+    typedef DofHandler super;
+    typedef super::entity entity;
 
-	DofHandlerFE(MPI_Comm comm, FiniteElementSpace * fespace_, int maxCodimensionBaseForDof_);
-	virtual ~DofHandlerFE();
+    DofHandlerFE(MPI_Comm comm,
+                 mfem::FiniteElementSpace * fespace_,
+                 size_t maxCodimensionBaseForDof_);
 
-	virtual void BuildEntityDofTables();
-	virtual void BuildEntityDofTable(entity type);
-	virtual int MarkDofsOnSelectedBndr(const Array<int> & bndrAttributesMarker, Array<int> & dofMarker) const;
-	virtual void GetInteriorDofs(entity type, int ientity, Array<int> & dofs);
-	virtual void GetrDof(entity type, int ientity, Array<int> & dofs) const{ super::GetrDof(type, ientity, dofs); }
-	virtual void GetDofsOnBdr(entity type, int ientity, Array<int> & dofs){ mfem_error("DofHandlerFE::GetDofOnBdr not implemented! ");}
-	virtual const SharingMap & GetEntityTrueEntity(int codim) const {elag_error_msg(1,"Not Implemented"); SharingMap * m = NULL; return *m; }
+    ~DofHandlerFE() = default;
+
+    DofHandlerFE(DofHandlerFE const&) = delete;
+    DofHandlerFE& operator=(DofHandlerFE const&) = delete;
+
+    DofHandlerFE(DofHandlerFE&&) = delete;
+    DofHandlerFE& operator=(DofHandlerFE&&) = delete;
+
+    virtual void BuildEntityDofTables() override;
+
+    virtual void BuildEntityDofTable(entity type) override;
+
+    virtual int MarkDofsOnSelectedBndr(
+        const mfem::Array<int> & bndrAttributesMarker,
+        mfem::Array<int> & dofMarker)
+        const override;
+
+    virtual void GetInteriorDofs(entity type,
+                                 int ientity,
+                                 mfem::Array<int> & dofs) override;
+
+    virtual void GetrDof(entity type, int ientity,
+                         mfem::Array<int> & dofs) const override
+    {
+        super::GetrDof(type, ientity, dofs);
+    }
+
+    virtual void GetDofsOnBdr(entity, int, mfem::Array<int> &) override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+    }
+
+    virtual const SharingMap & GetEntityTrueEntity(int) const override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+        // Silence compiler warning about reaching end of non-void function
+        SharingMap * m = nullptr;
+        return *m;
+    }
 
 protected:
-	virtual int getNumberOf(int type) const;
-	virtual void checkMyInvariants() const;
+    virtual int getNumberOf(int type) const override;
+    virtual void checkMyInvariants() const override;
 
 private:
 
+    void getElementDof(int entity_id, int * dofs, double * orientation) const;
 
-	void getElementDof(int entity_id, int * dofs, double * orientation) const;
-	void getFacetDof(int entity_id, int * dofs, double * orientation) const;
-	void getRidgeDof(int entity_id, int * dofs, double * orientation) const;
-	void getPeakDof(int entity_id, int * dofs, double * orientation) const;
-	void getDofForEntity(entity entity_type, int entity_id, int * dofs, double * orientation) const;
- 
+    void getFacetDof(int entity_id, int * dofs, double * orientation) const;
+
+    void getRidgeDof(int entity_id, int * dofs, double * orientation) const;
+
+    void getPeakDof(int entity_id, int * dofs, double * orientation) const;
+
+    void getDofForEntity(entity entity_type, int entity_id, int * dofs,
+                         double * orientation) const;
+
     int getNumberOfElements() const;
-	int getNumberOfFacets() const;
-	int getNumberOfRidges() const;
-	int getNumberOfPeaks() const;
+
+    int getNumberOfFacets() const;
+
+    int getNumberOfRidges() const;
+
+    int getNumberOfPeaks() const;
 
 
-	int getNumberOfDofForElement(int entity_id);
-	int getNumberOfDofForFacet(int entity_id);
-	int getNumberOfDofForRidge(int entity_id);
-	int getNumberOfDofForPeak(int entity_id);
-	int getNumberOfDofForEntity(int entity_type, int entity_id);
+    int getNumberOfDofForElement(int entity_id);
 
+    int getNumberOfDofForFacet(int entity_id);
 
-	FiniteElementSpace * fespace;
+    int getNumberOfDofForRidge(int entity_id);
+
+    int getNumberOfDofForPeak(int entity_id);
+
+    int getNumberOfDofForEntity(int entity_type, int entity_id);
+
+    mfem::FiniteElementSpace * fespace;
 };
 
 
@@ -142,60 +269,150 @@ class DofHandlerALG : public DofHandler
 {
 public:
 
-	enum dof_type{ Empty = 0x0, RangeTSpace = 0x1, NullSpace = 0x2};
+    enum dof_type{ Empty = 0x0, RangeTSpace = 0x1, NullSpace = 0x2};
 
-	DofHandlerALG(int maxCodimensionBaseForDof, const AgglomeratedTopology * topo);
-	DofHandlerALG(int * entity_HasInteriorDofs, int maxCodimensionBaseForDof, const AgglomeratedTopology & topo);
-	virtual ~DofHandlerALG();
+    DofHandlerALG(size_t maxCodimensionBaseForDof,
+                  const std::shared_ptr<AgglomeratedTopology>& topology);
+
+    DofHandlerALG(int * entity_HasInteriorDofs, size_t maxCodimensionBaseForDof,
+                  const std::shared_ptr<AgglomeratedTopology>& topology);
+
+    virtual ~DofHandlerALG() override;
 
 
-	virtual int GetNumberInteriorDofs(entity type);
-	int GetNumberInteriorDofs(entity type, int entity_id);
-	virtual void BuildEntityDofTables();
-	virtual void BuildEntityDofTable(entity type);
+    virtual int GetNumberInteriorDofs(entity type) override;
 
-	void AllocateDofTypeArray(int maxSize);
-	void SetDofType(int dof, dof_type type);
+    int GetNumberInteriorDofs(entity type, int entity_id);
 
-	virtual int MarkDofsOnSelectedBndr(const Array<int> & bndrAttributesMarker, Array<int> & dofMarker) const;
+    virtual void BuildEntityDofTables() override;
 
-	SparseMatrix * GetEntityNullSpaceDofTable(entity type) const;
-	SparseMatrix * GetEntityRangeTSpaceDofTable(entity type) const;
-	SparseMatrix * GetEntityInternalDofTable(entity type) const;
+    virtual void BuildEntityDofTable(entity type) override;
 
-	void SetNumberOfInteriorDofsNullSpace(entity type, int entity_id, int nLocDof);
-	void SetNumberOfInteriorDofsRangeTSpace(entity type, int entity_id, int nLocDof);
+    void AllocateDofTypeArray(int maxSize);
 
-	virtual void GetInteriorDofs(entity type, int ientity, Array<int> & dofs);
-	virtual void GetDofsOnBdr(entity type, int ientity, Array<int> & dofs);
-	virtual const SharingMap & GetEntityTrueEntity(int codim) const { return topo.EntityTrueEntity(codim); }
+    void SetDofType(int dof, dof_type type);
+
+    virtual int MarkDofsOnSelectedBndr(
+        const mfem::Array<int> & bndrAttributesMarker,
+        mfem::Array<int> & dofMarker) const override;
+
+    std::unique_ptr<mfem::SparseMatrix>
+    GetEntityNullSpaceDofTable(entity type) const;
+
+    std::unique_ptr<mfem::SparseMatrix>
+    GetEntityRangeTSpaceDofTable(entity type) const;
+
+    std::unique_ptr<mfem::SparseMatrix>
+    GetEntityInternalDofTable(entity type) const;
+
+    void SetNumberOfInteriorDofsNullSpace(
+        entity type, int entity_id, int nLocDof);
+
+    void SetNumberOfInteriorDofsRangeTSpace(
+        entity type, int entity_id, int nLocDof);
+
+    virtual void GetInteriorDofs(
+        entity type, int ientity, mfem::Array<int> & dofs) override;
+
+    virtual void GetDofsOnBdr(
+        entity type, int ientity, mfem::Array<int> & dofs) override;
+
+    virtual const SharingMap & GetEntityTrueEntity(int codim) const override
+    {
+        return Topology_->EntityTrueEntity(codim);
+    }
 
 protected:
-	virtual int getNumberOf(int type) const;
-	virtual void checkMyInvariants() const;
+    virtual int getNumberOf(int type) const override;
+    virtual void checkMyInvariants() const override;
 
 private:
-	void computeOffset(entity type);
-	void buildPeakDofTable();
-	void buildRidgeDofTable();
-	void buildFacetDofTable();
-	void buildElementDofTable();
+    void computeOffset(entity type);
+    void buildPeakDofTable();
+    void buildRidgeDofTable();
+    void buildFacetDofTable();
+    void buildElementDofTable();
 
-	int entity_hasInteriorDofs[4];
-	int entityType_nDofs[4];
+    void EntityDofFillIAssembly(entity entity_big, entity entity_small,
+                                int * i_assembly);
+    void EntityDofFillJ(entity entity_big, entity entity_small,
+                        int * i_assembly, int * j);
 
-	const AgglomeratedTopology & topo;
+    std::array<int,MAX_CODIMENSION> entity_hasInteriorDofs;
+    std::array<int,MAX_CODIMENSION> entityType_nDofs;
 
-	Array<int> * entity_NumberOfInteriorDofsNullSpace[4];
-	Array<int> * entity_NumberOfInteriorDofsRangeTSpace[4];
-	Array<int> * entity_InteriorDofOffsets[4];
+    std::shared_ptr<AgglomeratedTopology> Topology_;
 
-	// This variable will contain nDofs when finalized[ELEMENT] = true.
-	int nDofs;
+    std::array<std::vector<int>,MAX_CODIMENSION> entity_NumberOfInteriorDofsNullSpace;
+    std::array<std::vector<int>,MAX_CODIMENSION> entity_NumberOfInteriorDofsRangeTSpace;
+    std::array<std::vector<int>,MAX_CODIMENSION> entity_InteriorDofOffsets;
 
-	// Type of Global Dof:  RangeTSpace NullSpace.
-	Array<int> DofType;
+    // This variable will contain nDofs when finalized[ELEMENT] = true.
+    int nDofs;
+
+    // Type of Global Dof:  RangeTSpace NullSpace.
+    mfem::Array<int> DofType;
 };
 
 
+class DofHandlerSCRATCH final : public DofHandler
+{
+public:
+
+    DofHandlerSCRATCH(
+        MPI_Comm comm,size_t maxCodimensionBaseForDof,size_t nDim,
+        std::vector<std::unique_ptr<mfem::SparseMatrix>>&& entity_dof_):
+        DofHandler(comm, maxCodimensionBaseForDof, nDim, std::move(entity_dof_))
+    {
+    }
+
+    virtual void BuildEntityDofTables() override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+    }
+
+    virtual void BuildEntityDofTable(entity) override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+    }
+
+    virtual int MarkDofsOnSelectedBndr(
+        mfem::Array<int> const&, mfem::Array<int> &) const override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+        return 0;
+    }
+
+    virtual void GetInteriorDofs(entity, int, mfem::Array<int> &) override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+    }
+
+    virtual void GetDofsOnBdr(entity, int, mfem::Array<int> &) override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+    }
+
+    virtual const SharingMap & GetEntityTrueEntity(int) const override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+        // Silence compiler warning about reaching end of non-void function
+        SharingMap * m = nullptr;
+        return *m;
+    }
+
+protected:
+
+    virtual int getNumberOf(int) const override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+        return 0;
+    }
+
+    virtual void checkMyInvariants() const override
+    {
+        PARELAG_NOT_IMPLEMENTED();
+    }
+};
+}//namespace parelag
 #endif /* DOFHANDLER_HPP_ */
