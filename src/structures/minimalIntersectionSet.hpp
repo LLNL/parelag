@@ -11,17 +11,19 @@
   Software Foundation) version 2.1 dated February 1999.
 */
 
-#ifndef ELAG_STRUCTURES_HPP_
-#define ELAG_STRUCTURES_HPP_
+#ifndef MINIMALINTERSECTIONSET_HPP_
+#define MINIMALINTERSECTIONSET_HPP_
 
-#include "BooleanMatrix.hpp"
-#include "Coloring.hpp"
-#include "GhostMap.hpp"
-#include "SharedEntityCommunication.hpp"
-#include "SharingMap.hpp"
+#include <memory>
 
-#include "connectedComponents.hpp"
-#include "minimalIntersectionSet.hpp"
-#include "transpose.hpp"
+#include "elag_typedefs.hpp"
 
-#endif //ELAG_STRUCTURES_HPP_
+namespace parelag
+{
+std::unique_ptr<SerialCSRMatrix> findMinimalIntersectionSets(
+    SerialCSRMatrix & Z, double skipDiagEntryLessThan);
+
+std::unique_ptr<ParallelCSRMatrix> ParUnique(
+    hypre_ParCSRMatrix * ZZ, mfem::Array<int> & trueZ_start);
+}//namespace parelag
+#endif

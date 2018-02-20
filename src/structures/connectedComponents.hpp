@@ -11,17 +11,19 @@
   Software Foundation) version 2.1 dated February 1999.
 */
 
-#ifndef ELAG_STRUCTURES_HPP_
-#define ELAG_STRUCTURES_HPP_
+#include <mfem.hpp>
 
-#include "BooleanMatrix.hpp"
-#include "Coloring.hpp"
-#include "GhostMap.hpp"
-#include "SharedEntityCommunication.hpp"
-#include "SharingMap.hpp"
+#include "elag_typedefs.hpp"
 
-#include "connectedComponents.hpp"
-#include "minimalIntersectionSet.hpp"
-#include "transpose.hpp"
+namespace parelag
+{
+/// This modifies partitioning, adding partitions for unconnected
+/// components. It also removes empty partitions.
+int connectedComponents(mfem::Array<int> & partitioning,
+                        const SerialCSRMatrix & conn);
 
-#endif //ELAG_STRUCTURES_HPP_
+/// Not yet implemented
+int connectedComponents(mfem::Array<int> & partitioning,
+                        const SerialCSRMatrix & conn,
+                        const mfem::Array<int> & materialSubdomains);
+}
