@@ -19,6 +19,7 @@
 #include <sstream>
 #include <utility>
 #include <vector>
+#include <map>
 
 #include <mpi.h>
 #include <mfem.hpp>
@@ -131,6 +132,10 @@ public:
        Broadcast ints from master to slaves
        the idea here is if we know size in advance we can
        cut out a communication step
+
+       XXX: This function requires that the entities in ete_diag and ete_offd be ordered consistently
+            with the global true entity ordering on all CPUs. This is the case with ete_diag, so the
+            requirement is reduced to ete_col_map being sorted in increasing order.
     */
     void BroadcastFixedSize(int * values, int num_per_entity);
 
@@ -584,11 +589,12 @@ void SharedEntityCommunication<T>::BroadcastFixedSize(int * values,
 template <class T>
 void SharedEntityCommunication<T>::BroadcastSizes(T ** mats)
 {
+    const int header_length = size_specifier + 1;
     header_requests = new MPI_Request[num_master_comms + num_slave_comms];
     MPI_Status * header_statuses =
         new MPI_Status[num_master_comms + num_slave_comms];
-    send_headers = new int[size_specifier*num_master_comms];
-    receive_headers = new int[size_specifier*num_slave_comms];
+    send_headers = new int[header_length*num_master_comms];
+    receive_headers = new int[header_length*num_slave_comms];
     int send_counter = 0;
     int receive_counter = 0;
 
@@ -597,7 +603,7 @@ void SharedEntityCommunication<T>::BroadcastSizes(T ** mats)
         int entity = ete_offdT_J[j];
         int owner = entity_master[entity];
         MPI_Irecv(
-            &(receive_headers[j * size_specifier]), size_specifier,
+            &(receive_headers[j * header_length]), header_length,
             MPI_INT, owner, ENTITY_HEADER_TAG, comm,
             &(header_requests[j]));
         receive_counter++;
@@ -615,10 +621,11 @@ void SharedEntityCommunication<T>::BroadcastSizes(T ** mats)
             {
                 PackSendSizes(
                     *mats[entity],
-                    &(send_headers[send_counter * size_specifier]));
+                    &(send_headers[send_counter * header_length]));
+                send_headers[(send_counter + 1) * header_length - 1] = GetTrueEntity(entity);
                 MPI_Isend(
-                    &(send_headers[send_counter * size_specifier]),
-                    size_specifier, MPI_INT, neighbor_row[neighbor],
+                    &(send_headers[send_counter * header_length]),
+                    header_length, MPI_INT, neighbor_row[neighbor],
                     ENTITY_HEADER_TAG, comm,
                     &header_requests[num_slave_comms + send_counter]);
                 send_counter++;
@@ -640,18 +647,37 @@ void SharedEntityCommunication<T>::BroadcastSizes(T ** mats)
 template <class T>
 void SharedEntityCommunication<T>::BroadcastData(T ** mats)
 {
+    const int header_length = size_specifier + 1;
     int send_counter = 0;
     int receive_counter = 0;
     data_requests = new MPI_Request[num_master_comms + num_slave_comms];
     MPI_Status * data_statuses =
-        new MPI_Status[num_master_comms + num_slave_comms];
+       new MPI_Status[num_master_comms + num_slave_comms];
+
+    // Invert the entity to true entity relation to obtain true entity to entity.
+    // This is the simplest thing to do and costs O(n log n), where n is the number
+    // of entities on the processor that are not owned by the processor. This is the same
+    // asymptotic cost as sorting the column map.
+    std::map<int, int> te_to_e;
+    std::map<int, int>::iterator it;
+    for (int j = 0; j < ete_offd->num_cols; ++j)
+    {
+        const int e = ete_offdT_J[j];
+        const int te = GetTrueEntity(e);
+        te_to_e.insert(std::pair<int, int>(te, e));
+    }
 
     for (int j = 0; j < ete_offd->num_cols; ++j)
     {
-        int entity = ete_offdT_J[j];
-        int owner = entity_master[entity];
+        const int owner = entity_master[ete_offdT_J[j]];
+        MFEM_ASSERT(owner != comm_rank, "Ownership mismatch!")
+        const int trueentity = receive_headers[(j+1) * header_length - 1];
+        it = te_to_e.find(trueentity);
+        MFEM_ASSERT(te_to_e.end() != it, "Cannot find entity associated with true entity!");
+        const int entity = it->second;
+        MFEM_ASSERT(owner == entity_master[entity], "Ownership mismatch!");
         ReceiveData(
-            *mats[entity], &(receive_headers[j * size_specifier]),
+            *mats[entity], &(receive_headers[j * header_length]),
             owner, ENTITY_MESSAGE_TAG,
             &data_requests[j]);
         receive_counter++;
