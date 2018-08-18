@@ -33,6 +33,12 @@ list(APPEND EXAMPLE_SRCS
   MultigridTestSPE10.cpp
   )
 
+if (${PROJECT_NAME}_USE_MARS)
+  list(APPEND EXAMPLE_SRCS
+    Upscaling0FormMARS.cpp
+    )
+endif()
+
 add_parelag_executables(EXAMPLE_SRCS)
 
 if (${PROJECT_NAME}_ENABLE_TESTING)
