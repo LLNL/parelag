@@ -98,6 +98,11 @@ option(${PROJECT_NAME}_BUILD_EXAMPLES
   "Build the examples/ directory"
   OFF)
 
+# Whether to use MARS
+option(${PROJECT_NAME}_USE_MARS
+  "Build the MARS example"
+  OFF)
+
 # Whether to build the testsuite
 option(${PROJECT_NAME}_BUILD_TESTSUITE
   "Build the testsuite/ directory"
@@ -268,6 +273,11 @@ find_package(LAPACK REQUIRED)
 # etc. This should be fixed. :/
 find_package(MFEM REQUIRED)
 
+# Look for METIS; this should be the same metis used to build MFEM,
+# but if it links, it links.
+find_package(METIS REQUIRED)
+include_directories(${METIS_INCLUDE_DIRS})
+
 # We require a small collection of the SuiteSparse library. We need
 # the following libraries: umfpack, amd, colamd, cholmod, spqr
 # suitesparseconfig, klu, and btf.
@@ -277,14 +287,21 @@ find_package(MFEM REQUIRED)
 find_package(SuiteSparse REQUIRED)
 include_directories(${SuiteSparse_INCLUDE_DIRS})
 
-# Look for METIS; this should be the same metis used to build MFEM,
-# but if it links, it links.
-find_package(METIS REQUIRED)
-include_directories(${METIS_INCLUDE_DIRS})
-
 #
 # OPTIONAL LIBRARIES
 #
+
+# Look for MARS support.
+if(${PROJECT_NAME}_USE_MARS)
+  message(STATUS "Searching for MARS...")
+  find_package(MARS)
+  if (MARS_FOUND)
+    include_directories(${MARS_INCLUDE_DIRS})
+  else()
+    set(${PROJECT_NAME}_USE_MARS OFF)
+    message(STATUS "** MARS NOT FOUND; CONTENT DISABLED **")
+  endif()
+endif()
 
 # Look for OpenMP support. This is completely independent of whether
 # Hypre/MFEM are built with OpenMP support.

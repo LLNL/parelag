@@ -55,40 +55,44 @@ void ShowTopologyAgglomeratedElements(
     GetElementColoring(colors, 0, *el_el );
 
     AgglomeratedTopology* it = topo;
-    while((it = it->FinerTopology().get()) != nullptr)
+    do
     {
         help.SetSize(it->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT));
         it->AEntityEntity(0).WedgeMultTranspose(partitioning, help);
         Swap(partitioning, help);
-    }
+    }  while((it = it->FinerTopology().get()) != nullptr);
 
     it = topo;
-    while( (it = it->FinerTopology().get()) != nullptr )
+    do
     {
         help.SetSize( it->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT) );
         it->AEntityEntity(0).WedgeMultTranspose(colors, help);
         Swap(colors, help);
-    }
+    } while( (it = it->FinerTopology().get()) != nullptr );
 
     auto fec = make_unique<L2_FECollection>(0, mesh->Dimension());
     auto fespace = make_unique<FiniteElementSpace>(mesh, fec.get());
     GridFunction x(fespace.get());
 
     for(int i = 0; i < x.Size(); ++i )
-        x(i) = colors[i]*num_procs + myid;
+        x(i) = partitioning[i]*num_procs + myid;
 
     if(file == nullptr)
     {
         char vishost[] = "localhost";
         int  visport   = 19916;
         socketstream sol_sock (vishost, visport);
-        sol_sock<<"parallel " << num_procs << " " << myid << "\n";
+        if (num_procs > 1)
+            sol_sock<<"parallel " << num_procs << " " << myid << "\n";
         sol_sock << "solution\n";
-        mesh->PrintWithPartitioning(partitioning.GetData(),sol_sock);
+        mesh->PrintWithPartitioning(partitioning.GetData(), sol_sock, 1);
         x.Save(sol_sock);
     }
     else
+    {
+        mesh->PrintWithPartitioning(partitioning.GetData(), *file, 1);
         x.Save(*file);
+    }
 
     MPI_Barrier(comm);
 }
