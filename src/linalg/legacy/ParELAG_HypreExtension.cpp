@@ -212,7 +212,12 @@ void HypreAMS::SetParameters( const HypreAMSData & data )
         mfem_error("HypreAMS::SetParameters: if AMS cycle < 10 then Pi should be provided \n");
 
     if (data.cycle_type > 10)
-        HYPRE_AMSSetInterpolations(ams, nullptr, *Pix, *Piy, *Piz);
+    {
+        if (dim == 2)
+            HYPRE_AMSSetInterpolations(ams, nullptr, *Pix, *Piy, nullptr);
+        else 
+            HYPRE_AMSSetInterpolations(ams, nullptr, *Pix, *Piy, *Piz);
+    }
     else
         HYPRE_AMSSetInterpolations(ams, *Pi, nullptr, nullptr, nullptr);
 
