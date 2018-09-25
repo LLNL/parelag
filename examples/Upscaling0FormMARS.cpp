@@ -119,13 +119,13 @@ int main (int argc, char *argv[])
     switch (nDimensions)
     {
         case 2:
-            convert(*mesh, mesh2);
+            convert_mfem_to_mars_mesh(*mesh, mesh2);
             break;
         case 3:
-            convert(*mesh, mesh3);
+            convert_mfem_to_mars_mesh(*mesh, mesh3);
             break;
         case 4:
-            convert(*mesh, mesh4);
+            convert_mfem_to_mars_mesh(*mesh, mesh4);
             break;
         default:
             PARELAG_ASSERT(false);
@@ -137,24 +137,24 @@ int main (int argc, char *argv[])
         switch (nDimensions)
         {
             case 2:
-                partitioning = refine(mesh2);
+                partitioning = uniform_refine(mesh2);
                 PARELAG_ASSERT(mesh2.n_active_elements() == mesh2.n_elements());
                 nels = mesh2.n_active_elements();
-                tmesh = convert(mesh2, geom, bdr_geom);
+                tmesh = convert_mars_to_mfem_mesh(mesh2, geom, bdr_geom);
                 tmesh->CheckPartitioning(partitioning);
                 break;
             case 3:
-                partitioning = refine(mesh3);
+                partitioning = uniform_refine(mesh3);
                 PARELAG_ASSERT(mesh3.n_active_elements() == mesh3.n_elements());
                 nels = mesh3.n_active_elements();
-                tmesh = convert(mesh3, geom, bdr_geom);
+                tmesh = convert_mars_to_mfem_mesh(mesh3, geom, bdr_geom);
                 tmesh->CheckPartitioning(partitioning);
                 break;
 //            case 4:
-//                partitioning = refine(mesh4);
+//                partitioning = uniform_refine(mesh4);
 //                PARELAG_ASSERT(mesh4.n_active_elements() == mesh4.n_elements());
 //                nels = mesh4.n_active_elements();
-//                tmesh = convert(mesh4, geom, bdr_geom);
+//                tmesh = convert_mars_to_mfem_mesh(mesh4, geom, bdr_geom);
 //                tmesh->CheckPartitioning(partitioning);
 //                break;
             default:
@@ -166,13 +166,13 @@ int main (int argc, char *argv[])
     switch (nDimensions)
     {
         case 2:
-            mesh = convert(mesh2, geom, bdr_geom);
+            mesh = convert_mars_to_mfem_mesh(mesh2, geom, bdr_geom);
             break;
         case 3:
-            mesh = convert(mesh3, geom, bdr_geom);
+            mesh = convert_mars_to_mfem_mesh(mesh3, geom, bdr_geom);
             break;
 //        case 4:
-//            mesh = convert(mesh4, geom, bdr_geom);
+//            mesh = convert_mars_to_mfem_mesh(mesh4, geom, bdr_geom);
 //            break;
         default:
             PARELAG_ASSERT(false);

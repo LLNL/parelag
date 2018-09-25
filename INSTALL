@@ -103,6 +103,9 @@ ParELAG has optional support for:
       nightmarish compiler and then linker errors. You've been warned.
 - ParMETIS v4.0.3
 - GLvis, for visualization of results (http://glvis.org)
+- MARS (https://bitbucket.org/zulianp/mars) [under development]
+    A mesh refinement library (including adaptive local refinement) for meshes of
+    simplexes of any dimension.
 
 
 ==================================================

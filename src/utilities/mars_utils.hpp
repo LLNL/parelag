@@ -20,8 +20,17 @@
 
 namespace parelag {
 
+/** A direct conversion from the MFEM mesh format/class to MARS.
+
+    Template use is associated with the "static typing" philosophy in MARS vs.
+    the "dynamic typing" in MFEM. Namely, the mesh dimension in MARS is a property/parameter
+    of the type with static (compile time) semantics, whereas MFEM considers the dimension
+    as a run-time (dynamic) parameter of the mesh.
+
+    It currently cannot handle element attributes.
+*/
 template<mars::Integer Dim>
-static void convert(const mfem::Mesh &in, mars::Mesh<Dim, Dim> &out)
+static void convert_mfem_to_mars_mesh(const mfem::Mesh &in, mars::Mesh<Dim, Dim> &out)
 {
     //TODO: Handle element attribute.
 
@@ -91,8 +100,20 @@ static void convert(const mfem::Mesh &in, mars::Mesh<Dim, Dim> &out)
     }
 }
 
+/** A direct conversion from the MARS mesh format/class to MFEM.
+
+    The function needs the number (in MFEM terms) associated with the particular type of the boundary elements.
+    This can be quite inconvenient for general use but the typical use is to start with an MFEM mesh and convert it to MARS
+    for processing, and then convert back to MFEM. This way, the user can obtain the boundary element type from the
+    original MFEM mesh.
+
+    Currently, the produced MFEM mesh is completely new containing no appropriate information about how it was obtained from
+    a coarser mesh via refinement. This information is available in MARS and it is a matter of technical details how to provide it properly
+    to MFEM. MFEM needs this information for producing "mesh prolongators" and respective transfer operators between levels of
+    FE spaces on the respective sequence of meshes.
+*/
 template<mars::Integer Dim>
-static std::shared_ptr<mfem::Mesh> convert(const mars::Mesh<Dim, Dim> &in, int geom, int bdr_geom)
+static std::shared_ptr<mfem::Mesh> convert_mars_to_mfem_mesh(const mars::Mesh<Dim, Dim> &in, int geom, int bdr_geom)
 {
     using Point = mars::Vector<mars::Real, Dim>;
     const auto n_active_elements = in.n_active_elements();
@@ -143,8 +164,13 @@ static std::shared_ptr<mfem::Mesh> convert(const mars::Mesh<Dim, Dim> &in, int g
     return temp;
 }
 
+/** Uniformly refine a MARS mesh. This should work for any dimension of the domain and mesh.
+    In MARS terms, uniform refinement means refining all elements of the mesh. In particular,
+    this utilizes bisection. That is, it bisect all elements once, with potential additional
+    bisections to resolve any hanging nodes, i.e. it strives to maintain the conformity of the mesh.
+*/
 template<mars::Integer Dim>
-static int *refine(mars::Mesh<Dim, Dim> &in)
+static int *uniform_refine(mars::Mesh<Dim, Dim> &in)
 {
     mars::Bisection<mars::Mesh<Dim, Dim>> b(in);
     b.uniform_refine(1);
