@@ -165,6 +165,14 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
     PASS_REGULAR_EXPRESSION
     "Solving Darcy problem with L2 mass (weight = 1);Final residual norm: 3.34915e-07")
 
+  if (${PROJECT_NAME}_USE_MARS)
+    add_test(0FormMARS Upscaling0FormMARS.exe -nv)
+    set_tests_properties(0FormMARS
+      PROPERTIES
+      PASS_REGULAR_EXPRESSION
+      "% || uh - uH ||;2.325457e-03;% || grad ( uh - uH ) ||;4.196067e-02")
+  endif()
+
   # Only run the valgrind tests if Valgrind is available
   if (MEMORYCHECK_COMMAND AND ${PROJECT_NAME}_ENABLE_VALGRIND_TESTS)
     add_valgrind_test(vlocal_targets

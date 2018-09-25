@@ -94,12 +94,14 @@ int main (int argc, char *argv[])
         {
             if (myid == 0)
                 std::cerr << std::endl << "Can not open mesh file: "
-                          << meshfile << std::endl << std::endl;
-            return EXIT_FAILURE;
-        }
+                          << meshfile << " Going default..." << std::endl << std::endl;
 
-        mesh = make_shared<Mesh>(imesh, 1, 1);
-        imesh.close();
+             mesh = make_unique<Mesh>(4, 4, 4, Element::TETRAHEDRON, 1);
+        } else
+        {
+            mesh = make_shared<Mesh>(imesh, 1, 1);
+            imesh.close();
+        }
 
         ess_attr.SetSize(mesh->bdr_attributes.Max());
         ess_attr = 1;
