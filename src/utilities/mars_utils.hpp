@@ -157,7 +157,7 @@ static std::shared_ptr<mfem::Mesh> convert_mars_to_mfem_mesh(const mars::Mesh<Di
     }
 
 //    if (Dim == 4)
-//        temp->PrepareFinalize4D();
+//        temp->ReorderPentatope();
     temp->FinalizeTopology();
     temp->Finalize();
 
