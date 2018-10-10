@@ -17,6 +17,7 @@ list(APPEND EXAMPLE_SRCS
   EmbeddedMeshPartitionerDemo.cpp
   LogicalPartitionerDemo.cpp
   Upscaling0Form.cpp
+  Upscaling0FormMFEM.cpp
   Upscaling0FormSpectral.cpp
   Upscaling2Form.cpp
   Upscaling2FormAMGe.cpp
