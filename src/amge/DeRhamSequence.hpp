@@ -126,6 +126,11 @@ public:
         return D_[jform].get();
     }
 
+    void SetD(int jform, std::unique_ptr<mfem::SparseMatrix> D)
+    {
+        D_[jform] = std::move(D);
+    }
+
     mfem::SparseMatrix * GetDerivativeOperator(int jform)
     {
         return GetD(jform);
@@ -134,6 +139,11 @@ public:
     mfem::SparseMatrix * GetP(int jform)
     {
         return P_[jform].get();
+    }
+
+    void SetP(int jform, std::unique_ptr<mfem::SparseMatrix> P)
+    {
+        P_[jform] = std::move(P);
     }
 
     // FIXME!!

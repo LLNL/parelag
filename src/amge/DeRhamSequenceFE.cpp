@@ -602,11 +602,21 @@ void DeRhamSequenceFE::GetTransformation(
     }
 }
 
+void DeRhamSequenceFE::Update()
+{
+    for (int i=0; i < nForms_; ++i)
+        FESpace_[i]->Update();
+
+    buildDof();
+    assembleLocalMass();
+    assembleDerivative();
+}
+
 //-----------------------------------------------------------------------------
 
 /// FIXME (trb 12/15/15): Shouldn't the topo have the mesh already?
 DeRhamSequence3D_FE::DeRhamSequence3D_FE(
-    const std::shared_ptr<AgglomeratedTopology>& topo,ParMesh * mesh,int order)
+    const std::shared_ptr<AgglomeratedTopology>& topo,ParMesh * mesh,int order,bool assemble)
     : DeRhamSequenceFE(topo, 4)
 {
     Mesh_ = mesh;
@@ -646,9 +656,12 @@ DeRhamSequence3D_FE::DeRhamSequence3D_FE(
     mi_[8] = make_unique<MassIntegrator>();//edges
     mi_[9] = make_unique<PointFEMassIntegrator>();//points
 
-    buildDof();
-    assembleLocalMass();
-    assembleDerivative();
+    if (assemble)
+    {
+        buildDof();
+        assembleLocalMass();
+        assembleDerivative();
+    }
 }
 
 DeRhamSequence3D_FE::~DeRhamSequence3D_FE()
@@ -690,7 +703,7 @@ void DeRhamSequence3D_FE::computePVTraces(
 }
 
 DeRhamSequence2D_Hdiv_FE::DeRhamSequence2D_Hdiv_FE(
-    const std::shared_ptr<AgglomeratedTopology>& topo, ParMesh * mesh, int order)
+    const std::shared_ptr<AgglomeratedTopology>& topo, ParMesh * mesh, int order, bool assemble)
     : DeRhamSequenceFE(topo, 3)
 {
     Mesh_ = mesh;
@@ -720,9 +733,12 @@ DeRhamSequence2D_Hdiv_FE::DeRhamSequence2D_Hdiv_FE(
     mi_[4] = make_unique<MassIntegrator>();//edges
     mi_[5] = make_unique<PointFEMassIntegrator>();//points
 
-    buildDof();
-    assembleLocalMass();
-    assembleDerivative();
+    if (assemble)
+    {
+        buildDof();
+        assembleLocalMass();
+        assembleDerivative();
+    }
 }
 
 void DeRhamSequence2D_Hdiv_FE::computePVTraces(
