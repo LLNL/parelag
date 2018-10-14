@@ -18,6 +18,7 @@ list(APPEND EXAMPLE_SRCS
   LogicalPartitionerDemo.cpp
   Upscaling0Form.cpp
   Upscaling0FormMFEM.cpp
+  Upscaling0FormMFEMonly.cpp
   Upscaling0FormSpectral.cpp
   Upscaling2Form.cpp
   Upscaling2FormAMGe.cpp
