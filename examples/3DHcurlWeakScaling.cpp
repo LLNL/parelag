@@ -118,7 +118,7 @@ int main (int argc, char *argv[])
 //      Element::Type type = Element::TETRAHEDRON;
     Element::Type type = Element::HEXAHEDRON;
 
-    auto mesh = make_unique<Mesh>(n, n, n, type, 1);
+    auto mesh = make_unique<Mesh>(n, n, n, type, true);
 
     const int nDimensions = mesh->Dimension();
 

@@ -132,7 +132,7 @@ int main (int argc, char *argv[])
                           << ", falling back to default behavior." << std::endl;
                 std::cout << "Generating cube mesh with 8 hexahedral elements.\n";
             }
-            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, 1);
+            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, true);
         }
 
         for (int l=0; l<ser_ref_levels; l++)

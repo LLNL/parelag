@@ -102,10 +102,10 @@ int main(int argc, char * argv[])
     if (meshfile == "GENERATE_MESH")
     {
         if (dimension == 2)
-            mesh = make_unique<Mesh>(x_elements, y_elements, Element::QUADRILATERAL, 1);
+            mesh = make_unique<Mesh>(x_elements, y_elements, Element::QUADRILATERAL, true);
         else
             mesh = make_unique<Mesh>(x_elements, y_elements, z_elements,
-                                     Element::HEXAHEDRON, 1);
+                                     Element::HEXAHEDRON, true);
     }
     else
     {

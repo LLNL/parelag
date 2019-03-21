@@ -153,7 +153,7 @@ int main (int argc, char *argv[])
                           << ", falling back to default behavior." << std::endl;
                 std::cout << "Generating cube mesh with 8 hexahedral elements.\n";
             }
-            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, 1);
+            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, true);
             // Change mesh attribute of bottom half of cube
             for ( int i = 0; i < 4; i++)
                 mesh->GetElement(i)->SetAttribute(2);
