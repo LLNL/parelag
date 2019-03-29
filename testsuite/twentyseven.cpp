@@ -246,24 +246,24 @@ int main (int argc, char *argv[])
     if (argument == "discedge")
     {
         // create 39-element serial mesh
-        Mesh mesh(3, 3, 4, Element::HEXAHEDRON, 1);
+        Mesh mesh(3, 3, 4, Element::HEXAHEDRON, true);
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     else if (argument == "tet")
     {
         // create 48-element serial tetrahedral mesh
-        Mesh mesh(2, 2, 2, Element::TETRAHEDRON, 1);
+        Mesh mesh(2, 2, 2, Element::TETRAHEDRON, true);
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     else if (argument == "sv2")
     {
-        Mesh mesh(2, 2, 2, Element::HEXAHEDRON, 1);
+        Mesh mesh(2, 2, 2, Element::HEXAHEDRON, true);
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     else
     {
         // create 27-element serial mesh
-        Mesh mesh(3, 3, 3, Element::HEXAHEDRON, 1);
+        Mesh mesh(3, 3, 3, Element::HEXAHEDRON, true);
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     std::vector<shared_ptr<AgglomeratedTopology> > topology(2);

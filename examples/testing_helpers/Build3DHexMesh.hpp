@@ -24,7 +24,7 @@ namespace testhelpers
 
 std::unique_ptr<mfem::Mesh> Build3DHexMesh()
 {
-    return make_unique<mfem::Mesh>(2,2,2,mfem::Element::HEXAHEDRON,1);
+    return make_unique<mfem::Mesh>(2, 2, 2, mfem::Element::HEXAHEDRON, true);
 }
 
 }// namespace testhelpers

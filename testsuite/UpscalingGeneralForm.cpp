@@ -222,7 +222,7 @@ int main (int argc, char *argv[])
                           << ", falling back to default behavior." << std::endl;
                 std::cout << "Generating cube mesh with 8 hexahedral elements.\n";
             }
-            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, 1);
+            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, true);
             for (int i(1); i < nbdr-1; ++i)
                 ess_zeros[i] = 1;
             nat_one[0] = 1;

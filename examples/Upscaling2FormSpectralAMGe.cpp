@@ -123,7 +123,7 @@ int main (int argc, char *argv[])
                           << std::endl << "Generating structured mesh."
                           << std::endl;
             }
-            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, 1);
+            mesh = make_unique<Mesh>(2, 2, 2, Element::HEXAHEDRON, true);
         }
         ess_attr.SetSize(mesh->bdr_attributes.Max());
         ess_attr = 1;
