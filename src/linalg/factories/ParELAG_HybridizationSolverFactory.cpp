@@ -36,8 +36,6 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
     const auto hybrid_strategy =
         params.Get<std::string>("Hybridization strategy");
 
-//    std::shared_ptr<mfem::Operator> hybridized_op, to_hybrid_op, from_hybrid_op;
-
     if (hybrid_strategy == "Darcy")
     {
     	auto& sequence = state.GetDeRhamSequence();
@@ -92,23 +90,10 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
                 HB_mat_copy.EliminateRowCol(i);
         auto pHB_mat = Assemble(mult_dofTrueDof, HB_mat_copy, mult_dofTrueDof);
 
-        // Generate a diagonal scaling matrix by smoothing some random vector
-        mfem::HypreSmoother smoother(*pHB_mat);
-        mfem::CGSolver cg(pHB_mat->GetComm());
-        cg.SetOperator(*pHB_mat);
-        cg.SetPreconditioner(smoother);
-
-        // Number of smoothing steps in the generation of the rescaling vector
-        // If it is set to 0, then the original hybridized system is solved
-        int RescaleIter = state.GetExtraParameter("RescaleIteration", 20);
-        cg.SetMaxIter(RescaleIter);
-
-        mfem::Vector scaling_vector(pHB_mat->Height());
-        scaling_vector = 1.0;
-        mfem::Vector random_vector(pHB_mat->Height());
-        random_vector = 1.0;
-        if (RescaleIter > 0)
-            cg.Mult(random_vector, scaling_vector);
+        bool use_precomputed_scaling = true;
+        const int rescale_iter = state.GetExtraParameter("RescaleIteration", 20);
+        auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
+                             _get_scaling_by_smoothing(*pHB_mat, rescale_iter);
 
         int* scale_i = new int[pHB_mat->Height()+1];
         int* scale_j = new int[pHB_mat->Height()];
@@ -150,6 +135,29 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
             "\" is invalid. Currently, the only option is \"Darcy\"");
     }
 
+}
+
+mfem::Vector HybridizationSolverFactory::_get_scaling_by_smoothing(
+     const ParallelCSRMatrix& op, int num_iter) const
+{
+    // Generate a diagonal scaling matrix by smoothing some random vector
+    mfem::HypreSmoother smoother(const_cast<ParallelCSRMatrix&>(op));
+    mfem::CGSolver cg(op.GetComm());
+    cg.SetOperator(op);
+    cg.SetPreconditioner(smoother);
+
+    // Number of smoothing steps in the generation of the rescaling vector
+    // If it is set to 0, then the original hybridized system is solved
+    cg.SetMaxIter(num_iter);
+
+    mfem::Vector scaling_vector(op.Height());
+    scaling_vector = 1.0;
+    mfem::Vector zeros(op.Height());
+    zeros = 1e-8;
+    if (num_iter > 0)
+        cg.Mult(zeros, scaling_vector);
+
+    return scaling_vector;
 }
 
 void HybridizationSolverFactory::_do_set_default_parameters()
