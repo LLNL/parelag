@@ -13,6 +13,7 @@ list(APPEND DENSE_SRCS
   ParELAG_Eigensolver.cpp
   ParELAG_InnerProduct.cpp
   ParELAG_LDLCalculator.cpp
+  ParELAG_QDQCalculator.cpp
   ParELAG_MultiVector.cpp
   ParELAG_SVDCalculator.cpp
   )
@@ -22,7 +23,9 @@ list(APPEND DENSE_HDRS
   ParELAG_InnerProduct.hpp
   ParELAG_LAPACK.hpp
   ParELAG_LAPACK_Helpers.hpp
+  ParELAG_DenseInverseCalculator.hpp
   ParELAG_LDLCalculator.hpp
+  ParELAG_QDQCalculator.hpp
   ParELAG_MultiVector.hpp
   ParELAG_SVDCalculator.hpp
   )

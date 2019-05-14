@@ -22,7 +22,7 @@
 #include "amge/DeRhamSequence.hpp"
 #include "amge/DofHandler.hpp"
 #include "topology/Topology.hpp"
-#include "linalg/dense/ParELAG_LDLCalculator.hpp"
+#include "linalg/dense/ParELAG_DenseInverseCalculator.hpp"
 
 namespace parelag
 {
@@ -101,7 +101,7 @@ private:
     std::vector<std::unique_ptr<mfem::DenseMatrix>> Hybrid_el;
     std::vector<std::unique_ptr<mfem::DenseMatrix>> AinvCT;
     std::vector<std::unique_ptr<mfem::Vector>> Ainv_f;
-    std::vector<std::unique_ptr<LDLCalculator>> Ainv;
+    std::vector<std::unique_ptr<DenseInverseCalculator>> Ainv;
     std::vector<std::unique_ptr<mfem::DenseMatrix>> A_el;
 
     mfem::Array<int> ess_HdivDofs;

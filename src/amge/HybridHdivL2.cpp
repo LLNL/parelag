@@ -14,6 +14,7 @@
 #include "HybridHdivL2.hpp"
 
 #include "linalg/dense/ParELAG_LDLCalculator.hpp"
+#include "linalg/dense/ParELAG_QDQCalculator.hpp"
 #include "linalg/utilities/ParELAG_MatrixUtils.hpp"
 #include "linalg/utilities/ParELAG_SubMatrixExtraction.hpp"
 #include "utilities/MemoryUtils.hpp"
@@ -134,7 +135,7 @@ void HybridHdivL2::AssembleHybridSystem()
     unique_ptr<DenseMatrix> tmpAinvCT;
     unique_ptr<DenseMatrix> tmpHybrid_el;
     unique_ptr<Vector> Ainv_f_loc;
-    unique_ptr<LDLCalculator> solver;
+    unique_ptr<DenseInverseCalculator> solver;
     unique_ptr<DenseMatrix> tmpAloc;
 
     SharingMap & HdivTrueHdiv = dofHdiv->GetDofTrueDof();
