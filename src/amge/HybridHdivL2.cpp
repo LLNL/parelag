@@ -230,8 +230,13 @@ void HybridHdivL2::AssembleHybridSystem()
     Array<int> HdivGlobalToLocalMap(elem_HdivDof.Width());
     HdivGlobalToLocalMap = -1;
 
-    mfem::Vector CCT_diag(HybridSystem->NumRows());
-    mfem::Vector CBT1(HybridSystem->NumRows());
+    // Determine whether to construct rescaling vector (CC^T)^{-1}CB^T1
+    // (rescaling works in fine level or if number of HdivDof on each facet = 1)
+    const bool make_rescale = !IsSameOrient || (nFacet == facet_HdivDof.NumCols());
+std::cout<<"nFacet: "<< nFacet<<" num Hdiv dofs: "<<facet_HdivDof.NumCols()<<"\n";
+    std::cout<<"rescaling"<< (make_rescale?" is ":" is NOT ")<<"generating\n";
+    mfem::Vector CCT_diag(make_rescale ? HybridSystem->NumRows() : 0);
+    mfem::Vector CBT1(CCT_diag.Size());
     CCT_diag = 0.0;
     CBT1 = 0.0;
 
@@ -420,30 +425,33 @@ void HybridHdivL2::AssembleHybridSystem()
                                    1);
 
         // Save CCT and CBT1
-        mfem::DenseMatrix CCT(nMultiplierDofLoc);
-        mfem::MultAAt(ClocT, CCT);
-        mfem::Vector CCT_diag_local;
-        CCT.GetDiag(CCT_diag_local);
-
-        mfem::Vector const_one(nHdivDofLoc+nL2DofLoc);
-        for (int i = 0; i < nHdivDofLoc; ++i)
+        if (make_rescale)
         {
-            const_one[i] = 0.0;
-        }
-        for (int i = 0; i < nL2DofLoc; ++i)
-        {
-            const_one[nHdivDofLoc+i] = 1.0;
-        }
-        mfem::Vector BTone(nHdivDofLoc+nL2DofLoc);
-        tmpAloc->Mult(const_one, BTone);
+            mfem::DenseMatrix CCT(nMultiplierDofLoc);
+            mfem::MultAAt(ClocT, CCT);
+            mfem::Vector CCT_diag_local;
+            CCT.GetDiag(CCT_diag_local);
 
-        mfem::Vector CBT1_local(nMultiplierDofLoc);
-        ClocT.Mult(BTone, CBT1_local);
+            mfem::Vector const_one(nHdivDofLoc+nL2DofLoc);
+            for (int i = 0; i < nHdivDofLoc; ++i)
+            {
+                const_one[i] = 0.0;
+            }
+            for (int i = 0; i < nL2DofLoc; ++i)
+            {
+                const_one[nHdivDofLoc+i] = 1.0;
+            }
+            mfem::Vector BTone(nHdivDofLoc+nL2DofLoc);
+            tmpAloc->Mult(const_one, BTone);
 
-        for (int i = 0; i < nMultiplierDofLoc; ++i)
-        {
-            CCT_diag[MultiplierDofLoc[i]] += CCT_diag_local[i];
-            CBT1[MultiplierDofLoc[i]] += CBT1_local[i];
+            mfem::Vector CBT1_local(nMultiplierDofLoc);
+            ClocT.Mult(BTone, CBT1_local);
+
+            for (int i = 0; i < nMultiplierDofLoc; ++i)
+            {
+                CCT_diag[MultiplierDofLoc[i]] += CCT_diag_local[i];
+                CBT1[MultiplierDofLoc[i]] += CBT1_local[i];
+            }
         }
 
         // Save the factorization of [M B^T;B 0] for solution recovery purpose
@@ -495,16 +503,19 @@ void HybridHdivL2::AssembleHybridSystem()
     	}
 
     // Assemble global rescaling vector (CC^T)^{-1}CB^T 1
-    mfem::Vector CCT_diag_global(MultiplierTrueMultiplier.GetTrueLocalSize());
-    MultiplierTrueMultiplier.Assemble(CCT_diag, CCT_diag_global);
-
-    mfem::Vector CBT1_global(MultiplierTrueMultiplier.GetTrueLocalSize());
-    MultiplierTrueMultiplier.Assemble(CBT1, CBT1_global);
-
-    CCT_inv_CBT1.SetSize(MultiplierTrueMultiplier.GetTrueLocalSize());
-    for (int i = 0; i < CCT_inv_CBT1.Size(); ++i)
+    if (make_rescale)
     {
-        CCT_inv_CBT1[i] = CBT1_global[i] / CCT_diag_global[i];
+        mfem::Vector CCT_diag_global(MultiplierTrueMultiplier.GetTrueLocalSize());
+        MultiplierTrueMultiplier.Assemble(CCT_diag, CCT_diag_global);
+
+        mfem::Vector CBT1_global(MultiplierTrueMultiplier.GetTrueLocalSize());
+        MultiplierTrueMultiplier.Assemble(CBT1, CBT1_global);
+
+        CCT_inv_CBT1.SetSize(MultiplierTrueMultiplier.GetTrueLocalSize());
+        for (int i = 0; i < CCT_inv_CBT1.Size(); ++i)
+        {
+            CCT_inv_CBT1[i] = CBT1_global[i] / CCT_diag_global[i];
+        }
     }
 }
 

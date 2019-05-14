@@ -90,10 +90,10 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
                 HB_mat_copy.EliminateRowCol(i);
         auto pHB_mat = Assemble(mult_dofTrueDof, HB_mat_copy, mult_dofTrueDof);
 
-        bool use_precomputed_scaling = true;
+        const bool use_precomputed_scaling = hybridization->GetRescaling().Size();
         const int rescale_iter = state.GetExtraParameter("RescaleIteration", 20);
         auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
-                             _get_scaling_by_smoothing(*pHB_mat, rescale_iter);
+                              _get_scaling_by_smoothing(*pHB_mat, rescale_iter);
 
         int* scale_i = new int[pHB_mat->Height()+1];
         int* scale_j = new int[pHB_mat->Height()];

@@ -286,9 +286,10 @@ int main (int argc, char *argv[])
                 level_nElements[ilevel+1],
                 partitioning);
             topology[ilevel+1] =
-                topology[ilevel]->CoarsenLocalPartitioning(partitioning, 0, 0, 2);
+                topology[ilevel]->CoarsenLocalPartitioning(partitioning, 0, 0,0);
         }
     }
+    std::cout<<"num bdr faces = "<<topology[1]->FacetBdrAttribute().NumNonZeroElems()<<"\n";
 
     if (print_progress_report)
         std::cout << "-- Successfully agglomerated topology.\n\n"

@@ -1783,6 +1783,7 @@ void DeRhamSequence::ComputeCoarseTracesWithTargets(int jform)
 
     //========== FIRST LOOP: Compute SVDs and set AE_ndofs ===========//
     // my_p and mass get filled in here
+    int i_count = 0;
     for (int iAE(0); iAE < nAE; ++iAE)
     {
         if (AE_TrueAE.IsShared(iAE) == -1 )
@@ -1847,6 +1848,10 @@ void DeRhamSequence::ComputeCoarseTracesWithTargets(int jform)
                 if (s(i) < s_max_tol)
                     break;
             }
+            if (i > 0)
+                i_count++;
+//            s.Print();
+//std::cout<<"facet "<< iAE<<": "<<i<<"\n";
             AE_ndofs[iAE] = i+1;
 
             double pv_dot_pv = inner_product(loc_pv, loc_pv);
@@ -1892,6 +1897,7 @@ void DeRhamSequence::ComputeCoarseTracesWithTargets(int jform)
             mass.SetElementalMatrix(iAE, std::move(cElemMass) );
         }
     }
+    std::cout<<"number of faces with i > 0 = "<<i_count<<"\n";
 
     {
         Array<int> tmp(AE_ndofs, nAE);
