@@ -233,8 +233,6 @@ void HybridHdivL2::AssembleHybridSystem()
     // Determine whether to construct rescaling vector (CC^T)^{-1}CB^T1
     // (rescaling works in fine level or if number of HdivDof on each facet = 1)
     const bool make_rescale = !IsSameOrient || (nFacet == facet_HdivDof.NumCols());
-std::cout<<"nFacet: "<< nFacet<<" num Hdiv dofs: "<<facet_HdivDof.NumCols()<<"\n";
-    std::cout<<"rescaling"<< (make_rescale?" is ":" is NOT ")<<"generating\n";
     mfem::Vector CCT_diag(make_rescale ? HybridSystem->NumRows() : 0);
     mfem::Vector CBT1(CCT_diag.Size());
     CCT_diag = 0.0;
