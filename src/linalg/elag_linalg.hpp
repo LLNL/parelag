@@ -18,6 +18,7 @@
 #include "dense/ParELAG_InnerProduct.hpp"
 #include "dense/ParELAG_LAPACK.hpp"
 #include "dense/ParELAG_LDLCalculator.hpp"
+#include "dense/ParELAG_QDQCalculator.hpp"
 #include "dense/ParELAG_MultiVector.hpp"
 #include "dense/ParELAG_SVDCalculator.hpp"
 

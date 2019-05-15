@@ -18,7 +18,6 @@
 
 #include "hypreExtension/hypreExtension.hpp"
 #include "linalg/dense/ParELAG_InnerProduct.hpp"
-#include "linalg/dense/ParELAG_LDLCalculator.hpp"
 #include "linalg/utilities/ParELAG_MatrixUtils.hpp"
 #include "linalg/solver_core/ParELAG_SaddlePointSolver.hpp"
 #include "linalg/utilities/ParELAG_SubMatrixExtraction.hpp"
@@ -681,6 +680,13 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
         Pi_[jform]->Project(*(Targets_[jform]),
                             *(coarser_sequence->Targets_[jform]));
     }
+
+    // Coarsen constant one representation
+    MultiVector fine_const(L2_const_rep_.GetData(), 1, L2_const_rep_.Size());
+    mfem::Vector& coarse_rep = coarser_sequence->GetL2ConstRepresentation();
+    coarse_rep.SetSize(coarser_sequence->Dof_[nForms_-1]->GetNDofs());
+    MultiVector coarse_const(coarse_rep.GetData(), 1, coarse_rep.Size());
+    Pi_[nForms_-1]->Project(fine_const, coarse_const);
 
     return coarser_sequence;
 }

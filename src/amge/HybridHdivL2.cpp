@@ -14,6 +14,7 @@
 #include "HybridHdivL2.hpp"
 
 #include "linalg/dense/ParELAG_LDLCalculator.hpp"
+#include "linalg/dense/ParELAG_QDQCalculator.hpp"
 #include "linalg/utilities/ParELAG_MatrixUtils.hpp"
 #include "linalg/utilities/ParELAG_SubMatrixExtraction.hpp"
 #include "utilities/MemoryUtils.hpp"
@@ -46,6 +47,7 @@ HybridHdivL2::HybridHdivL2(const std::shared_ptr<DeRhamSequence>& sequence,
     Ainv_f(0),
     Ainv(0),
     A_el(0),
+    L2_const_rep_(sequence->GetL2ConstRepresentation()),
     CCT_inv_CBT1(0)
 {
     // Mass matrix for L2 space
@@ -135,7 +137,7 @@ void HybridHdivL2::AssembleHybridSystem()
     unique_ptr<DenseMatrix> tmpAinvCT;
     unique_ptr<DenseMatrix> tmpHybrid_el;
     unique_ptr<Vector> Ainv_f_loc;
-    unique_ptr<LDLCalculator> solver;
+    unique_ptr<DenseInverseCalculator> solver;
     unique_ptr<DenseMatrix> tmpAloc;
 
     SharingMap & HdivTrueHdiv = dofHdiv->GetDofTrueDof();
@@ -430,17 +432,21 @@ void HybridHdivL2::AssembleHybridSystem()
             mfem::Vector CCT_diag_local;
             CCT.GetDiag(CCT_diag_local);
 
-            mfem::Vector const_one(nHdivDofLoc+nL2DofLoc);
+            mfem::Vector const_one;
+            L2_const_rep_.GetSubVector(L2DofLoc, const_one);
+
+            mfem::Vector zero_one(nHdivDofLoc+nL2DofLoc);
             for (int i = 0; i < nHdivDofLoc; ++i)
             {
-                const_one[i] = 0.0;
+                zero_one[i] = 0.0;
             }
             for (int i = 0; i < nL2DofLoc; ++i)
             {
-                const_one[nHdivDofLoc+i] = 1.0;
+                zero_one[nHdivDofLoc+i] = const_one[i];
             }
+
             mfem::Vector BTone(nHdivDofLoc+nL2DofLoc);
-            tmpAloc->Mult(const_one, BTone);
+            tmpAloc->Mult(zero_one, BTone);
 
             mfem::Vector CBT1_local(nMultiplierDofLoc);
             ClocT.Mult(BTone, CBT1_local);

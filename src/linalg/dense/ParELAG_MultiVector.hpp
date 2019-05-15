@@ -135,7 +135,10 @@ private:
 };
 
 //y = M * x;
-void Mult(mfem::DenseMatrix & M, const MultiVector & x, MultiVector & y);
+void Mult(const mfem::DenseMatrix & M, const MultiVector & x, MultiVector & y);
+
+//y = M^T * x;
+void MultTranspose(const mfem::DenseMatrix & M, const MultiVector & x, MultiVector & y);
 
 // y = y + scaling M*x
 void Mult(double scaling, mfem::DenseMatrix & M, const MultiVector & x,

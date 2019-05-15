@@ -622,7 +622,7 @@ extern "C"
                 int *, double *, int *, double *, double *, int *);
 }
 
-void Mult(DenseMatrix & M, const MultiVector & x, MultiVector & y)
+void Mult(const DenseMatrix & M, const MultiVector & x, MultiVector & y)
 {
     int nrows = M.Height();
     int ncols = M.Width();
@@ -657,6 +657,46 @@ void Mult(DenseMatrix & M, const MultiVector & x, MultiVector & y)
     static double alpha = 1.0, beta = 0.0;
 
     dgemm_(&transa, &transb, &nrows, &nv, &ncols,
+           &alpha, M.Data(), &nrows, xx, &ldx,
+           &beta, yy, &ldy);
+
+}
+
+void MultTranspose(const DenseMatrix & M, const MultiVector & x, MultiVector & y)
+{
+    int nrows = M.Height();
+    int ncols = M.Width();
+    int nv = x.NumberOfVectors();
+
+    PARELAG_TEST_FOR_EXCEPTION(
+        ncols != y.Size(),
+        std::runtime_error,
+        "void MultTranspose(DenseMatrix & M, const MultiVector & x, MultiVector & y) #1");
+
+    PARELAG_TEST_FOR_EXCEPTION(
+        nrows != x.Size(),
+        std::runtime_error,
+        "void MultTranspose(DenseMatrix & M, const MultiVector & x, MultiVector & y) #2");
+
+    PARELAG_TEST_FOR_EXCEPTION(
+        x.NumberOfVectors() != y.NumberOfVectors(),
+        std::runtime_error,
+        "void MultTranspose(DenseMatrix & M, const MultiVector & x, MultiVector & y) #3");
+
+    if(nrows == 0)
+        return;
+
+    if(nv == 0 || ncols == 0 )
+        return;
+
+    double * xx(x.GetData()), *yy(y.GetData());
+    int ldx = x.LeadingDimension();
+    int ldy = y.LeadingDimension();
+
+    static char transa = 'T', transb = 'N';
+    static double alpha = 1.0, beta = 0.0;
+
+    dgemm_(&transa, &transb, &ncols, &nv, &nrows,
            &alpha, M.Data(), &nrows, xx, &ldx,
            &beta, yy, &ldy);
 

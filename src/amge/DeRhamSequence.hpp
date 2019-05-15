@@ -417,6 +417,10 @@ public:
     GetElementalMassMatrices(int iform,
                              AgglomeratedTopology::Entity icodim);
 
+    /// Get the representation of constant one function in L2 (dim-form)
+    const mfem::Vector& GetL2ConstRepresentation() const { return L2_const_rep_; }
+    mfem::Vector& GetL2ConstRepresentation() { return L2_const_rep_; }
+
     ///@}
     /// \name Exploit the linked list
     ///@{
@@ -669,6 +673,9 @@ protected:
 
     /// The cochain projector from this level to the coarser one
     std::vector<std::unique_ptr<CochainProjector>> Pi_;
+
+    /// Representation of constant one function in L2 (dim-form)
+    mfem::Vector L2_const_rep_;
 
     /// The next coarsest sequence in the hierarchy
     std::weak_ptr<DeRhamSequence> CoarserSequence_;
