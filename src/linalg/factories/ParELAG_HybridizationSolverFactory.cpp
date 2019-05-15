@@ -154,7 +154,7 @@ mfem::Vector HybridizationSolverFactory::_get_scaling_by_smoothing(
         sli.SetMaxIter(num_iter);
 
         mfem::Vector zeros(op.Height());
-        zeros = 1e-8;
+        zeros = 0.0;
         sli.Mult(zeros, scaling_vector);
     }
 
