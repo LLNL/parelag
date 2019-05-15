@@ -681,6 +681,13 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
                             *(coarser_sequence->Targets_[jform]));
     }
 
+    // Coarsen constant one representation
+    MultiVector fine_const(L2_const_rep_.GetData(), 1, L2_const_rep_.Size());
+    mfem::Vector& coarse_rep = coarser_sequence->GetL2ConstRepresentation();
+    coarse_rep.SetSize(coarser_sequence->Dof_[nForms_-1]->GetNDofs());
+    MultiVector coarse_const(coarse_rep.GetData(), 1, coarse_rep.Size());
+    Pi_[nForms_-1]->Project(fine_const, coarse_const);
+
     return coarser_sequence;
 }
 

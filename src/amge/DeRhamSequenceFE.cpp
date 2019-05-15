@@ -662,6 +662,9 @@ DeRhamSequence3D_FE::DeRhamSequence3D_FE(
         assembleLocalMass();
         assembleDerivative();
     }
+
+    mfem::ConstantCoefficient one(1.0);
+    ProjectCoefficient(nDimensions, one, L2_const_rep_);
 }
 
 DeRhamSequence3D_FE::~DeRhamSequence3D_FE()
@@ -739,6 +742,9 @@ DeRhamSequence2D_Hdiv_FE::DeRhamSequence2D_Hdiv_FE(
         assembleLocalMass();
         assembleDerivative();
     }
+
+    mfem::ConstantCoefficient one(1.0);
+    ProjectCoefficient(nDimensions, one, L2_const_rep_);
 }
 
 void DeRhamSequence2D_Hdiv_FE::computePVTraces(

@@ -109,6 +109,7 @@ private:
     std::vector<std::unique_ptr<DenseInverseCalculator>> Ainv;
     std::vector<std::unique_ptr<mfem::DenseMatrix>> A_el;
 
+    const mfem::Vector& L2_const_rep_;
     mfem::Vector CCT_inv_CBT1;
 
     mfem::Array<int> ess_HdivDofs;
