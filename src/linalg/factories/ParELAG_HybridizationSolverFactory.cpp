@@ -142,20 +142,22 @@ mfem::Vector HybridizationSolverFactory::_get_scaling_by_smoothing(
 {
     // Generate a diagonal scaling matrix by smoothing some random vector
     mfem::HypreSmoother smoother(const_cast<ParallelCSRMatrix&>(op));
-    mfem::CGSolver cg(op.GetComm());
-    cg.SetOperator(op);
-    cg.SetPreconditioner(smoother);
+    mfem::SLISolver sli(op.GetComm());
+    sli.SetOperator(op);
+    sli.SetPreconditioner(smoother);
 
     // Number of smoothing steps in the generation of the rescaling vector
     // If it is set to 0, then the original hybridized system is solved
-    cg.SetMaxIter(num_iter);
+    sli.SetMaxIter(num_iter);
 
     mfem::Vector scaling_vector(op.Height());
     scaling_vector = 1.0;
     mfem::Vector zeros(op.Height());
     zeros = 1e-8;
     if (num_iter > 0)
-        cg.Mult(zeros, scaling_vector);
+    {
+        sli.Mult(zeros, scaling_vector);
+    }
 
     return scaling_vector;
 }
