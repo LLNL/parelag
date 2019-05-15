@@ -101,5 +101,25 @@ private:
     std::shared_ptr<mfem::SparseMatrix> D_Scale_;
 };
 
+/// assuming symmetric problems
+class TwoLevelAdditiveSchwarz : Solver
+{
+public:
+    /// dofs are in true dofs numbering, coarse_map: coarse to fine
+    TwoLevelAdditiveSchwarz(ParallelCSRMatrix &op,
+                            const mfem::Array<mfem::Array<int> >& local_dofs,
+                            const SerialCSRMatrix& coarse_map);
+
+    virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const;
+
+private:
+    const mfem::Array<mfem::Array<int> >& local_dofs_;
+    const SerialCSRMatrix& coarse_map_;
+    mfem::Array<mfem::DenseMatrix> local_ops_;
+    mfem::Array<LDLCalculator> local_solvers_;
+    std::unique_ptr<ParallelCSRMatrix> coarse_op_;
+    std::unique_ptr<mfem::HypreBoomerAMG> coarse_solver_;
+};
+
 }// namespace parelag
 #endif /* PARELAG_HYBRIDIZATIONSOLVER_HPP */
