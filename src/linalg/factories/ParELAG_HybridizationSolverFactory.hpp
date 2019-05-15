@@ -57,6 +57,7 @@ private:
         const std::shared_ptr<MfemBlockOperator>& op,
         SolverState& state) const override;
 
+    /// Compute rescaling vector by smoothing
     mfem::Vector _get_scaling_by_smoothing(
         const ParallelCSRMatrix& op, int num_iter) const;
 
