@@ -46,7 +46,9 @@ HybridHdivL2::HybridHdivL2(const std::shared_ptr<DeRhamSequence>& sequence,
     AinvCT(0),
     Ainv_f(0),
     Ainv(0),
-    A_el(0)
+    A_el(0),
+    L2_const_rep_(sequence->GetL2ConstRepresentation()),
+    CCT_inv_CBT1(0)
 {
     // Mass matrix for L2 space
     W = sequence->ComputeMassOperator(nDimension);
@@ -229,6 +231,14 @@ void HybridHdivL2::AssembleHybridSystem()
 
     Array<int> HdivGlobalToLocalMap(elem_HdivDof.Width());
     HdivGlobalToLocalMap = -1;
+
+    // Determine whether to construct rescaling vector (CC^T)^{-1}CB^T1
+    // (rescaling works in fine level or if number of HdivDof on each facet = 1)
+    const bool make_rescale = !IsSameOrient || (nFacet == facet_HdivDof.NumCols());
+    mfem::Vector CCT_diag(make_rescale ? HybridSystem->NumRows() : 0);
+    mfem::Vector CBT1(CCT_diag.Size());
+    CCT_diag = 0.0;
+    CBT1 = 0.0;
 
     for (int elem = 0; elem < nElem; ++elem)
     {
@@ -414,8 +424,42 @@ void HybridHdivL2::AssembleHybridSystem()
                                    *tmpHybrid_el,
                                    1);
 
-        A_el[elem] = std::move(tmpAloc);
+        // Save CCT and CBT1
+        if (make_rescale)
+        {
+            mfem::DenseMatrix CCT(nMultiplierDofLoc);
+            mfem::MultAAt(ClocT, CCT);
+            mfem::Vector CCT_diag_local;
+            CCT.GetDiag(CCT_diag_local);
+
+            mfem::Vector const_one;
+            L2_const_rep_.GetSubVector(L2DofLoc, const_one);
+
+            mfem::Vector zero_one(nHdivDofLoc+nL2DofLoc);
+            for (int i = 0; i < nHdivDofLoc; ++i)
+            {
+                zero_one[i] = 0.0;
+            }
+            for (int i = 0; i < nL2DofLoc; ++i)
+            {
+                zero_one[nHdivDofLoc+i] = const_one[i];
+            }
+
+            mfem::Vector BTone(nHdivDofLoc+nL2DofLoc);
+            tmpAloc->Mult(zero_one, BTone);
+
+            mfem::Vector CBT1_local(nMultiplierDofLoc);
+            ClocT.Mult(BTone, CBT1_local);
+
+            for (int i = 0; i < nMultiplierDofLoc; ++i)
+            {
+                CCT_diag[MultiplierDofLoc[i]] += CCT_diag_local[i];
+                CBT1[MultiplierDofLoc[i]] += CBT1_local[i];
+            }
+        }
+
         // Save the factorization of [M B^T;B 0] for solution recovery purpose
+        A_el[elem] = std::move(tmpAloc);
         Ainv[elem] = std::move(solver);
 
         // Save the element matrix [M B^T;B 0]^-1[C 0]^T for solution
@@ -461,6 +505,22 @@ void HybridHdivL2::AssembleHybridSystem()
     		int mult_dof = j_HdivDof_Multiplier[i_HdivDof_Multiplier[i]];
     		ess_MultiplierDofs[mult_dof] = 1;
     	}
+
+    // Assemble global rescaling vector (CC^T)^{-1}CB^T 1
+    if (make_rescale)
+    {
+        mfem::Vector CCT_diag_global(MultiplierTrueMultiplier.GetTrueLocalSize());
+        MultiplierTrueMultiplier.Assemble(CCT_diag, CCT_diag_global);
+
+        mfem::Vector CBT1_global(MultiplierTrueMultiplier.GetTrueLocalSize());
+        MultiplierTrueMultiplier.Assemble(CBT1, CBT1_global);
+
+        CCT_inv_CBT1.SetSize(MultiplierTrueMultiplier.GetTrueLocalSize());
+        for (int i = 0; i < CCT_inv_CBT1.Size(); ++i)
+        {
+            CCT_inv_CBT1[i] = CBT1_global[i] / CCT_diag_global[i];
+        }
+    }
 }
 
 // TODO: impose nonzero boundary condition for u.n

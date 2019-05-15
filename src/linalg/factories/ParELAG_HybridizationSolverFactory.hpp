@@ -18,6 +18,7 @@
 #include "linalg/solver_core/ParELAG_BlockSolverFactory.hpp"
 #include "utilities/MemoryUtils.hpp"
 #include "linalg/utilities/ParELAG_MfemBlockOperator.hpp"
+#include "amge/HybridHdivL2.hpp"
 
 namespace parelag
 {
@@ -55,6 +56,10 @@ private:
     std::unique_ptr<mfem::Solver> _do_build_block_solver(
         const std::shared_ptr<MfemBlockOperator>& op,
         SolverState& state) const override;
+
+    /// Compute rescaling vector by smoothing
+    mfem::Vector _get_scaling_by_smoothing(
+        const ParallelCSRMatrix& op, int num_iter) const;
 
     /// Sets any required parameters that have not already been set.
     void _do_set_default_parameters() override;

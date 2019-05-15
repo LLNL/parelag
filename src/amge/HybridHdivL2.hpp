@@ -67,6 +67,11 @@ public:
         return ess_MultiplierDofs;
 	}
 
+    const mfem::Vector& GetRescaling() const noexcept
+    {
+        return CCT_inv_CBT1;
+    }
+
 private:
 
     bool IsSameOrient;
@@ -103,6 +108,9 @@ private:
     std::vector<std::unique_ptr<mfem::Vector>> Ainv_f;
     std::vector<std::unique_ptr<DenseInverseCalculator>> Ainv;
     std::vector<std::unique_ptr<mfem::DenseMatrix>> A_el;
+
+    const mfem::Vector& L2_const_rep_;
+    mfem::Vector CCT_inv_CBT1;
 
     mfem::Array<int> ess_HdivDofs;
     mfem::Array<int> ess_MultiplierDofs;

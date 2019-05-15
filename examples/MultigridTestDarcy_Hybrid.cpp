@@ -286,7 +286,8 @@ int main (int argc, char *argv[])
                 level_nElements[ilevel+1],
                 partitioning);
             topology[ilevel+1] =
-                topology[ilevel]->CoarsenLocalPartitioning(partitioning, 0, 0);
+                topology[ilevel]->CoarsenLocalPartitioning(partitioning, 0, 0,
+                                                           nDimensions == 2 ? 0 : 2);
         }
     }
 
@@ -305,13 +306,21 @@ int main (int argc, char *argv[])
         Timer tot_timer = TimeManager::AddTimer(
             "DeRhamSequence Construction -- Total");
 
-        sequence[0] = make_shared<DeRhamSequence3D_FE>(
-            topology[0], pmesh.get(), feorder);
+        if (nDimensions == 3)
+        {
+            sequence[0] = make_shared<DeRhamSequence3D_FE>(
+                        topology[0], pmesh.get(), feorder);
+        }
+        else
+        {
+            sequence[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(
+                        topology[0], pmesh.get(), feorder);
+        }
 
         DRSequence_FE = sequence[0]->FemSequence();
         PARELAG_ASSERT(DRSequence_FE);
 
-        constexpr int jFormStart = 0;
+        const int jFormStart = nDimensions - 1;
         sequence[0]->SetjformStart(jFormStart);
 
         DRSequence_FE->ReplaceMassIntegrator(
@@ -324,24 +333,12 @@ int main (int argc, char *argv[])
 
         mfem::Array<mfem::Coefficient *> L2coeff;
         mfem::Array<mfem::VectorCoefficient *> Hdivcoeff;
-        mfem::Array<mfem::VectorCoefficient *> Hcurlcoeff;
-        mfem::Array<mfem::Coefficient *> H1coeff;
-        fillVectorCoefficientArray(nDimensions, upscalingOrder, Hcurlcoeff);
         fillVectorCoefficientArray(nDimensions, upscalingOrder, Hdivcoeff);
         fillCoefficientArray(nDimensions, upscalingOrder, L2coeff);
-        fillCoefficientArray(nDimensions, upscalingOrder+1, H1coeff);
 
         std::vector<unique_ptr<MultiVector>>
             targets(sequence[0]->GetNumberOfForms());
-        int jform(0);
-
-        targets[jform] =
-            DRSequence_FE->InterpolateScalarTargets(jform, H1coeff);
-        ++jform;
-
-        targets[jform] =
-            DRSequence_FE->InterpolateVectorTargets(jform, Hcurlcoeff);
-        ++jform;
+        int jform(nDimensions-1);
 
         targets[jform] =
             DRSequence_FE->InterpolateVectorTargets(jform,Hdivcoeff);
@@ -353,8 +350,6 @@ int main (int argc, char *argv[])
 
         freeCoeffArray(L2coeff);
         freeCoeffArray(Hdivcoeff);
-        freeCoeffArray(Hcurlcoeff);
-        freeCoeffArray(H1coeff);
 
         mfem::Array<MultiVector*> targets_in(targets.size());
         for (int ii = 0; ii < targets_in.Size(); ++ii)
@@ -533,6 +528,8 @@ int main (int argc, char *argv[])
     		"Solver Parameters").Get<double>("Relative tolerance");
     const double atol = solver_list.Sublist(
     		"Solver Parameters").Get<double>("Absolute tolerance");
+    const int rescale_iter = prec_list.Sublist(prec_type).Sublist(
+            "Solver Parameters").Get<int>("RescaleIteration");
 
     auto solver_state = prec_factory->GetDefaultState();
     solver_state->SetDeRhamSequence(sequence[start_level]);
@@ -549,7 +546,7 @@ int main (int argc, char *argv[])
     // Number of smoothing steps in the generation of the rescaling vector
     // Such a rescaling can potentially improve the efficiency of the solver
     // If it is set to 0, then the original hybridized system is solved
-    solver_state->SetExtraParameter("RescaleIteration",20);
+    solver_state->SetExtraParameter("RescaleIteration",rescale_iter);
 
     // Scales of element H(div) mass matrices for the problem being solved
     // If not provided, the scale is treated as 1.0.
