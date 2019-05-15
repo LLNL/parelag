@@ -18,7 +18,6 @@
 
 #include "hypreExtension/hypreExtension.hpp"
 #include "linalg/dense/ParELAG_InnerProduct.hpp"
-#include "linalg/dense/ParELAG_LDLCalculator.hpp"
 #include "linalg/utilities/ParELAG_MatrixUtils.hpp"
 #include "linalg/solver_core/ParELAG_SaddlePointSolver.hpp"
 #include "linalg/utilities/ParELAG_SubMatrixExtraction.hpp"

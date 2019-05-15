@@ -11,8 +11,8 @@
   Software Foundation) version 2.1 dated February 1999.
 */
 
-#ifndef LDLCALCULATOR_HPP_
-#define LDLCALCULATOR_HPP_
+#ifndef QDQCALCULATOR_HPP_
+#define QDQCALCULATOR_HPP_
 
 #include <mfem.hpp>
 
@@ -24,25 +24,25 @@ namespace parelag
 {
 
 /**
-   Solver that interfaces LAPACK's dsytrf and dsytrf, for doing a direct solve
-   for a *symmetric* dense matrix.
+   Solver that interfaces LAPACK, for doing a direct solve
+   for a *symmetric* dense matrix using eiganvalue decomposition.
 
    Generally you construct, Compute() and then Mult()
 */
-class LDLCalculator : public DenseInverseCalculator
+class QDQCalculator : public DenseInverseCalculator
 {
 public:
-    LDLCalculator();
-    virtual ~LDLCalculator() = default;
+    QDQCalculator();
+    virtual ~QDQCalculator() = default;
 
-    LDLCalculator(LDLCalculator const&) = delete;
-    LDLCalculator(LDLCalculator&&) = delete;
+    QDQCalculator(QDQCalculator const&) = delete;
+    QDQCalculator(QDQCalculator&&) = delete;
 
-    LDLCalculator& operator=(LDLCalculator const&) = delete;
-    LDLCalculator& operator=(LDLCalculator&&) = delete;
+    QDQCalculator& operator=(QDQCalculator const&) = delete;
+    QDQCalculator& operator=(QDQCalculator&&) = delete;
 
     /**
-       Compute the factorization. Only the *lower* triangular part of
+       Compute the factorization. Only the *upper* triangular part of
        A is used. Symmetry is not checked.
     */
     virtual int Compute(mfem::DenseMatrix & A);
@@ -63,21 +63,11 @@ public:
     virtual void Mult(const mfem::DenseMatrix & x, mfem::DenseMatrix & y) const;
 
 private:
-    /** \brief Set work Vector to have appropriate size. */
-    void _do_allocate_optimal_size(int nax_n);
 
-    // TODO: think about mutable for some of these variables, and const
-    //       methods above
-
-    char uplo_;
-    mutable mfem::Vector work_;
-    mutable int lwork_;
-    mutable mfem::Array<int> ipiv_;
-    double * Adata_;
-
-    int max_n_;
     int n_;
+    mfem::Vector D_;
+    mfem::DenseMatrix Q_;
 };
 
 }//namespace parelag
-#endif /* LDLCALCULATOR_HPP_ */
+#endif /* QDQCALCULATOR_HPP_ */
