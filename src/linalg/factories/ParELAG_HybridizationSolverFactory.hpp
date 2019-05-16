@@ -77,13 +77,13 @@ private:
 };
 
 /// assuming symmetric problems
-class TwoLevelAdditiveSchwarz : public mfem::Solver
+class AuxiliarySpacePreconditioner : public mfem::Solver
 {
 public:
     /// dofs are in true dofs numbering, coarse_map: coarse to fine
-    TwoLevelAdditiveSchwarz(ParallelCSRMatrix& op,
-                            const std::vector<mfem::Array<int> >& local_dofs,
-                            const SerialCSRMatrix& coarse_map);
+    AuxiliarySpacePreconditioner(ParallelCSRMatrix& op,
+                                 const std::vector<mfem::Array<int> >& local_dofs,
+                                 const SerialCSRMatrix& aux_map);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const;
     virtual void SetOperator(const mfem::Operator& op) {}
@@ -94,20 +94,19 @@ private:
     ParallelCSRMatrix& op_;
     mfem::HypreSmoother smoother;
     std::vector<mfem::Array<int> > local_dofs_;
-    SerialCSRMatrix coarse_map_;
+    SerialCSRMatrix aux_map_;
     std::vector<mfem::DenseMatrix> local_ops_;
     std::vector<LDLCalculator> local_solvers_;
-    std::unique_ptr<ParallelCSRMatrix> coarse_op_;
-    std::unique_ptr<mfem::HypreBoomerAMG> coarse_solver_;
-    mfem::CGSolver coarse_cg_;
+    std::unique_ptr<ParallelCSRMatrix> aux_op_;
+    std::unique_ptr<mfem::HypreBoomerAMG> aux_solver_;
 };
 
-class CGTLAS : public mfem::Solver
+class AuxSpaceCG : public mfem::Solver
 {
 public:
-    CGTLAS(std::unique_ptr<ParallelCSRMatrix> op,
-           const std::vector<mfem::Array<int> >& local_dofs,
-           const SerialCSRMatrix& coarse_map);
+    AuxSpaceCG(std::unique_ptr<ParallelCSRMatrix> op,
+               const std::vector<mfem::Array<int> >& local_dofs,
+               const SerialCSRMatrix& aux_map);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const
     {
@@ -118,7 +117,7 @@ public:
 
 private:
     std::unique_ptr<ParallelCSRMatrix> op_;
-    TwoLevelAdditiveSchwarz prec_;
+    AuxiliarySpacePreconditioner prec_;
     mfem::CGSolver cg_;
 };
 

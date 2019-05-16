@@ -139,20 +139,7 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
             mfem::SparseMatrix scaled_PV_map_local;
             parallel_PV_map->GetDiag(scaled_PV_map_local);
 
-            const auto elem = AgglomeratedTopology::ELEMENT;
-            const int num_elems = dofhandler->GetNumberEntities(elem);
-            std::vector<mfem::Array<int>> local_dofs2(num_elems);
-            for (int i = 0; i < num_elems; ++i)
-            {
-                hybridization->GetDofMultiplier()->GetDofs(elem, i, local_dofs2[i]);
-            }
-            std::vector<mfem::Array<int>> local_dofs3(dofhandler->GetNDofs());
-            for (int i = 0; i < dofhandler->GetNDofs(); ++i)
-            {
-                local_dofs3[i].Append(i);
-            }
-
-            solver = make_unique<CGTLAS>(std::move(pHB_mat), local_dofs, scaled_PV_map_local);
+            solver = make_unique<AuxSpaceCG>(std::move(pHB_mat), local_dofs, scaled_PV_map_local);
             *D_Scale = 1.0;
         }
 
@@ -224,17 +211,17 @@ void HybridizationSolverFactory::_do_initialize(const ParameterList&)
     SolverFact_ = GetSolverLibrary().GetSolverFactory(solver_name);
 }
 
-TwoLevelAdditiveSchwarz::TwoLevelAdditiveSchwarz(ParallelCSRMatrix& op,
+AuxiliarySpacePreconditioner::AuxiliarySpacePreconditioner(
+        ParallelCSRMatrix& op,
         const std::vector<mfem::Array<int> >& local_dofs,
-        const SerialCSRMatrix& coarse_map)
+        const SerialCSRMatrix& aux_map)
     : mfem::Solver(op.NumRows(), false),
       op_(op),
       smoother(op_, mfem::HypreSmoother::GS),
       local_dofs_(local_dofs.size()),
-      coarse_map_(coarse_map),
+      aux_map_(aux_map),
       local_ops_(local_dofs.size()),
-      local_solvers_(local_dofs.size()),
-      coarse_cg_(op_.GetComm())
+      local_solvers_(local_dofs.size())
 {
     // Set up local solvers
 //    SerialCSRMatrix op_diag;
@@ -247,48 +234,40 @@ TwoLevelAdditiveSchwarz::TwoLevelAdditiveSchwarz(ParallelCSRMatrix& op,
 //        local_dofs[i].Copy(local_dofs_[i]);
 //    }
 
-    // Set up coarse solver
-    int num_local_cdofs = coarse_map.NumCols();
-    mfem::Array<int> cdof_starts;
-    ParPartialSums_AssumedPartitionCheck(op.GetComm(), num_local_cdofs, cdof_starts);
-    int num_global_cdofs = cdof_starts.Last();
-    ParallelCSRMatrix parallel_c_map(op.GetComm(), op.N(), num_global_cdofs,
-                                     op.ColPart(), cdof_starts, &coarse_map_);
+    // Set up auxilary space solver
+    int num_local_adofs = aux_map.NumCols();
+    mfem::Array<int> adof_starts;
+    ParPartialSums_AssumedPartitionCheck(op.GetComm(), num_local_adofs, adof_starts);
+    int num_global_adofs = adof_starts.Last();
+    ParallelCSRMatrix parallel_aux_map(op.GetComm(), op.N(), num_global_adofs,
+                                       op.ColPart(), adof_starts, &aux_map_);
 
-    coarse_op_.reset(RAP(&op, &parallel_c_map));
-    coarse_op_->CopyRowStarts();
-    coarse_op_->CopyColStarts();
+    aux_op_.reset(RAP(&op, &parallel_aux_map));
+    aux_op_->CopyRowStarts();
+    aux_op_->CopyColStarts();
 
-    std::cout<<"Size of coarse_op = "<<coarse_op_->N()<< " "<< op_.N()<<"\n";
-    coarse_solver_ = make_unique<mfem::HypreBoomerAMG>(*coarse_op_);
-    coarse_solver_->SetPrintLevel(-1);
-
-//    coarse_cg_.SetOperator(*coarse_op_);
-//    coarse_cg_.SetPreconditioner(*coarse_solver_);
-//    coarse_cg_.SetMaxIter(50);
-//    coarse_cg_.SetRelTol(1e-9);
-//    coarse_cg_.SetAbsTol(1e-12);
-//    coarse_cg_.SetPrintLevel(1);
+    aux_solver_ = make_unique<mfem::HypreBoomerAMG>(*aux_op_);
+    aux_solver_->SetPrintLevel(-1);
 }
 
-void TwoLevelAdditiveSchwarz::Mult(const mfem::Vector& x, mfem::Vector& y) const
+void AuxiliarySpacePreconditioner::Mult(const mfem::Vector& x, mfem::Vector& y) const
 {
     y = 0.0;
 
-    mfem::Vector x_coarse, y_coarse, residual(x), correction(y.Size());
+    mfem::Vector x_aux, y_aux, residual(x), correction(y.Size());
     correction = 0.0;
 
     Smoothing(x, y);
 
     op_.Mult(-1.0, y, 1.0, residual);
 
-    x_coarse.SetSize(coarse_map_.NumCols());
-    y_coarse.SetSize(coarse_map_.NumCols());
-    x_coarse = 0.0;
-    y_coarse = 0.0;
-    coarse_map_.MultTranspose(residual, x_coarse);
-    coarse_solver_->Mult(x_coarse, y_coarse);
-    coarse_map_.Mult(y_coarse, correction);
+    x_aux.SetSize(aux_map_.NumCols());
+    y_aux.SetSize(aux_map_.NumCols());
+    x_aux = 0.0;
+    y_aux = 0.0;
+    aux_map_.MultTranspose(residual, x_aux);
+    aux_solver_->Mult(x_aux, y_aux);
+    aux_map_.Mult(y_aux, correction);
 
     op_.Mult(-1.0, correction, 1.0, residual);
     y += correction;
@@ -298,7 +277,7 @@ void TwoLevelAdditiveSchwarz::Mult(const mfem::Vector& x, mfem::Vector& y) const
     y += correction;
 }
 
-void TwoLevelAdditiveSchwarz::Smoothing(const mfem::Vector& x, mfem::Vector& y) const
+void AuxiliarySpacePreconditioner::Smoothing(const mfem::Vector& x, mfem::Vector& y) const
 {
     y = 0.0;
     smoother.Mult(x, y);
@@ -327,12 +306,12 @@ void TwoLevelAdditiveSchwarz::Smoothing(const mfem::Vector& x, mfem::Vector& y) 
 //    }
 }
 
-CGTLAS::CGTLAS(std::unique_ptr<ParallelCSRMatrix> op,
-               const std::vector<mfem::Array<int> >& local_dofs,
-               const SerialCSRMatrix& coarse_map)
+AuxSpaceCG::AuxSpaceCG(std::unique_ptr<ParallelCSRMatrix> op,
+                       const std::vector<mfem::Array<int> >& local_dofs,
+                       const SerialCSRMatrix& aux_map)
     : mfem::Solver(op->NumRows(), false),
       op_(std::move(op)),
-      prec_(*op_, local_dofs, coarse_map),
+      prec_(*op_, local_dofs, aux_map),
       cg_(op_->GetComm())
 {
     cg_.SetPrintLevel(1);
