@@ -89,6 +89,8 @@ public:
     virtual void SetOperator(const mfem::Operator& op) {}
 
 private:
+    void Smoothing(const mfem::Vector& x, mfem::Vector& y) const;
+
     ParallelCSRMatrix& op_;
     mfem::HypreSmoother smoother;
     std::vector<mfem::Array<int> > local_dofs_;
@@ -97,6 +99,7 @@ private:
     std::vector<LDLCalculator> local_solvers_;
     std::unique_ptr<ParallelCSRMatrix> coarse_op_;
     std::unique_ptr<mfem::HypreBoomerAMG> coarse_solver_;
+    mfem::CGSolver coarse_cg_;
 };
 
 class CGTLAS : public mfem::Solver
