@@ -81,8 +81,8 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         // original hybridized matrix (before elimination) is kept so that
         // later it can be used to finish the elimination process (for rhs)
         mfem::SparseMatrix HB_mat_copy(*hybridization->GetHybridSystem());
-        SharingMap& mult_dofTrueDof = hybridization->
-                GetDofMultiplier()->GetDofTrueDof();
+        DofHandler* dofhandler = hybridization->GetDofMultiplier();
+        SharingMap& mult_dofTrueDof = dofhandler->GetDofTrueDof();
 
         // Eliminate essential multiplier dofs (1-1 map to natural Hdiv dofs)
         for (int i = 0; i < HB_mat_copy.Size(); i++)
@@ -91,10 +91,8 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         auto pHB_mat = Assemble(mult_dofTrueDof, HB_mat_copy, mult_dofTrueDof);
 
         const int rescale_iter = state.GetExtraParameter("RescaleIteration", -20);
-        const mfem::Vector& precomputed_scale = hybridization->GetRescaling();
-        const bool use_precomputed_scaling = precomputed_scale.Size() && rescale_iter < 0;
-        auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
-                              _get_scaling_by_smoothing(*pHB_mat, std::abs(rescale_iter));
+        auto scaling_vector = rescale_iter < 0 ? hybridization->GetRescaling() :
+                              _get_scaling_by_smoothing(*pHB_mat, rescale_iter);
 
         int* scale_i = new int[pHB_mat->Height()+1];
         int* scale_j = new int[pHB_mat->Height()];
@@ -106,55 +104,52 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
                     scale_i, scale_j, scale_data,
                     pHB_mat->Height(), pHB_mat->Height());
 
-
-//        auto pD_Scale = make_unique<mfem::HypreParMatrix>(
-//                    pHB_mat->GetComm(), pHB_mat->N(), pHB_mat->RowPart(),
-//                    D_Scale.get());
-
-//        auto Scaled_pHB = ToUnique(RAP(pHB_mat.get(), pD_Scale.get()));
-
-//        auto hybrid_state = std::shared_ptr<SolverState>{
-//            SolverFact_->GetDefaultState()};
-//        auto solver = SolverFact_->BuildSolver(std::move(Scaled_pHB),*hybrid_state);
-
-
-        AgglomeratedTopology::Entity facet = AgglomeratedTopology::FACET;
-        int num_facets = sequence.GetTopology()->GetNumberLocalEntities(facet);
-
-        auto dofhandler = hybridization->GetDofMultiplier();
-        mfem::SparseMatrix PV_map(dofhandler->GetNDofs(), num_facets);
-
-        std::vector<mfem::Array<int>> local_dofs(num_facets);
-
-        for (int i = 0; i < num_facets; ++i)
-        {
-            dofhandler->GetDofs(facet, i, local_dofs[i]);
-            PV_map.Add(local_dofs[i][0], i, 1.0);
-        }
-        PV_map.Finalize();
-
+        const auto facet = AgglomeratedTopology::FACET;
         auto& facet_truefacet = sequence.GetTopology()->EntityTrueEntity(facet);
-        auto parallel_PV_map = Assemble(dofhandler->GetDofTrueDof(), PV_map, facet_truefacet);
+        const int num_facets = facet_truefacet.GetLocalSize();
 
-        parallel_PV_map->ScaleRows(scaling_vector);
-        mfem::SparseMatrix scaled_PV_map_local, scaled_PV_map_offd;
-        HYPRE_Int* junk;
-        parallel_PV_map->GetDiag(scaled_PV_map_local);
+        std::shared_ptr<mfem::Solver> solver;
 
-        parallel_PV_map->GetOffd(scaled_PV_map_offd, junk);
-        PARELAG_ASSERT(scaled_PV_map_offd.NumNonZeroElems() == 0);
-
-        facet = AgglomeratedTopology::ELEMENT;
-        num_facets = sequence.GetTopology()->GetNumberLocalEntities(facet);
-        std::vector<mfem::Array<int>> local_dofs2(num_facets);
-        for (int i = 0; i < num_facets; ++i)
+        if (!IsSameOrient || (num_facets == dofhandler->GetNDofs()))
         {
-            hybridization->GetDofMultiplier()->GetDofs(facet, i, local_dofs2[i]);
+            auto pD_Scale = make_unique<mfem::HypreParMatrix>(
+                        pHB_mat->GetComm(), pHB_mat->N(), pHB_mat->RowPart(),
+                        D_Scale.get());
+
+            auto Scaled_pHB = ToUnique(RAP(pHB_mat.get(), pD_Scale.get()));
+
+            auto hybrid_state = std::shared_ptr<SolverState>{
+                    SolverFact_->GetDefaultState()};
+            solver = SolverFact_->BuildSolver(std::move(Scaled_pHB),*hybrid_state);
         }
+        else
+        {
+            mfem::SparseMatrix PV_map(dofhandler->GetNDofs(), num_facets);
 
+            std::vector<mfem::Array<int>> local_dofs(num_facets);
+            for (int i = 0; i < num_facets; ++i)
+            {
+                dofhandler->GetDofs(facet, i, local_dofs[i]);
+                PV_map.Add(local_dofs[i][0], i, 1.0);
+            }
+            PV_map.Finalize();
 
-        auto solver = make_unique<CGTLAS>(std::move(pHB_mat), local_dofs2, scaled_PV_map_local);
-        *D_Scale = 1.0;
+            auto parallel_PV_map = Assemble(mult_dofTrueDof, PV_map, facet_truefacet);
+            parallel_PV_map->ScaleRows(scaling_vector);
+            mfem::SparseMatrix scaled_PV_map_local;
+            parallel_PV_map->GetDiag(scaled_PV_map_local);
+
+            const auto elem = AgglomeratedTopology::ELEMENT;
+            const int num_elems = dofhandler->GetNumberEntities(elem);
+            std::vector<mfem::Array<int>> local_dofs2(num_facets);
+            for (int i = 0; i < num_elems; ++i)
+            {
+                hybridization->GetDofMultiplier()->GetDofs(elem, i, local_dofs2[i]);
+            }
+
+            solver = make_unique<CGTLAS>(std::move(pHB_mat), local_dofs2, scaled_PV_map_local);
+            *D_Scale = 1.0;
+        }
 
         solver->iterative_mode = false;
 
