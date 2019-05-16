@@ -66,7 +66,7 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
             ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
             ess_HdivDofs = 0;
         }
-        auto hybridization =
+        std::shared_ptr<HybridHdivL2> hybridization =
                 std::make_shared<HybridHdivL2>(sequence_ptr, IsSameOrient,
                                                L2MassWeight, ess_HdivDofs,
                                                elemMatrixScaling);
@@ -106,15 +106,56 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
                     scale_i, scale_j, scale_data,
                     pHB_mat->Height(), pHB_mat->Height());
 
-        auto pD_Scale = make_unique<mfem::HypreParMatrix>(
-                    pHB_mat->GetComm(), pHB_mat->N(), pHB_mat->RowPart(),
-                    D_Scale.get());
 
-        auto Scaled_pHB = ToUnique(RAP(pHB_mat.get(), pD_Scale.get()));
+//        auto pD_Scale = make_unique<mfem::HypreParMatrix>(
+//                    pHB_mat->GetComm(), pHB_mat->N(), pHB_mat->RowPart(),
+//                    D_Scale.get());
 
-        auto hybrid_state = std::shared_ptr<SolverState>{
-            SolverFact_->GetDefaultState()};
-        auto solver = SolverFact_->BuildSolver(std::move(Scaled_pHB),*hybrid_state);
+//        auto Scaled_pHB = ToUnique(RAP(pHB_mat.get(), pD_Scale.get()));
+
+//        auto hybrid_state = std::shared_ptr<SolverState>{
+//            SolverFact_->GetDefaultState()};
+//        auto solver = SolverFact_->BuildSolver(std::move(Scaled_pHB),*hybrid_state);
+
+
+        AgglomeratedTopology::Entity facet = AgglomeratedTopology::FACET;
+        int num_facets = sequence.GetTopology()->GetNumberLocalEntities(facet);
+
+        auto dofhandler = hybridization->GetDofMultiplier();
+        mfem::SparseMatrix PV_map(dofhandler->GetNDofs(), num_facets);
+
+        std::vector<mfem::Array<int>> local_dofs(num_facets);
+
+        for (int i = 0; i < num_facets; ++i)
+        {
+            dofhandler->GetDofs(facet, i, local_dofs[i]);
+            PV_map.Add(local_dofs[i][0], i, 1.0);
+        }
+        PV_map.Finalize();
+
+        auto& facet_truefacet = sequence.GetTopology()->EntityTrueEntity(facet);
+        auto parallel_PV_map = Assemble(dofhandler->GetDofTrueDof(), PV_map, facet_truefacet);
+
+        parallel_PV_map->ScaleRows(scaling_vector);
+        mfem::SparseMatrix scaled_PV_map_local, scaled_PV_map_offd;
+        HYPRE_Int* junk;
+        parallel_PV_map->GetDiag(scaled_PV_map_local);
+
+        parallel_PV_map->GetOffd(scaled_PV_map_offd, junk);
+        PARELAG_ASSERT(scaled_PV_map_offd.NumNonZeroElems() == 0);
+
+        facet = AgglomeratedTopology::ELEMENT;
+        num_facets = sequence.GetTopology()->GetNumberLocalEntities(facet);
+        std::vector<mfem::Array<int>> local_dofs2(num_facets);
+        for (int i = 0; i < num_facets; ++i)
+        {
+            hybridization->GetDofMultiplier()->GetDofs(facet, i, local_dofs2[i]);
+        }
+
+
+        auto solver = make_unique<CGTLAS>(std::move(pHB_mat), local_dofs2, scaled_PV_map_local);
+        *D_Scale = 1.0;
+
         solver->iterative_mode = false;
 
         std::unique_ptr<mfem::Solver> hybrid_solve =
@@ -182,5 +223,108 @@ void HybridizationSolverFactory::_do_initialize(const ParameterList&)
 
     SolverFact_ = GetSolverLibrary().GetSolverFactory(solver_name);
 }
+
+TwoLevelAdditiveSchwarz::TwoLevelAdditiveSchwarz(ParallelCSRMatrix& op,
+        const std::vector<mfem::Array<int> >& local_dofs,
+        const SerialCSRMatrix& coarse_map)
+    : mfem::Solver(op.NumRows(), false),
+      op_(op),
+      smoother(op_, mfem::HypreSmoother::l1GS),
+      local_dofs_(local_dofs.size()),
+      coarse_map_(coarse_map),
+      local_ops_(local_dofs.size()),
+      local_solvers_(local_dofs.size())
+{
+    // Set up local solvers
+    SerialCSRMatrix op_diag;
+    op.GetDiag(op_diag);
+//    for (int i = 0; i < local_dofs.size(); ++i)
+//    {
+//        local_ops_[i].SetSize(local_dofs[i].Size());
+//        op_diag.GetSubMatrix(local_dofs[i], local_dofs[i], local_ops_[i]);
+//        local_solvers_[i].Compute(local_ops_[i]);
+//        local_dofs[i].Copy(local_dofs_[i]);
+//    }
+
+    // Set up coarse solver
+    int num_local_cdofs = coarse_map.NumCols();
+    mfem::Array<int> cdof_starts;
+    ParPartialSums_AssumedPartitionCheck(op.GetComm(), num_local_cdofs, cdof_starts);
+    int num_global_cdofs = cdof_starts.Last();
+    SerialCSRMatrix c_map(coarse_map);
+    ParallelCSRMatrix parallel_c_map(op.GetComm(), op.N(), num_global_cdofs,
+                                     op.ColPart(), cdof_starts, &c_map);
+
+    coarse_op_.reset(RAP(&op, &parallel_c_map));
+    coarse_op_->CopyRowStarts();
+    coarse_op_->CopyColStarts();
+    std::cout<<"Size of coarse_op = "<<coarse_op_->N()<< " "<< op_.N()<<"\n";
+    coarse_solver_ = make_unique<mfem::HypreBoomerAMG>(*coarse_op_);
+    coarse_solver_->SetPrintLevel(-1);
+}
+
+void TwoLevelAdditiveSchwarz::Mult(const mfem::Vector& x, mfem::Vector& y) const
+{
+    y = 0.0;
+
+    mfem::Vector x_local, y_local, x_coarse, y_coarse;
+//    for (int i = 0; i < local_dofs_.size(); ++i)
+//    {
+//        x.GetSubVector(local_dofs_[i], x_local);
+//        y_local.SetSize(x_local.Size());
+//        y_local = 0.0;
+//        local_solvers_[i].Mult(x_local, y_local);
+//        y.AddElementVector(local_dofs_[i], y_local);
+//    }
+
+    smoother.Mult(x, y);
+
+    mfem::Vector residual(x);
+    op_.Mult(-1.0, y, 1.0, residual);
+
+    x_coarse.SetSize(coarse_map_.NumCols());
+    y_coarse.SetSize(coarse_map_.NumCols());
+    x_coarse = 0.0;
+    y_coarse = 0.0;
+    coarse_map_.MultTranspose(residual, x_coarse);
+    coarse_solver_->Mult(x_coarse, y_coarse);
+    coarse_map_.AddMult(y_coarse, y);
+
+    residual = x;
+    op_.Mult(-1.0, y, 1.0, residual);
+
+    mfem::Vector correction(y.Size());
+    correction = 0.0;
+    smoother.Mult(residual, correction);
+//    for (int i = 0; i < local_dofs_.size(); ++i)
+//    {
+//        residual.GetSubVector(local_dofs_[i], x_local);
+//        y_local.SetSize(x_local.Size());
+//        y_local = 0.0;
+//        local_solvers_[i].Mult(x_local, y_local);
+//        correction.AddElementVector(local_dofs_[i], y_local);
+//    }
+
+    y += correction;
+}
+
+CGTLAS::CGTLAS(std::unique_ptr<ParallelCSRMatrix> op,
+               const std::vector<mfem::Array<int> >& local_dofs,
+               const SerialCSRMatrix& coarse_map)
+    : mfem::Solver(op->NumRows(), false),
+      op_(std::move(op)),
+      prec_(*op_, local_dofs, coarse_map),
+      cg_(op_->GetComm())
+{
+    cg_.SetPrintLevel(1);
+    cg_.SetMaxIter(500);
+    cg_.SetRelTol(1e-9);
+    cg_.SetAbsTol(1e-12);
+    cg_.SetOperator(*op_);
+    cg_.SetPreconditioner(prec_);
+    cg_.iterative_mode = false;
+}
+
+
 
 }// namespace parelag

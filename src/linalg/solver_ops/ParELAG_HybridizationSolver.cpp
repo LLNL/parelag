@@ -34,7 +34,7 @@ HybridizationSolver::HybridizationSolver(
 
     Offsets_.SetSize(Offsets.Size());
     for (int i = 0; i < Offsets.Size(); i++)
-    	Offsets_[i] = Offsets[i];
+        Offsets_[i] = Offsets[i];
 }
 
 void HybridizationSolver::_do_set_operator(const std::shared_ptr<mfem::Operator>& op)
@@ -57,8 +57,8 @@ void HybridizationSolver::Mult(
     mfem::BlockVector rhs_view(rhs.GetData(), Offsets_);
     mfem::BlockVector sol_view(sol.GetData(), Offsets_);
 
-	SharingMap& mult_dofTrueDof =
-			Hybridization_->GetDofMultiplier()->GetDofTrueDof();
+    SharingMap& mult_dofTrueDof =
+            Hybridization_->GetDofMultiplier()->GetDofTrueDof();
 
     // Transform RHS to the hybridized form and essential data
     mfem::Vector HybridRHS;
@@ -144,61 +144,5 @@ void HybridizationSolver::MultTranspose(
     // Transform back to the non-hybridized form
     Hybridization_->RecoverOriginalSolution(HybridSol,sol_view);
 }
-
-TwoLevelAdditiveSchwarz::TwoLevelAdditiveSchwarz(
-        ParallelCSRMatrix& op,
-        const mfem::Array<mfem::Array<int> >& local_dofs,
-        const SerialCSRMatrix& coarse_map)
-    : Solver(op.NumRows(), false),
-      local_dofs_(local_dofs),
-      coarse_map_(coarse_map),
-      local_ops_(local_dofs.Size()),
-      local_solvers_(local_dofs.Size())
-{
-    // Set up local solvers
-    SerialCSRMatrix op_diag;
-    op.GetDiag(op_diag);
-    for (int i = 0; i < local_dofs.Size(); ++i)
-    {
-        local_ops_[i].SetSize(local_dofs[i].Size());
-        op_diag.GetSubMatrix(local_dofs[i], local_dofs[i], local_ops_[i]);
-        local_solvers_[i].Compute(local_ops_[i]);
-    }
-
-    // Set up coarse solver
-    int num_local_cdofs = coarse_map.NumCols();
-    mfem::Array<int> cdof_starts;
-    ParPartialSums_AssumedPartitionCheck(op.GetComm(), num_local_cdofs, cdof_starts);
-    int num_global_cdofs = cdof_starts.Last();
-    SerialCSRMatrix c_map(coarse_map);
-    ParallelCSRMatrix parallel_c_map(op.GetComm(), op.N(), num_global_cdofs,
-                                     op.ColPart(), cdof_starts, &c_map);
-
-    coarse_op_.reset(RAP(&op, &parallel_c_map));
-    coarse_solver_ = make_unique<mfem::HypreBoomerAMG>(*coarse_op_);
-    coarse_solver_->SetPrintLevel(-1);
-}
-
-void TwoLevelAdditiveSchwarz::Mult(const mfem::Vector& x, mfem::Vector& y) const
-{
-    mfem::Vector x_local, y_local, x_coarse, y_coarse;
-    for (int i = 0; i < local_dofs_.Size(); ++i)
-    {
-        x.GetSubVector(local_dofs_[i], x_local);
-        y_local.SetSize(x_local.Size());
-        y_local = 0.0;
-        local_solvers_[i].Mult(x_local, y_local);
-        y.SetSubVector(local_dofs_[i], y_local);
-    }
-
-    x_coarse.SetSize(coarse_map_.NumCols());
-    y_coarse.SetSize(coarse_map_.NumCols());
-    x_coarse = 0.0;
-    y_coarse = 0.0;
-    coarse_map_.MultTranspose(x, x_coarse);
-    coarse_solver_->Mult(x_coarse, y_coarse);
-    coarse_map_.AddMultTranspose(y_coarse, y);
-}
-
 
 }// namespace parelag
