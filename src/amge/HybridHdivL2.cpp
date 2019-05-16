@@ -173,8 +173,8 @@ void HybridHdivL2::AssembleHybridSystem()
         i_tmp,j_tmp,data_tmp,nFacet,nHdivDof );
 
     SparseMatrix& facet_bdrAttribute = topo->FacetBdrAttribute();
-    auto FullHdivDof_facet = Transpose(*facet_FullHdivDof);
-    auto FullHdivDof_bdrAttribute = Mult(*FullHdivDof_facet,facet_bdrAttribute);
+    auto FullHdivDof_facet = ToUnique(Transpose(*facet_FullHdivDof));
+    auto FullHdivDof_bdrAttribute = ToUnique(Mult(*FullHdivDof_facet,facet_bdrAttribute));
 
     // Constructing the relation table (in SparseMatrix format) between Hdiv
     // dof and multiplier dof. For every Hdiv dof, if it is associated with an
