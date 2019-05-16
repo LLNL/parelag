@@ -82,21 +82,15 @@ class AuxiliarySpacePreconditioner : public mfem::Solver
 public:
     /// dofs are in true dofs numbering, coarse_map: coarse to fine
     AuxiliarySpacePreconditioner(ParallelCSRMatrix& op,
-                                 const std::vector<mfem::Array<int> >& local_dofs,
                                  const SerialCSRMatrix& aux_map);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const;
     virtual void SetOperator(const mfem::Operator& op) {}
 
 private:
-    void Smoothing(const mfem::Vector& x, mfem::Vector& y) const;
-
     ParallelCSRMatrix& op_;
     mfem::HypreSmoother smoother;
-    std::vector<mfem::Array<int> > local_dofs_;
     SerialCSRMatrix aux_map_;
-    std::vector<mfem::DenseMatrix> local_ops_;
-    std::vector<LDLCalculator> local_solvers_;
     std::unique_ptr<ParallelCSRMatrix> aux_op_;
     std::unique_ptr<mfem::HypreBoomerAMG> aux_solver_;
 };
@@ -105,7 +99,6 @@ class AuxSpaceCG : public mfem::Solver
 {
 public:
     AuxSpaceCG(std::unique_ptr<ParallelCSRMatrix> op,
-               const std::vector<mfem::Array<int> >& local_dofs,
                const SerialCSRMatrix& aux_map);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const
