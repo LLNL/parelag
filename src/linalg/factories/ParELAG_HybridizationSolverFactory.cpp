@@ -226,13 +226,26 @@ AuxiliarySpacePreconditioner::AuxiliarySpacePreconditioner(
     // Set up local solvers
 //    SerialCSRMatrix op_diag;
 //    op.GetDiag(op_diag);
-//    for (int i = 0; i < local_dofs.size(); ++i)
-//    {
+    for (int i = 0; i < local_dofs.size(); ++i)
+    {
 //        local_ops_[i].SetSize(local_dofs[i].Size());
 //        op_diag.GetSubMatrix(local_dofs[i], local_dofs[i], local_ops_[i]);
 //        local_solvers_[i].Compute(local_ops_[i]);
-//        local_dofs[i].Copy(local_dofs_[i]);
-//    }
+        local_dofs[i].Copy(local_dofs_[i]);
+    }
+
+    for (int k = 0; k < local_dofs_[0].Size(); ++k)
+    {
+//        std::vector<mfem::Array<int>> loc_dofs(local_dofs_.size());
+        mfem::SparseMatrix coarsen_map(op, num_facets);
+
+        for (int i = 0; i < num_facets; ++i)
+        {
+            for (int j = 0; j < k; ++j)
+            PV_map.Add(local_dofs[i][0], i, 1.0);
+        }
+    }
+    PV_map.Finalize();
 
     // Set up auxilary space solver
     int num_local_adofs = aux_map.NumCols();
