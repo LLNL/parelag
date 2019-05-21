@@ -124,29 +124,23 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         }
         else
         {
-
             const int num_truefacets = facet_truefacet.GetTrueLocalSize();
             std::vector<mfem::Array<int>> local_dofs(num_truefacets);
 
             auto facet_dof = dofhandler->GetEntityDofTable(facet);
 
-            mfem::SparseMatrix diag;
-            facet_truefacet.get_entity_trueEntity()->GetDiag(diag);
-            mfem::SparseMatrix f_tf_diag(diag); f_tf_diag = 1.0;
-            mult_dofTrueDof.get_entity_trueEntity()->GetDiag(diag);
-            mfem::SparseMatrix d_td_diag(diag); d_td_diag = 1.0;
+            mfem::SparseMatrix f_tf_diag, d_td_diag;
+            facet_truefacet.get_entity_trueEntity()->GetDiag(f_tf_diag);
+            mult_dofTrueDof.get_entity_trueEntity()->GetDiag(d_td_diag);
             std::unique_ptr<mfem::SparseMatrix> tf_td(RAP(f_tf_diag, facet_dof, d_td_diag));
 
-            mfem::SparseMatrix PV_map(d_td_diag.NumCols(), num_truefacets);
             for (int i = 0; i < num_truefacets; ++i)
             {
                 local_dofs[i].MakeRef(tf_td->GetRowColumns(i), tf_td->RowSize(i));
-                PV_map.Add(local_dofs[i][0], i, 1.0);
             }
-            PV_map.Finalize();
-            PV_map.ScaleRows(scaling_vector);
 
-            solver = make_unique<AuxSpaceCG>(std::move(pHB_mat), local_dofs, PV_map);
+            auto prec =  make_unique<pMultigrid>(*pHB_mat, local_dofs, scaling_vector);
+            solver = make_unique<PCG>(std::move(pHB_mat), std::move(prec));
             *D_Scale = 1.0;
         }
 
@@ -218,183 +212,113 @@ void HybridizationSolverFactory::_do_initialize(const ParameterList&)
     SolverFact_ = GetSolverLibrary().GetSolverFactory(solver_name);
 }
 
-AuxiliarySpacePreconditioner::AuxiliarySpacePreconditioner(
+pMultigrid::pMultigrid(
         ParallelCSRMatrix& op,
         const std::vector<mfem::Array<int> >& local_dofs,
-        const SerialCSRMatrix& aux_map)
+        const mfem::Vector& scaling)
     : mfem::Solver(op.NumRows(), false),
-      op_(op),
-      smoother(op_, mfem::HypreSmoother::l1GS, 1),
-      local_dofs_(local_dofs.size()),
-      aux_map_(aux_map),
-      local_ops_(local_dofs.size()),
-      local_solvers_(local_dofs.size()),
-      aux_cg_(op_.GetComm()),
-      middle_map(local_dofs[0].Size()-2),
-      middle_op_(local_dofs[0].Size()-2),
-      middle_solver_(local_dofs[0].Size()-2)
+      level(0),
+      ops_(local_dofs[0].Size()),
+      solvers_(local_dofs[0].Size())
 {
-    // Set up local solvers
-//    SerialCSRMatrix op_diag;
-//    op.GetDiag(op_diag);
-    for (int i = 0; i < local_dofs.size(); ++i)
-    {
-//        local_ops_[i].SetSize(local_dofs[i].Size());
-//        op_diag.GetSubMatrix(local_dofs[i], local_dofs[i], local_ops_[i]);
-//        local_solvers_[i].Compute(local_ops_[i]);
-        local_dofs[i].Copy(local_dofs_[i]);
-    }
+    ops_[0].reset(mfem::Add(1.0, op, 0.0, op));
+    ops_[0]->CopyRowStarts();
+    ops_[0]->CopyColStarts();
 
-    for (int k = 0; k < local_dofs[0].Size() - 2; ++k)
-    {
-        mfem::SparseMatrix coarsen_map(op_.NumRows(), local_dofs.size()*(k+2));
+    Ps_.reserve(local_dofs[0].Size()-1);
 
-        for (int i = 0; i < local_dofs.size(); ++i)
+    int fine_size = ops_[0]->NumRows();
+    for (int k = 1; k < local_dofs[0].Size(); ++k)
+    {
+        const int loc_fine_sz = local_dofs[0].Size() - k + 1;
+        const int loc_coarse_sz = local_dofs[0].Size() - k;
+        int coarse_size = local_dofs.size() * loc_coarse_sz;
+
+        Ps_.emplace_back(fine_size, coarse_size);
+        if (k == 0)
         {
-            for (int j = 0; j < k + 2; ++j)
-            {
-                coarsen_map.Add(local_dofs[i][j], i*(k+2)+j, 1.0);
-            }
+            for (int i = 0; i < local_dofs.size(); ++i)
+                for (int j = 0; j < loc_coarse_sz; ++j)
+                    Ps_[k-1].Add(local_dofs[i][j], i*loc_coarse_sz+j, 1.0);
         }
-        coarsen_map.Finalize();
-        middle_map[k].Swap(coarsen_map);
+        else
+        {
+            for (int i = 0; i < local_dofs.size(); ++i)
+                for (int j = 0; j < loc_coarse_sz; ++j)
+                    Ps_[k-1].Add(i*loc_fine_sz+j, i*loc_coarse_sz+j, 1.0);
+        }
+        Ps_[k-1].Finalize();
 
-        int num_local_adofs = middle_map[k].NumCols();
-        mfem::Array<int> adof_starts;
-        ParPartialSums_AssumedPartitionCheck(op.GetComm(), num_local_adofs, adof_starts);
-        int num_global_adofs = adof_starts.Last();
-        ParallelCSRMatrix parallel_aux_map(op.GetComm(), op.N(), num_global_adofs,
-                                           op.ColPart(), adof_starts, &(middle_map[k]));
+        mfem::Array<int> coarse_starts;
+        ParPartialSums_AssumedPartitionCheck(op.GetComm(), coarse_size, coarse_starts);
+        int global_coarse_size = coarse_starts.Last();
+        ParallelCSRMatrix parallel_P(op.GetComm(), ops_[k-1]->N(), global_coarse_size,
+                                     ops_[k-1]->ColPart(), coarse_starts, &(Ps_[k-1]));
 
-        middle_op_[k].reset(RAP(&op, &parallel_aux_map));
-        middle_op_[k]->CopyRowStarts();
-        middle_op_[k]->CopyColStarts();
+        ops_[k].reset(RAP(ops_[k-1].get(), &parallel_P));
+        ops_[k]->CopyRowStarts();
+        ops_[k]->CopyColStarts();
 
-        middle_solver_[k] = make_unique<mfem::HypreSmoother>(*middle_op_[k]);
+        solvers_[k-1] = make_unique<mfem::HypreSmoother>(*ops_[k-1]);
+
+        fine_size = coarse_size;
     }
 
-    // Set up auxilary space solver
-    int num_local_adofs = aux_map.NumCols();
-    mfem::Array<int> adof_starts;
-    ParPartialSums_AssumedPartitionCheck(op.GetComm(), num_local_adofs, adof_starts);
-    int num_global_adofs = adof_starts.Last();
-    ParallelCSRMatrix parallel_aux_map(op.GetComm(), op.N(), num_global_adofs,
-                                       op.ColPart(), adof_starts, &aux_map_);
+    {
+        auto coarse_solver = new mfem::CGSolver(op.GetComm());
+        coarse_solver->SetRelTol(1e-1);
+        coarse_solver->SetAbsTol(1e-10);
+        coarse_solver->SetMaxIter(25);
+    //    coarse_solver->SetPrintLevel(1);
+        coarse_solver->SetOperator(*(ops_.back()));
 
-    aux_op_.reset(RAP(&op, &parallel_aux_map));
-    aux_op_->CopyRowStarts();
-    aux_op_->CopyColStarts();
+        coarse_prec_ = make_unique<mfem::HypreBoomerAMG>(*(ops_.back()));
+        coarse_prec_->SetPrintLevel(-1);
+        coarse_solver->SetPreconditioner(*coarse_prec_);
 
-    aux_solver_ = make_unique<mfem::HypreBoomerAMG>(*aux_op_);
-    aux_solver_->SetPrintLevel(-1);
-
-    aux_cg_.SetRelTol(1e-1);
-    aux_cg_.SetAbsTol(1e-10);
-    aux_cg_.SetMaxIter(50);
-//    aux_cg_.SetPrintLevel(1);
-    aux_cg_.SetOperator(*aux_op_);
-    aux_cg_.SetPreconditioner(*aux_solver_);
-
+        solvers_.back().reset(coarse_solver);
+    }
 }
 
-void AuxiliarySpacePreconditioner::Mult(const mfem::Vector& x, mfem::Vector& y) const
+void pMultigrid::Mult(const mfem::Vector& x, mfem::Vector& y) const
 {
-    y = 0.0;
+    mfem::Vector x_c, y_c, residual(x), correction(y.Size());
 
-    mfem::Vector x_aux, y_aux, residual(x), correction(y.Size());
+    solvers_[level]->Mult(residual, y);
+    ops_[level]->Mult(-1.0, y, 1.0, residual);
 
-    Smoothing(x, y);
-    op_.Mult(-1.0, y, 1.0, residual);
+    x_c.SetSize(Ps_[level].NumCols());
+    y_c.SetSize(Ps_[level].NumCols());
+    x_c = 0.0;
+    y_c = 0.0;
 
+    Ps_[level].MultTranspose(residual, x_c);
 
-
-    for (int k = local_dofs_[0].Size() - 3; k > -1 ; --k)
+    level++;
+    if (level == solvers_.size()-1)
     {
-        x_aux.SetSize(middle_map[k].NumCols());
-        y_aux.SetSize(middle_map[k].NumCols());
-        x_aux = 0.0;
-        y_aux = 0.0;
-        middle_map[k].MultTranspose(residual, x_aux);
-        middle_solver_[k]->Mult(x_aux, y_aux);
-        correction = 0.0;
-        middle_map[k].Mult(y_aux, correction);
-
-        op_.Mult(-1.0, correction, 1.0, residual);
-        y += correction;
+        solvers_[level]->Mult(x_c, y_c);
     }
+    else
+    {
+        Mult(x_c, y_c);
+    }
+    level--;
 
-
-
-    x_aux.SetSize(aux_map_.NumCols());
-    y_aux.SetSize(aux_map_.NumCols());
-    x_aux = 0.0;
-    y_aux = 0.0;
-    aux_map_.MultTranspose(residual, x_aux);
-    aux_cg_.Mult(x_aux, y_aux);
     correction = 0.0;
-    aux_map_.Mult(y_aux, correction);
+    Ps_[level].Mult(y_c, correction);
 
-    op_.Mult(-1.0, correction, 1.0, residual);
+    ops_[level]->Mult(-1.0, correction, 1.0, residual);
     y += correction;
 
-
-
-    for (int k = 0; k < local_dofs_[0].Size() - 2; ++k)
-    {
-        x_aux.SetSize(middle_map[k].NumCols());
-        y_aux.SetSize(middle_map[k].NumCols());
-        x_aux = 0.0;
-        y_aux = 0.0;
-        middle_map[k].MultTranspose(residual, x_aux);
-        middle_solver_[k]->Mult(x_aux, y_aux);
-        correction = 0.0;
-        middle_map[k].Mult(y_aux, correction);
-
-        op_.Mult(-1.0, correction, 1.0, residual);
-        y += correction;
-    }
-
-
-
-    Smoothing(residual, correction);
+    solvers_[level]->Mult(residual, correction);
     y += correction;
 }
 
-void AuxiliarySpacePreconditioner::Smoothing(const mfem::Vector& x, mfem::Vector& y) const
-{
-    y = 0.0;
-    smoother.Mult(x, y);
-
-//    mfem::Vector x_local, y_local, residual(x);
-
-//    auto loop_content = [&](int i)
-//    {
-//        residual.GetSubVector(local_dofs_[i], x_local);
-//        y_local.SetSize(x_local.Size());
-//        local_solvers_[i].Mult(x_local, y_local);
-//        y.AddElementVector(local_dofs_[i], y_local);
-
-//        residual = x;
-//        op_.Mult(-1.0, y, 1.0, residual);
-//    };
-
-//    for (int i = 0; i < local_dofs_.size(); ++i)
-//    {
-//        loop_content(i);
-//    }
-
-//    for (int i = local_dofs_.size()-1; i > -1; --i)
-//    {
-//        loop_content(i);
-//    }
-}
-
-AuxSpaceCG::AuxSpaceCG(std::unique_ptr<ParallelCSRMatrix> op,
-                       const std::vector<mfem::Array<int> >& local_dofs,
-                       const SerialCSRMatrix& aux_map)
+PCG::PCG(std::unique_ptr<ParallelCSRMatrix> op, std::unique_ptr<mfem::Solver> prec)
     : mfem::Solver(op->NumRows(), false),
       op_(std::move(op)),
-      prec_(*op_, local_dofs, aux_map),
+      prec_(std::move(prec)),
       cg_(op_->GetComm())
 {
     cg_.SetPrintLevel(1);
@@ -402,7 +326,7 @@ AuxSpaceCG::AuxSpaceCG(std::unique_ptr<ParallelCSRMatrix> op,
     cg_.SetRelTol(1e-9);
     cg_.SetAbsTol(1e-12);
     cg_.SetOperator(*op_);
-    cg_.SetPreconditioner(prec_);
+    cg_.SetPreconditioner(*prec_);
     cg_.iterative_mode = false;
 }
 

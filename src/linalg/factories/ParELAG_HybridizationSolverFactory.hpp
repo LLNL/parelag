@@ -77,40 +77,29 @@ private:
 };
 
 /// assuming symmetric problems
-class AuxiliarySpacePreconditioner : public mfem::Solver
+class pMultigrid : public mfem::Solver
 {
 public:
     /// dofs are in true dofs numbering, coarse_map: coarse to fine
-    AuxiliarySpacePreconditioner(ParallelCSRMatrix& op,
-                                 const std::vector<mfem::Array<int> >& local_dofs,
-                                 const SerialCSRMatrix& aux_map);
+    pMultigrid(ParallelCSRMatrix& op,
+               const std::vector<mfem::Array<int> >& local_dofs,
+               const mfem::Vector& scaling);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const;
     virtual void SetOperator(const mfem::Operator& op) {}
 
 private:
-    void Smoothing(const mfem::Vector& x, mfem::Vector& y) const;
-
-    ParallelCSRMatrix& op_;
-    mfem::HypreSmoother smoother;
-    std::vector<mfem::Array<int> > local_dofs_;
-    SerialCSRMatrix aux_map_;
-    std::vector<mfem::DenseMatrix> local_ops_;
-    std::vector<LDLCalculator> local_solvers_;
-    std::unique_ptr<ParallelCSRMatrix> aux_op_;
-    std::unique_ptr<mfem::HypreBoomerAMG> aux_solver_;
-    mfem::CGSolver aux_cg_;
-    std::vector<mfem::SparseMatrix> middle_map;
-    std::vector<std::unique_ptr<ParallelCSRMatrix>> middle_op_;
-    std::vector<std::unique_ptr<mfem::HypreSmoother>> middle_solver_;
+    mutable int level;
+    std::unique_ptr<mfem::HypreBoomerAMG> coarse_prec_;
+    std::vector<mfem::SparseMatrix> Ps_;
+    std::vector<std::unique_ptr<ParallelCSRMatrix>> ops_;
+    std::vector<std::unique_ptr<mfem::Solver>> solvers_;
 };
 
-class AuxSpaceCG : public mfem::Solver
+class PCG : public mfem::Solver
 {
 public:
-    AuxSpaceCG(std::unique_ptr<ParallelCSRMatrix> op,
-               const std::vector<mfem::Array<int> >& local_dofs,
-               const SerialCSRMatrix& aux_map);
+    PCG(std::unique_ptr<ParallelCSRMatrix> op, std::unique_ptr<mfem::Solver> prec);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const
     {
@@ -121,7 +110,7 @@ public:
 
 private:
     std::unique_ptr<ParallelCSRMatrix> op_;
-    AuxiliarySpacePreconditioner prec_;
+    std::unique_ptr<mfem::Solver> prec_;
     mfem::CGSolver cg_;
 };
 
