@@ -228,6 +228,8 @@ pMultigrid::pMultigrid(
     Ps_.reserve(local_dofs[0].Size()-1);
 
     int fine_size = ops_[0]->NumRows();
+
+    mfem::Vector scaling_fine(scaling), scaling_coarse;
     for (int k = 1; k < local_dofs[0].Size(); ++k)
     {
         const int loc_fine_sz = local_dofs[0].Size() - k + 1;
@@ -249,6 +251,16 @@ pMultigrid::pMultigrid(
         }
         Ps_[k-1].Finalize();
 
+        if (k < local_dofs[0].Size()-1)
+        {
+            scaling_coarse.SetSize(coarse_size);
+            Ps_[k-1].MultTranspose(scaling_fine, scaling_coarse);
+        }
+        else
+        {
+            Ps_[k-1].ScaleRows(scaling_fine);
+        }
+
         mfem::Array<int> coarse_starts;
         ParPartialSums_AssumedPartitionCheck(op.GetComm(), coarse_size, coarse_starts);
         int global_coarse_size = coarse_starts.Last();
@@ -262,6 +274,7 @@ pMultigrid::pMultigrid(
         solvers_[k-1] = make_unique<mfem::HypreSmoother>(*ops_[k-1]);
 
         fine_size = coarse_size;
+        scaling_fine = scaling_coarse;
     }
 
     {
@@ -269,7 +282,7 @@ pMultigrid::pMultigrid(
         coarse_solver->SetRelTol(1e-1);
         coarse_solver->SetAbsTol(1e-10);
         coarse_solver->SetMaxIter(25);
-    //    coarse_solver->SetPrintLevel(1);
+//        coarse_solver->SetPrintLevel(1);
         coarse_solver->SetOperator(*(ops_.back()));
 
         coarse_prec_ = make_unique<mfem::HypreBoomerAMG>(*(ops_.back()));
