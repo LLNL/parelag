@@ -99,6 +99,10 @@ private:
     std::vector<LDLCalculator> local_solvers_;
     std::unique_ptr<ParallelCSRMatrix> aux_op_;
     std::unique_ptr<mfem::HypreBoomerAMG> aux_solver_;
+    mfem::CGSolver aux_cg_;
+    std::vector<mfem::SparseMatrix> middle_map;
+    std::vector<std::unique_ptr<ParallelCSRMatrix>> middle_op_;
+    std::vector<std::unique_ptr<mfem::HypreSmoother>> middle_solver_;
 };
 
 class AuxSpaceCG : public mfem::Solver

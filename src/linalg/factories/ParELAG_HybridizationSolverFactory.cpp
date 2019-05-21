@@ -124,22 +124,29 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         }
         else
         {
-            mfem::SparseMatrix PV_map(dofhandler->GetNDofs(), num_facets);
 
-            std::vector<mfem::Array<int>> local_dofs(num_facets);
-            for (int i = 0; i < num_facets; ++i)
+            const int num_truefacets = facet_truefacet.GetTrueLocalSize();
+            std::vector<mfem::Array<int>> local_dofs(num_truefacets);
+
+            auto facet_dof = dofhandler->GetEntityDofTable(facet);
+
+            mfem::SparseMatrix diag;
+            facet_truefacet.get_entity_trueEntity()->GetDiag(diag);
+            mfem::SparseMatrix f_tf_diag(diag); f_tf_diag = 1.0;
+            mult_dofTrueDof.get_entity_trueEntity()->GetDiag(diag);
+            mfem::SparseMatrix d_td_diag(diag); d_td_diag = 1.0;
+            std::unique_ptr<mfem::SparseMatrix> tf_td(RAP(f_tf_diag, facet_dof, d_td_diag));
+
+            mfem::SparseMatrix PV_map(d_td_diag.NumCols(), num_truefacets);
+            for (int i = 0; i < num_truefacets; ++i)
             {
-                dofhandler->GetDofs(facet, i, local_dofs[i]);
+                local_dofs[i].MakeRef(tf_td->GetRowColumns(i), tf_td->RowSize(i));
                 PV_map.Add(local_dofs[i][0], i, 1.0);
             }
             PV_map.Finalize();
+            PV_map.ScaleRows(scaling_vector);
 
-            auto parallel_PV_map = Assemble(mult_dofTrueDof, PV_map, facet_truefacet);
-            parallel_PV_map->ScaleRows(scaling_vector);
-            mfem::SparseMatrix scaled_PV_map_local;
-            parallel_PV_map->GetDiag(scaled_PV_map_local);
-
-            solver = make_unique<AuxSpaceCG>(std::move(pHB_mat), local_dofs, scaled_PV_map_local);
+            solver = make_unique<AuxSpaceCG>(std::move(pHB_mat), local_dofs, PV_map);
             *D_Scale = 1.0;
         }
 
@@ -217,11 +224,15 @@ AuxiliarySpacePreconditioner::AuxiliarySpacePreconditioner(
         const SerialCSRMatrix& aux_map)
     : mfem::Solver(op.NumRows(), false),
       op_(op),
-      smoother(op_, mfem::HypreSmoother::GS),
+      smoother(op_, mfem::HypreSmoother::l1GS, 1),
       local_dofs_(local_dofs.size()),
       aux_map_(aux_map),
       local_ops_(local_dofs.size()),
-      local_solvers_(local_dofs.size())
+      local_solvers_(local_dofs.size()),
+      aux_cg_(op_.GetComm()),
+      middle_map(local_dofs[0].Size()-2),
+      middle_op_(local_dofs[0].Size()-2),
+      middle_solver_(local_dofs[0].Size()-2)
 {
     // Set up local solvers
 //    SerialCSRMatrix op_diag;
@@ -234,18 +245,33 @@ AuxiliarySpacePreconditioner::AuxiliarySpacePreconditioner(
         local_dofs[i].Copy(local_dofs_[i]);
     }
 
-    for (int k = 0; k < local_dofs_[0].Size(); ++k)
+    for (int k = 0; k < local_dofs[0].Size() - 2; ++k)
     {
-//        std::vector<mfem::Array<int>> loc_dofs(local_dofs_.size());
-        mfem::SparseMatrix coarsen_map(op, num_facets);
+        mfem::SparseMatrix coarsen_map(op_.NumRows(), local_dofs.size()*(k+2));
 
-        for (int i = 0; i < num_facets; ++i)
+        for (int i = 0; i < local_dofs.size(); ++i)
         {
-            for (int j = 0; j < k; ++j)
-            PV_map.Add(local_dofs[i][0], i, 1.0);
+            for (int j = 0; j < k + 2; ++j)
+            {
+                coarsen_map.Add(local_dofs[i][j], i*(k+2)+j, 1.0);
+            }
         }
+        coarsen_map.Finalize();
+        middle_map[k].Swap(coarsen_map);
+
+        int num_local_adofs = middle_map[k].NumCols();
+        mfem::Array<int> adof_starts;
+        ParPartialSums_AssumedPartitionCheck(op.GetComm(), num_local_adofs, adof_starts);
+        int num_global_adofs = adof_starts.Last();
+        ParallelCSRMatrix parallel_aux_map(op.GetComm(), op.N(), num_global_adofs,
+                                           op.ColPart(), adof_starts, &(middle_map[k]));
+
+        middle_op_[k].reset(RAP(&op, &parallel_aux_map));
+        middle_op_[k]->CopyRowStarts();
+        middle_op_[k]->CopyColStarts();
+
+        middle_solver_[k] = make_unique<mfem::HypreSmoother>(*middle_op_[k]);
     }
-    PV_map.Finalize();
 
     // Set up auxilary space solver
     int num_local_adofs = aux_map.NumCols();
@@ -261,6 +287,14 @@ AuxiliarySpacePreconditioner::AuxiliarySpacePreconditioner(
 
     aux_solver_ = make_unique<mfem::HypreBoomerAMG>(*aux_op_);
     aux_solver_->SetPrintLevel(-1);
+
+    aux_cg_.SetRelTol(1e-1);
+    aux_cg_.SetAbsTol(1e-10);
+    aux_cg_.SetMaxIter(50);
+//    aux_cg_.SetPrintLevel(1);
+    aux_cg_.SetOperator(*aux_op_);
+    aux_cg_.SetPreconditioner(*aux_solver_);
+
 }
 
 void AuxiliarySpacePreconditioner::Mult(const mfem::Vector& x, mfem::Vector& y) const
@@ -268,25 +302,61 @@ void AuxiliarySpacePreconditioner::Mult(const mfem::Vector& x, mfem::Vector& y) 
     y = 0.0;
 
     mfem::Vector x_aux, y_aux, residual(x), correction(y.Size());
-    correction = 0.0;
 
     Smoothing(x, y);
-
     op_.Mult(-1.0, y, 1.0, residual);
+
+
+
+    for (int k = local_dofs_[0].Size() - 3; k > -1 ; --k)
+    {
+        x_aux.SetSize(middle_map[k].NumCols());
+        y_aux.SetSize(middle_map[k].NumCols());
+        x_aux = 0.0;
+        y_aux = 0.0;
+        middle_map[k].MultTranspose(residual, x_aux);
+        middle_solver_[k]->Mult(x_aux, y_aux);
+        correction = 0.0;
+        middle_map[k].Mult(y_aux, correction);
+
+        op_.Mult(-1.0, correction, 1.0, residual);
+        y += correction;
+    }
+
+
 
     x_aux.SetSize(aux_map_.NumCols());
     y_aux.SetSize(aux_map_.NumCols());
     x_aux = 0.0;
     y_aux = 0.0;
     aux_map_.MultTranspose(residual, x_aux);
-    aux_solver_->Mult(x_aux, y_aux);
+    aux_cg_.Mult(x_aux, y_aux);
+    correction = 0.0;
     aux_map_.Mult(y_aux, correction);
 
     op_.Mult(-1.0, correction, 1.0, residual);
     y += correction;
 
-    Smoothing(residual, correction);
 
+
+    for (int k = 0; k < local_dofs_[0].Size() - 2; ++k)
+    {
+        x_aux.SetSize(middle_map[k].NumCols());
+        y_aux.SetSize(middle_map[k].NumCols());
+        x_aux = 0.0;
+        y_aux = 0.0;
+        middle_map[k].MultTranspose(residual, x_aux);
+        middle_solver_[k]->Mult(x_aux, y_aux);
+        correction = 0.0;
+        middle_map[k].Mult(y_aux, correction);
+
+        op_.Mult(-1.0, correction, 1.0, residual);
+        y += correction;
+    }
+
+
+
+    Smoothing(residual, correction);
     y += correction;
 }
 
