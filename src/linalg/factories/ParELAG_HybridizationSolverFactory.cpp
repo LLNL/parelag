@@ -281,13 +281,14 @@ pMultigrid::pMultigrid(
         auto coarse_solver = new mfem::CGSolver(op.GetComm());
         coarse_solver->SetRelTol(1e-1);
         coarse_solver->SetAbsTol(1e-10);
-        coarse_solver->SetMaxIter(25);
+        coarse_solver->SetMaxIter(10);
 //        coarse_solver->SetPrintLevel(1);
         coarse_solver->SetOperator(*(ops_.back()));
 
         coarse_prec_ = make_unique<mfem::HypreBoomerAMG>(*(ops_.back()));
         coarse_prec_->SetPrintLevel(-1);
         coarse_solver->SetPreconditioner(*coarse_prec_);
+        coarse_solver->iterative_mode = false;
 
         solvers_.back().reset(coarse_solver);
     }
@@ -295,35 +296,31 @@ pMultigrid::pMultigrid(
 
 void pMultigrid::Mult(const mfem::Vector& x, mfem::Vector& y) const
 {
-    mfem::Vector x_c, y_c, residual(x), correction(y.Size());
+    mfem::Vector residual(x), correction(y.Size());
 
     solvers_[level]->Mult(residual, y);
     ops_[level]->Mult(-1.0, y, 1.0, residual);
 
-    x_c.SetSize(Ps_[level].NumCols());
-    y_c.SetSize(Ps_[level].NumCols());
-    x_c = 0.0;
+    mfem::Vector x_c(Ps_[level].NumCols()), y_c(Ps_[level].NumCols());
     y_c = 0.0;
 
     Ps_[level].MultTranspose(residual, x_c);
-
-    level++;
-    if (level == solvers_.size()-1)
+    if (level == solvers_.size()-2)
     {
-        solvers_[level]->Mult(x_c, y_c);
+        solvers_.back()->Mult(x_c, y_c);
     }
     else
     {
+        level++;
         Mult(x_c, y_c);
+        level--;
     }
-    level--;
-
-    correction = 0.0;
     Ps_[level].Mult(y_c, correction);
 
     ops_[level]->Mult(-1.0, correction, 1.0, residual);
     y += correction;
 
+    correction = 0.0;
     solvers_[level]->Mult(residual, correction);
     y += correction;
 }
