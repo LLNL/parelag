@@ -96,6 +96,26 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
                               _get_scaling_by_smoothing(*pHB_mat, std::abs(rescale_iter));
 
+        // Smoothing renders scaling of essential dofs to be close to 0
+        if (use_precomputed_scaling == false)
+        {
+            auto d_td = mult_dofTrueDof.get_entity_trueEntity();
+            mfem::SparseMatrix diag;
+            d_td->GetDiag(diag);
+
+            for (int i = 0; i < HB_mat_copy.Size(); i++)
+            {
+                if (hybridization->GetEssentialMultiplierDofs()[i])
+                {
+                    if (diag.RowSize(i))
+                    {
+                        PARELAG_ASSERT(diag.RowSize(i) == 1);
+                        scaling_vector(diag.GetRowColumns(i)[0]) = 1.0;
+                    }
+                }
+            }
+        }
+
         int* scale_i = new int[pHB_mat->Height()+1];
         int* scale_j = new int[pHB_mat->Height()];
         double* scale_data = new double[pHB_mat->Height()];
