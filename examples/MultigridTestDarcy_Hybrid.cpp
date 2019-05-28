@@ -597,7 +597,7 @@ int main (int argc, char *argv[])
     	Timer timer = TimeManager::AddTimer("Solve Hybridized System");
     	hybrid_solver->Mult(rhs,sol);
     }
-std::cout<<"hypre_error_flag = "<<hypre_error_flag<<"\n";
+
     {
         mfem::Vector tmp(A->Height());
         mfem::BlockVector psol(true_block_offsets);

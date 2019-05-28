@@ -96,6 +96,8 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
                               _get_scaling_by_smoothing(*pHB_mat, std::abs(rescale_iter));
 
+        // Smoothing renders scaling of essential dofs to be close to 0
+        if (use_precomputed_scaling == false)
         {
             auto d_td = mult_dofTrueDof.get_entity_trueEntity();
             mfem::SparseMatrix diag;

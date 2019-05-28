@@ -322,7 +322,7 @@ void HybridHdivL2::AssembleHybridSystem()
                 nDofLoc = i_facet_Multiplier[facet+1] -
                         i_facet_Multiplier[facet];
 #ifdef ELAG_DEBUG
-                elag_assert(nDofLoc = i_facet_HdivDof[facet+1] -
+                elag_assert(nDofLoc == i_facet_HdivDof[facet+1] -
                             i_facet_HdivDof[facet]);
 #endif
                 for (int i = 0; i < nDofLoc; ++i)
