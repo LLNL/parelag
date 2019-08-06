@@ -899,8 +899,8 @@ void InterpolatePV_H1Traces(const FiniteElementSpace * fespace,
     AP_Interpolant.SetSize(ndofs);
     AP_Interpolant = 0.0;
 
-    int * j_AP_peak = AP_peak.GetJ();
-    int * end = j_AP_peak+nnz;
+    const int * j_AP_peak = AP_peak.GetJ();
+    const int * end = j_AP_peak+nnz;
 
     double * val = AP_Interpolant.GetData();
     for(; j_AP_peak != end; ++j_AP_peak)

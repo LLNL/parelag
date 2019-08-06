@@ -142,7 +142,8 @@ unique_ptr<TopologyTable> MultBoolean(
     const TopologyTable & A,
     const TopologyTable & B )
 {
-    int *A_i, *A_j, *B_i, *B_j, *C_i, *C_j;
+    const int *A_i, *A_j, *B_i, *B_j;
+    int *C_i, *C_j;
     int ia, ib, ic, ja, jb, num_nonzeros;
 
     const int nrowsA = A.Size();

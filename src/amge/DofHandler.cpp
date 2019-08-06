@@ -125,11 +125,18 @@ const SparseMatrix & DofHandler::GetrDofDofTable(entity type)
         for (int kk(0); kk < nnz+1; ++kk)
             i_Rdof_dof[kk] = kk;
 
+        // XXX: This seems a bit weird. Not only because of the disrespect to
+        //      const logic, but also due to the ownership of J and I being stuck together,
+        //      which demands the copying of the J array to avoid double deletion. --DZK
+
+        int * j_Rdof_dof = new int[nnz];
+        std::copy(ent_dof.GetJ(), ent_dof.GetJ() + nnz, j_Rdof_dof);
+
         rDof_dof[type] = make_unique<SparseMatrix>(i_Rdof_dof,
-                                                   ent_dof.GetJ(),
-                                                   ent_dof.GetData(),
+                                                   j_Rdof_dof,
+                                                   const_cast<double *>(ent_dof.GetData()),
                                                    nnz,
-                                                   ent_dof.Width());
+                                                   ent_dof.Width(), true, false, false);
         CheckMatrix(*rDof_dof[type]);
     }
     return *rDof_dof[type];
@@ -138,7 +145,7 @@ const SparseMatrix & DofHandler::GetrDofDofTable(entity type)
 void DofHandler::GetrDof(entity type, int ientity, Array<int> & dofs) const
 {
     const SparseMatrix & entityDof = GetEntityDofTable(type);
-    int * I = entityDof.GetI();
+    const int * I = entityDof.GetI();
 
     int start = I[ientity];
     int stop  = I[ientity+1];
@@ -820,8 +827,8 @@ int DofHandlerALG::MarkDofsOnSelectedBndr(
     const TopologyTable & fc_bdnr(Topology_->FacetBdrAttribute());
 
     int n_fc = fc_bdnr.Size();
-    int * i_fc_bndr = fc_bdnr.GetI();
-    int * j_fc_bndr = fc_bdnr.GetJ();
+    const int * i_fc_bndr = fc_bdnr.GetI();
+    const int * j_fc_bndr = fc_bdnr.GetJ();
     int * i_facet_dof = entity_dof[AgglomeratedTopology::FACET]->GetI();
     int * j_facet_dof = entity_dof[AgglomeratedTopology::FACET]->GetJ();
     int start(0), end(0);

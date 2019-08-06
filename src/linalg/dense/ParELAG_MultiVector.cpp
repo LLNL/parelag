@@ -88,7 +88,7 @@ void MultiVector::GetSubMultiVector(
 void MultiVector::GetSubMultiVector(
     const Array<int> &dofs, double *elem_data) const
 {
-    double * this_start = data;
+    const double * this_start = data;
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for(const int * it(dofs.GetData()); it != dofs.GetData()+dofs.Size(); ++it, ++elem_data)
@@ -272,18 +272,14 @@ void MultiVector::GetVectorView(int ivect, Vector & view)
 
 void MultiVector::GetRangeView(int start, int end, MultiVector & view)
 {
-
     PARELAG_TEST_FOR_EXCEPTION(
         end < start,
         std::logic_error,
         "MultiVector::GetRangeView(): Invalid range: start > end!!");
 
-    if(view.allocsize > 0)
-        delete[] view.data;
+    Destroy();
 
-    view.data = data+start;
-    view.size = size - start;
-    view.allocsize = -view.size;
+    SetDataAndSize((double *)data + start, size - start);
     view.LDA_  = LDA_;
     view.LocalSize_ = end-start;
     view.NumVectors_ = NumVectors_;
@@ -361,7 +357,7 @@ MultiVector::InversePermutation(const int * p, int p_size, int out_size) const
     int offset_in = 0;
 
     if(out_size > p_size)
-        std::fill(out->data, out->data+ out->size, 0.0);
+        std::fill((double *)out->data, (double *)out->data + out->size, 0.0);
 
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
@@ -514,7 +510,8 @@ void MatrixTimesMultiVector(
     const double * val = M.GetData();
 
     int i,j,end;
-    double * xi_data(x.data), * yi_data(y.data);
+    const double * xi_data(x.data);
+    double * yi_data(y.data);
 
     for (int ivect(0); ivect < x.NumVectors_; ++ivect)
     {
@@ -550,7 +547,8 @@ void MatrixTimesMultiVector(double scaling, const SparseMatrix & M,
     const double * val = M.GetData();
 
     int i,j,end;
-    double * xi_data(x.data), * yi_data(y.data);
+    const double * xi_data(x.data);
+    double * yi_data(y.data);
 
     for( int ivect(0); ivect < x.NumVectors_; ++ivect)
     {
@@ -599,7 +597,8 @@ void MatrixTTimesMultiVector(double scaling, const SparseMatrix & M,
     const double * val = M.GetData();
 
     int i,j,end;
-    double * xi_data(x.data), * yi_data(y.data);
+    const double * xi_data(x.data);
+    double * yi_data(y.data);
 
     double sxi;
     for( int ivect(0); ivect < x.NumVectors_; ++ivect)

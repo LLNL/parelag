@@ -124,8 +124,8 @@ void HybridHdivL2::AssembleHybridSystem()
     // Orientation contains the orientation (either 1 or -1) of the facet
     // (where the i-th local multiplier dof is supported in) relative to the
     // element
-    Array<int> L2DofLoc, rHdivDofLoc, HdivDofLoc, MultiplierDofLoc,
-            MultiplierToGlobalHdivMap, Orientation;
+    Array<int> L2DofLoc, rHdivDofLoc, HdivDofLoc;
+    Array<int> MultiplierDofLoc, MultiplierToGlobalHdivMap, Orientation;
 
     // Auxiliary array for submatrix extraction of Q
     Array<int> WMarker( W->Width() );
@@ -147,15 +147,15 @@ void HybridHdivL2::AssembleHybridSystem()
     facet_elem.reset(Transpose(elem_facet));
     int * i_elem_facet = elem_facet.GetI();
     int * j_elem_facet = elem_facet.GetJ();
-    int * i_facet_HdivDof = facet_HdivDof.GetI();
-    int * j_facet_HdivDof = facet_HdivDof.GetJ();
+    const int * i_facet_HdivDof = facet_HdivDof.GetI();
+    const int * j_facet_HdivDof = facet_HdivDof.GetJ();
 
-    int * i_elem_L2Dof = elem_L2Dof.GetI();
-    int * j_elem_L2Dof = elem_L2Dof.GetJ();
-    int * i_elem_HdivDof = elem_HdivDof.GetI();
-    int * j_elem_HdivDof = elem_HdivDof.GetJ();
-    int * i_elem_rHdivDof = elem_rHdivDof.GetI();
-    int * j_elem_rHdivDof = elem_rHdivDof.GetJ();
+    const int * i_elem_L2Dof = elem_L2Dof.GetI();
+    const int * j_elem_L2Dof = elem_L2Dof.GetJ();
+    const int * i_elem_HdivDof = elem_HdivDof.GetI();
+    const int * j_elem_HdivDof = elem_HdivDof.GetJ();
+    const int * i_elem_rHdivDof = elem_rHdivDof.GetI();
+    const int * j_elem_rHdivDof = elem_rHdivDof.GetJ();
 
     // facet_FullHdivDof is almost the same as facet_HdivDof table, except that
     // the size of facet_FullHdivDof is always equal to number of HdivDof, but
@@ -246,11 +246,11 @@ void HybridHdivL2::AssembleHybridSystem()
         int nL2DofLoc = elem_L2Dof.RowSize(elem);
         int nHdivDofLoc = elem_HdivDof.RowSize(elem);
 
-        L2DofLoc.MakeRef(j_elem_L2Dof+i_elem_L2Dof[elem],
+        L2DofLoc.MakeRef(const_cast<int *>(j_elem_L2Dof)+i_elem_L2Dof[elem],
                          nL2DofLoc);
-        rHdivDofLoc.MakeRef(j_elem_rHdivDof+i_elem_rHdivDof[elem],
+        rHdivDofLoc.MakeRef(const_cast<int *>(j_elem_rHdivDof)+i_elem_rHdivDof[elem],
                             nHdivDofLoc);
-        HdivDofLoc.MakeRef(j_elem_HdivDof+i_elem_HdivDof[elem],
+        HdivDofLoc.MakeRef(const_cast<int *>(j_elem_HdivDof)+i_elem_HdivDof[elem],
                            nHdivDofLoc);
 
         // Build the Hdiv dof global to local map which will be used
@@ -557,14 +557,14 @@ void HybridHdivL2::RHSTransform(const BlockVector& OriginalRHS,
 		int nL2DofLoc = elem_L2Dof.RowSize(elem);
 		int nHdivDofLoc = elem_HdivDof.RowSize(elem);
 		int nMultiplierDofLoc = elem_Multiplier.RowSize(elem);
-		L2DofLoc.MakeRef(elem_L2Dof.GetJ()+elem_L2Dof.GetI()[elem],
+		L2DofLoc.MakeRef(const_cast<int *>(elem_L2Dof.GetJ())+elem_L2Dof.GetI()[elem],
 				nL2DofLoc);
-		HdivDofLoc.MakeRef(elem_HdivDof.GetJ()+elem_HdivDof.GetI()[elem],
+		HdivDofLoc.MakeRef(const_cast<int *>(elem_HdivDof.GetJ())+elem_HdivDof.GetI()[elem],
 				nHdivDofLoc);
-		rHdivDofLoc.MakeRef(elem_rHdivDof.GetJ()+elem_rHdivDof.GetI()[elem],
+		rHdivDofLoc.MakeRef(const_cast<int *>(elem_rHdivDof.GetJ())+elem_rHdivDof.GetI()[elem],
 				nHdivDofLoc);
 		MultiplierDofLoc.MakeRef(
-				elem_Multiplier.GetJ() +elem_Multiplier.GetI()[elem],
+				const_cast<int *>(elem_Multiplier.GetJ()) +elem_Multiplier.GetI()[elem],
 				nMultiplierDofLoc);
 
         // Build the Hdiv dof global to local map which will be used
@@ -650,14 +650,14 @@ void HybridHdivL2::RecoverOriginalSolution(const Vector& HybridSol,
         int nL2DofLoc = elem_L2Dof.RowSize(elem);
         int nHdivDofLoc = elem_HdivDof.RowSize(elem);
         int nMultiplierDofLoc = elem_Multiplier.RowSize(elem);
-        L2DofLoc.MakeRef(elem_L2Dof.GetJ()+elem_L2Dof.GetI()[elem],
+        L2DofLoc.MakeRef(const_cast<int *>(elem_L2Dof.GetJ())+elem_L2Dof.GetI()[elem],
                          nL2DofLoc);
-        HdivDofLoc.MakeRef(elem_HdivDof.GetJ()+elem_HdivDof.GetI()[elem],
+        HdivDofLoc.MakeRef(const_cast<int *>(elem_HdivDof.GetJ())+elem_HdivDof.GetI()[elem],
                            nHdivDofLoc);
-        rHdivDofLoc.MakeRef(elem_rHdivDof.GetJ()+elem_rHdivDof.GetI()[elem],
+        rHdivDofLoc.MakeRef(const_cast<int *>(elem_rHdivDof.GetJ())+elem_rHdivDof.GetI()[elem],
                             nHdivDofLoc);
         MultiplierDofLoc.MakeRef(
-        		elem_Multiplier.GetJ() +elem_Multiplier.GetI()[elem],
+        		const_cast<int *>(elem_Multiplier.GetJ()) +elem_Multiplier.GetI()[elem],
 				nMultiplierDofLoc);
 
         // Initialize a vector which will store the local contribution of Hdiv
