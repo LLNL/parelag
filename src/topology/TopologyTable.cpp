@@ -26,14 +26,14 @@ using namespace mfem;
 using std::unique_ptr;
 
 TopologyTable::TopologyTable(SerialCSRMatrix & A_in)
-    : SerialCSRMatrix(nullptr,nullptr,nullptr,0,0)
+    : SerialCSRMatrix()
 {
     elag_assert(A_in.Finalized());
     this->Swap(A_in);
 }
 
 TopologyTable::TopologyTable(std::unique_ptr<SerialCSRMatrix> A_in)
-    : SerialCSRMatrix(nullptr,nullptr,nullptr,0,0)
+    : SerialCSRMatrix()
 {
     elag_assert(A_in->Finalized());
     this->Swap(*A_in);

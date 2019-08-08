@@ -277,9 +277,9 @@ void MultiVector::GetRangeView(int start, int end, MultiVector & view)
         std::logic_error,
         "MultiVector::GetRangeView(): Invalid range: start > end!!");
 
-    Destroy();
+    view.Destroy();
 
-    SetDataAndSize((double *)data + start, size - start);
+    view.SetDataAndSize((double *)data + start, size - start);
     view.LDA_  = LDA_;
     view.LocalSize_ = end-start;
     view.NumVectors_ = NumVectors_;
