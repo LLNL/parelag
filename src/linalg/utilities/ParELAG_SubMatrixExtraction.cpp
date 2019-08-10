@@ -321,8 +321,8 @@ void ExtractSubMatrices(const SparseMatrix & A,
         int n_loc_row = i_subMat_row[i+1] - i_subMat_row[i];
         int n_loc_col = i_subMat_col[i+1] - i_subMat_col[i];
 
-        Array<int> loc_row(const_cast<int*>(j_subMat_row+i_subMat_row[i]), n_loc_row);
-        Array<int> loc_col(const_cast<int*>(j_subMat_col+i_subMat_col[i]), n_loc_col);
+        Array<const int> loc_row(j_subMat_row+i_subMat_row[i], n_loc_row);
+        Array<const int> loc_col(j_subMat_col+i_subMat_col[i], n_loc_col);
 
         subMats[i] = ExtractRowAndColumns(A, loc_row, loc_col, tmpColMarker);
     }
