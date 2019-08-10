@@ -142,7 +142,11 @@ int main (int argc, char *argv[])
     std::vector<Array<LogicalCartesianMaterialId>> parallel_ijk(nLevels);
     {
         constexpr auto el_type = Element::HEXAHEDRON;
+#if (MFEM_VERSION_MAJOR < 4)
         auto mesh = make_unique<Mesh>(N[0],N[1],N[2],el_type,1,1.0,1.0,1.0);
+#else
+        auto mesh = make_unique<Mesh>(N[0],N[1],N[2],el_type,1,1.0,1.0,1.0,false);
+#endif
 
         // Ensure all element attributes defaults to 1
         for(int i(0); i < mesh->GetNE(); ++i)

@@ -72,10 +72,10 @@ public:
     void GetRangeView(int start, int end, MultiVector & view);
 
     double * GetDataFromVector(int ivect)
-    {return this->data+ivect*LDA_;}
+    {return GetData()+ivect*LDA_;}
 
     const double * GetDataFromVector(int ivect) const
-    {return this->data+ivect*LDA_;}
+    {return GetData()+ivect*LDA_;}
 
     int Size() const { return LocalSize_;}
     int LeadingDimension() const { return LDA_; }

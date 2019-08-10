@@ -212,7 +212,7 @@ void HybridHdivL2::AssembleHybridSystem()
     // temperary elem to multiplier dof relation table, we use it to count the
     // number of local dofs, the actual local to global numbering (the "J"
     // array) is constructed during the computation of the element matrices
-    std::vector<std::unique_ptr<SparseMatrix>> Entity_Multiplier(4);
+    std::vector<std::unique_ptr<const SparseMatrix>> Entity_Multiplier(4);
     Entity_Multiplier[AgglomeratedTopology::FACET] = ToUnique(
         Mult(*facet_FullHdivDof, *HdivDof_Multiplier));
     unique_ptr<SparseMatrix> elem_Multiplier_temp{
@@ -220,7 +220,7 @@ void HybridHdivL2::AssembleHybridSystem()
 
     facet_FullHdivDof.reset();
 
-    int * i_facet_Multiplier = Entity_Multiplier[AgglomeratedTopology::FACET]->
+    const int * i_facet_Multiplier = Entity_Multiplier[AgglomeratedTopology::FACET]->
             GetI();
     int * i_elem_Multiplier = new int[nElem+1];
     std::copy(elem_Multiplier_temp->GetI(),
