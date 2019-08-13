@@ -60,7 +60,7 @@ void signumTransformation(mfem::SparseMatrix & A);
 
 std::unique_ptr<mfem::SparseMatrix> DeepCopy(mfem::SparseMatrix & A);
 
-void CheckMatrix(mfem::SparseMatrix & A);
+void CheckMatrix(const mfem::SparseMatrix & A);
 
 //SparseMatrix Addition
 std::unique_ptr<mfem::SparseMatrix> Add(

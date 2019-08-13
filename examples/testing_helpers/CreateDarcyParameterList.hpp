@@ -63,6 +63,7 @@ std::unique_ptr<ParameterList> CreateDarcyTestParameters()
                 auto& solver_list = list.Sublist("Solver Parameters");
                 solver_list.Set("Forms", "2 3");
                 solver_list.Set("Solver", "CG_PCG-AMG");
+                solver_list.Set("RescaleIteration", 1);
             }
         }// Hybridization-Darcy
 

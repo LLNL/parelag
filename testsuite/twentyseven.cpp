@@ -246,24 +246,40 @@ int main (int argc, char *argv[])
     if (argument == "discedge")
     {
         // create 39-element serial mesh
+#if (MFEM_VERSION_MAJOR < 4)
         Mesh mesh(3, 3, 4, Element::HEXAHEDRON, true);
+#else
+        Mesh mesh(3, 3, 4, Element::HEXAHEDRON, true, 1.0, 1.0, 1.0, false);
+#endif
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     else if (argument == "tet")
     {
         // create 48-element serial tetrahedral mesh
+#if (MFEM_VERSION_MAJOR < 4)
         Mesh mesh(2, 2, 2, Element::TETRAHEDRON, true);
+#else
+        Mesh mesh(2, 2, 2, Element::TETRAHEDRON, true, 1.0, 1.0, 1.0, false);
+#endif
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     else if (argument == "sv2")
     {
+#if (MFEM_VERSION_MAJOR < 4)
         Mesh mesh(2, 2, 2, Element::HEXAHEDRON, true);
+#else
+        Mesh mesh(2, 2, 2, Element::HEXAHEDRON, true, 1.0, 1.0, 1.0, false);
+#endif
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     else
     {
         // create 27-element serial mesh
+#if (MFEM_VERSION_MAJOR < 4)
         Mesh mesh(3, 3, 3, Element::HEXAHEDRON, true);
+#else
+        Mesh mesh(3, 3, 3, Element::HEXAHEDRON, true, 1.0, 1.0, 1.0, false);
+#endif
         pmesh = make_shared<ParMesh>(comm, mesh);
     }
     std::vector<shared_ptr<AgglomeratedTopology> > topology(2);
