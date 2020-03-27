@@ -38,7 +38,7 @@ void AMSSolverFactory::_do_set_default_parameters()
     params.Get<int>("Relaxation sweeps", 1);
     params.Get<double>("Relaxation weight", 1.0);
     params.Get<double>("Relaxation omega", 1.0);
-    params.Get<bool>("beta_is_zero", false);
+    params.Get<bool>("Beta is zero", false);
 
     ParameterList& ptap_mg_params = params.Sublist("PtAP AMG Parameters");
     ptap_mg_params.Get<int>("Coarsening type", 10);
@@ -47,8 +47,11 @@ void AMSSolverFactory::_do_set_default_parameters()
     ptap_mg_params.Get<double>("Theta", 0.25);
     ptap_mg_params.Get<int>("Interpolation type", 6);
     ptap_mg_params.Get<int>("P max", 4);
+
+    // NB: These do not seem to be used in this context.
+    //     They would have been used in an actual BoomerAMG factory.
     ptap_mg_params.Get<int>("Print level", 0);
-    ptap_mg_params.Get<int>("Dim", 1);
+    ptap_mg_params.Get<int>("Number of functions", 1);
     ptap_mg_params.Get<int>("Maximum levels", 25);
 
     ParameterList& gtag_mg_params = params.Sublist("GtAG AMG Parameters");
@@ -58,8 +61,11 @@ void AMSSolverFactory::_do_set_default_parameters()
     gtag_mg_params.Get<double>("Theta", 0.25);
     gtag_mg_params.Get<int>("Interpolation type", 6);
     gtag_mg_params.Get<int>("P max", 4);
+
+    // NB: These do not seem to be used in this context.
+    //     They would have been used in an actual BoomerAMG factory.
     gtag_mg_params.Get<int>("Print level", 0);
-    gtag_mg_params.Get<int>("Dim", 1);
+    gtag_mg_params.Get<int>("Number of functions", 1);
     gtag_mg_params.Get<int>("Maximum levels", 25);
 
 }
