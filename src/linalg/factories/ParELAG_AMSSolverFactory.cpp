@@ -48,7 +48,7 @@ void AMSSolverFactory::_do_set_default_parameters()
     ptap_mg_params.Get<int>("Interpolation type", 6);
     ptap_mg_params.Get<int>("P max", 4);
 
-    // NB: These do not seem to be used in this context.
+    // NB: These do not seem to be used in this context (i.e., in AMSSolverWrapper).
     //     They would have been used in an actual BoomerAMG factory.
     ptap_mg_params.Get<int>("Print level", 0);
     ptap_mg_params.Get<int>("Number of functions", 1);
@@ -62,7 +62,7 @@ void AMSSolverFactory::_do_set_default_parameters()
     gtag_mg_params.Get<int>("Interpolation type", 6);
     gtag_mg_params.Get<int>("P max", 4);
 
-    // NB: These do not seem to be used in this context.
+    // NB: These do not seem to be used in this context (i.e., in AMSSolverWrapper).
     //     They would have been used in an actual BoomerAMG factory.
     gtag_mg_params.Get<int>("Print level", 0);
     gtag_mg_params.Get<int>("Number of functions", 1);

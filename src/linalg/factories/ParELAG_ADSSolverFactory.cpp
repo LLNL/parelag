@@ -45,7 +45,7 @@ void ADSSolverFactory::_do_set_default_parameters()
     ParameterList& ams_params = params.Sublist("AMS Parameters");
     ams_params.Get<int>("Cycle type", 14);
 
-    // NB: These do not seem to be used in this context.
+    // NB: These do not seem to be used in this context (i.e., in ADSSolverWrapper).
     //     They would have been used in an actual AMS factory.
     ams_params.Get<int>("Relaxation type", 2);
     ams_params.Get<int>("Relaxation sweeps", 1);
@@ -61,13 +61,13 @@ void ADSSolverFactory::_do_set_default_parameters()
     ptap_mg_params.Get<int>("Interpolation type", 6);
     ptap_mg_params.Get<int>("P max", 4);
 
-    // NB: These do not seem to be used in this context.
+    // NB: These do not seem to be used in this context (i.e., in ADSSolverWrapper).
     //     They would have been used in an actual BoomerAMG factory.
     ptap_mg_params.Get<int>("Print level", 0);
     ptap_mg_params.Get<int>("Number of functions", 1);
     ptap_mg_params.Get<int>("Maximum levels", 25);
 
-    // NB: These do not seem to be used in this context.
+    // NB: These do not seem to be used in this context (i.e., in ADSSolverWrapper).
     //     They would have been used in an actual AMS factory.
     ParameterList& gtag_mg_params = ams_params.Sublist("GtAG AMG Parameters");
     gtag_mg_params.Get<int>("Coarsening type", 10);
@@ -77,7 +77,7 @@ void ADSSolverFactory::_do_set_default_parameters()
     gtag_mg_params.Get<int>("Interpolation type", 6);
     gtag_mg_params.Get<int>("P max", 4);
 
-    // NB: These would not have been used even in an actual AMS factory,
+    // NB: These would not have been used even in an actual AMS factory (more precisely, in AMSSolverWrapper),
     //     but would have been used in an actual BoomerAMG factory.
     gtag_mg_params.Get<int>("Print level", 0);
     gtag_mg_params.Get<int>("Number of functions", 1);
@@ -91,7 +91,7 @@ void ADSSolverFactory::_do_set_default_parameters()
     amg_params.Get<int>("Interpolation type", 6);
     amg_params.Get<int>("P max", 4);
 
-    // NB: These do not seem to be used in this context.
+    // NB: These do not seem to be used in this context (i.e., in ADSSolverWrapper).
     //     They would have been used in an actual BoomerAMG factory.
     amg_params.Get<int>("Print level", 0);
     amg_params.Get<int>("Number of functions", 1);
