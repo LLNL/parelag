@@ -226,7 +226,7 @@
         <Parameter name="Interpolation type" type="int" value="6"/>
         <Parameter name="P max" type="int" value="4"/>
         <Parameter name="Print level" type="int" value="0"/>
-        <Parameter name="Dim" type="int" value="1"/>
+        <Parameter name="Number of functions" type="int" value="1"/>
         <Parameter name="Maximum levels" type="int" value="25"/>
         <Parameter name="Tolerance" type="double" value="0.0"/>
         <Parameter name="Maximum iterations" type="int" value="1"/>
@@ -255,7 +255,7 @@
           <Parameter name="Interpolation type" type="int" value="6"/>
           <Parameter name="P max" type="int" value="4"/>
           <Parameter name="Print level" type="int" value="0"/>
-          <Parameter name="Dim" type="int" value="1"/>
+          <Parameter name="Number of functions" type="int" value="1"/>
           <Parameter name="Maximum levels" type="int" value="25"/>
         </ParameterList>
         <!-- End ParameterList "PtAP AMG Parameters" -->
@@ -267,7 +267,7 @@
           <Parameter name="Interpolation type" type="int" value="6"/>
           <Parameter name="P max" type="int" value="4"/>
           <Parameter name="Print level" type="int" value="0"/>
-          <Parameter name="Dim" type="int" value="1"/>
+          <Parameter name="Number of functions" type="int" value="1"/>
           <Parameter name="Maximum levels" type="int" value="25"/>
         </ParameterList>
         <!-- End ParameterList "GtAG AMG Parameters" -->

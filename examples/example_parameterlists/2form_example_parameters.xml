@@ -229,7 +229,7 @@
         <Parameter name="Interpolation type" type="int" value="6"/>
         <Parameter name="P max" type="int" value="4"/>
         <Parameter name="Print level" type="int" value="0"/>
-        <Parameter name="Dim" type="int" value="1"/>
+        <Parameter name="Number of functions" type="int" value="1"/>
         <Parameter name="Maximum levels" type="int" value="25"/>
         <Parameter name="Tolerance" type="double" value="0.0"/>
         <Parameter name="Maximum iterations" type="int" value="1"/>
@@ -256,7 +256,7 @@
           <Parameter name="Relaxation sweeps" type="int" value="1"/>
           <Parameter name="Relaxation weight" type="double" value="1.0"/>
           <Parameter name="Relaxation omega" type="double" value="1.0"/>
-          <Parameter name="beta_is_zero" type="bool" value="false"/>
+          <Parameter name="Beta is zero" type="bool" value="false"/>
           <ParameterList name="PtAP AMG Parameters">
             <Parameter name="Coarsening type" type="int" value="10"/>
             <Parameter name="Aggressive coarsening levels" type="int" value="1"/>
@@ -265,7 +265,7 @@
             <Parameter name="Interpolation type" type="int" value="6"/>
             <Parameter name="P max" type="int" value="4"/>
             <Parameter name="Print level" type="int" value="0"/>
-            <Parameter name="Dim" type="int" value="1"/>
+            <Parameter name="Number of functions" type="int" value="1"/>
             <Parameter name="Maximum levels" type="int" value="25"/>
           </ParameterList>
           <!-- End ParameterList "PtAP AMG Parameters" -->
@@ -279,7 +279,7 @@
           <Parameter name="Interpolation type" type="int" value="6"/>
           <Parameter name="P max" type="int" value="4"/>
           <Parameter name="Print level" type="int" value="0"/>
-          <Parameter name="Dim" type="int" value="1"/>
+          <Parameter name="Number of functions" type="int" value="1"/>
           <Parameter name="Maximum levels" type="int" value="25"/>
         </ParameterList>
         <!-- End ParameterList "AMG Parameters" -->

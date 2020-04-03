@@ -72,8 +72,8 @@ private:
     void _do_set_default_parameters() override
     {
         auto& params = GetParameters();
-        params.Set("Maximum levels",-1);
-        params.Set("Forms",std::vector<int>());
+        params.Get<int>("Maximum levels",-1);
+        params.Get<std::vector<int>>("Forms",std::vector<int>());
     }
 
     /** \brief Implementation of Initialize(). */
