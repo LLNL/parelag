@@ -65,7 +65,9 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
     set_tests_properties(form2spectralAMGe
       PROPERTIES
       PASS_REGULAR_EXPRESSION
-      "u l2-like errors: 7.4780e-04 1.3267e-07 \nu energy-like errors: 1.3227e-02 1.6039e-07;u l2-like errors: 7.4780e-04 7.2804e-08 \nu energy-like errors: 1.3227e-02 6.6910e-08")
+      "u l2-like errors: 7.4780e-04 1.3267e-07 \nu energy-like errors: 1.3227e-02 1.6039e-07;\
+u l2-like errors: 7.4780e-04 7.2804e-08 \nu energy-like errors: 1.3227e-02 6.6910e-08;\
+u l2-like errors: 7.4780e-04 1.6799e-07 \nu energy-like errors: 1.3227e-02 2.8143e-07")
 
   # Form 0, Spectral
   # the local_targets tests have ridiculously high energy errors, see
@@ -93,7 +95,8 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
   set_tests_properties(ElectricPotential_bfly
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "u l2-like errors: 5.5000e-04 2.1996e-04 \np l2-like errors: 9.9192e-03 4.5006e-03 \nu energy-like errors: 2.4379e-04 1.3407e-04")
+    "u l2-like errors: 5.5000e-04 2.1996e-04 \np l2-like errors: 9.9192e-03 4.5006e-03 \nu energy-like errors: 2.4379e-04 1.3407e-04;\
+u l2-like errors: 5.4999e-04 2.1996e-04 \np l2-like errors: 9.9192e-03 4.5006e-03 \nu energy-like errors: 2.4379e-04 1.3407e-04")
 
   # LogicalPartitioner test
   add_test(logical_partitioner
@@ -147,25 +150,33 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
   set_tests_properties(MG1Form
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "Final residual norm: 1.972e-06;Final residual norm: 5.01907e-07")
+    "Final residual norm: 1.972e-06;\
+Final residual norm: 5.01907e-07;\
+Final residual norm: 1.36919e-06")
 
   add_test(MG2Form MultigridTest2Form.exe)
   set_tests_properties(MG2Form
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "Final residual norm: 2.61854e-07;Final residual norm: 2.26239e-07")
+    "Final residual norm: 2.61854e-07;\
+Final residual norm: 2.26239e-07;\
+Final residual norm: 2.54525e-07")
 
   add_test(MGDarcyHybrid MultigridTestDarcy_Hybrid.exe)
   set_tests_properties(MGDarcyHybrid
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "Final residual norm: 2.86484e-07;Final residual norm: 1.95524e-06")
+    "Final residual norm: 2.86484e-07;\
+Final residual norm: 1.95524e-06;\
+Final residual norm: 2.09814e-06")
 
   add_test(MGDarcyWithL2MassHybrid MultigridTestDarcy_Hybrid.exe --L2mass-weight 1.0)
   set_tests_properties(MGDarcyWithL2MassHybrid
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "Final residual norm: 2.60987e-07;Final residual norm: 1.80874e-06")
+    "Final residual norm: 2.60987e-07;\
+Final residual norm: 1.80874e-06;\
+Final residual norm: 1.9406e-06")
 
   if (${PROJECT_NAME}_USE_MARS)
     add_test(0FormMARS Upscaling0FormMARS.exe -nv)
