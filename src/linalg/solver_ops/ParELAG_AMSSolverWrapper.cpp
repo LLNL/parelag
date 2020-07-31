@@ -85,7 +85,7 @@ void AMSSolverWrapper::_do_set_parameters(ParameterList& Params)
 
     if (not Params.Get<bool>("Beta is zero", false))
     {
-        HYPRE_AMSSetAlphaAMGOptions(
+        HYPRE_AMSSetBetaAMGOptions(
             ams_, gtag_mg_params.Get<int>("Coarsening type",10),
             gtag_mg_params.Get<int>("Aggressive coarsening levels",1),
             gtag_mg_params.Get<int>("Relaxation type",6),

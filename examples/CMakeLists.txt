@@ -151,9 +151,9 @@ u l2-like errors: 5.4999e-04 2.1996e-04 \np l2-like errors: 9.9192e-03 4.5006e-0
   set_tests_properties(MG1Form
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "Final residual norm: 1.972e-06;\
-Final residual norm: 5.01907e-07;\
-Final residual norm: 1.36919e-06")
+    "Final residual norm: 1.97197e-06;\
+Final residual norm: 5.01914e-07;\
+Final residual norm: 1.36916e-06")
 
   add_test(MG2Form MultigridTest2Form.exe)
   set_tests_properties(MG2Form
