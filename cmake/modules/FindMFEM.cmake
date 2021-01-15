@@ -24,7 +24,7 @@ find_package(HYPRE REQUIRED)
 
 # Start by finding the MFEM config.mk file
 find_file(MFEM_CONFIG_FILE config.mk
-  HINTS ${MFEM_DIR} $ENV{MFEM_DIR}
+  HINTS ${MFEM_DIR} $ENV{MFEM_DIR} ${MFEM_DIR}/share/mfem
   PATH_SUFFIXES config
   NO_DEFAULT_PATH
   DOC "The MFEM configuration file")
