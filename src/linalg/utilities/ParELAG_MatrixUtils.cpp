@@ -392,7 +392,7 @@ void signumTransformation(SparseMatrix & A)
             *it = (*it > 0) ? 1.:-1.;
 }
 
-void CheckMatrix(SparseMatrix & A)
+void CheckMatrix(const SparseMatrix & A)
 {
     const int nCols = A.Width();
 
@@ -406,7 +406,7 @@ void CheckMatrix(SparseMatrix & A)
             std::range_error,
             "CheckMatrix(): Invalid column index detected!");
 
-    Vector v(A.GetData(), nnz);
+    const Vector v(const_cast<double *>(A.GetData()), nnz);
     PARELAG_TEST_FOR_EXCEPTION(
         v.CheckFinite(),
         std::range_error,
@@ -781,8 +781,8 @@ void Mult(const SparseMatrix & A, const DenseMatrix & B, DenseMatrix & out)
 std::unique_ptr<SparseMatrix> MultAbs (const SparseMatrix &A, const SparseMatrix &B)
 {
    int nrowsA, ncolsA, nrowsB, ncolsB;
-   int *A_i, *A_j, *B_i, *B_j;
-   double *A_data, *B_data;
+   const int *A_i, *A_j, *B_i, *B_j;
+   const double *A_data, *B_data;
    int ia, ib, ic, ja, jb, num_nonzeros;
    int row_start, counter;
    double a_entry, b_entry;
@@ -967,8 +967,10 @@ void Weightedl1Smoother(const SparseMatrix& A, Vector& diagonal_matrix)
 
     for (int i=0; i < n; ++i)
     {
-        int *row, beg;
-        double *a, diag;
+        const int *row;
+        int beg;
+        const double *a;
+        double diag;
 
         sum = 0.;
         diag = A(i, i);

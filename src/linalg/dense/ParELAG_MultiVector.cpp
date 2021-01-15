@@ -88,7 +88,7 @@ void MultiVector::GetSubMultiVector(
 void MultiVector::GetSubMultiVector(
     const Array<int> &dofs, double *elem_data) const
 {
-    double * this_start = data;
+    const double * this_start = GetData();
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for(const int * it(dofs.GetData()); it != dofs.GetData()+dofs.Size(); ++it, ++elem_data)
@@ -125,7 +125,7 @@ void MultiVector::SetSubMultiVector(const Array<int> &dofs, const MultiVector &e
 void MultiVector::SetSubMultiVector(const Array<int> &dofs, double *elem_data)
 {
 
-    double * this_start = data;
+    double * this_start = GetData();
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for(const int * it(dofs.GetData()); it != dofs.GetData()+dofs.Size(); ++it, ++elem_data)
@@ -162,7 +162,7 @@ void MultiVector::AddSubMultiVector(const Array<int> &dofs, const MultiVector &e
 void MultiVector::AddSubMultiVector(const Array<int> &dofs, double *elem_data)
 {
 
-    double * this_start = data;
+    double * this_start = GetData();
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for(const int * it(dofs.GetData()); it != dofs.GetData()+dofs.Size(); ++it, ++elem_data)
@@ -206,12 +206,13 @@ void MultiVector::CopyToDenseMatrix(int ivectStart,
         "MultiVector::CopyToDenseMatrix(): m has incompatible sizes.");
 
     double * mdata = m.Data();
+    double *d = GetData();
 
     int offset = ivectStart*LDA_;
     for(int ivect(ivectStart); ivect < ivectEnd; ++ivect)
     {
         for (int i = entryStart; i < entryEnd; i++)
-            *(mdata++) = data[offset+i];
+            *(mdata++) = d[offset+i];
         offset += LDA_;
     }
 
@@ -249,6 +250,7 @@ void MultiVector::CopyToDenseMatrixT(int ivectStart,
         std::logic_error,
         "MultiVector::CopyToDenseMatrix(): m has incompatible sizes.");
 
+    double *d = GetData();
     int offset = ivectStart*LDA_;
 
     int mrow, mcol;
@@ -258,7 +260,7 @@ void MultiVector::CopyToDenseMatrixT(int ivectStart,
         for (int i = entryStart; i < entryEnd; i++)
         {
             mcol = i - entryStart;
-            m(mrow, mcol) = data[offset+i];
+            m(mrow, mcol) = d[offset+i];
         }
         offset += LDA_;
     }
@@ -267,23 +269,19 @@ void MultiVector::CopyToDenseMatrixT(int ivectStart,
 
 void MultiVector::GetVectorView(int ivect, Vector & view)
 {
-    view.SetDataAndSize(data+ivect*LDA_, LocalSize_);
+    view.SetDataAndSize(GetData()+ivect*LDA_, LocalSize_);
 }
 
 void MultiVector::GetRangeView(int start, int end, MultiVector & view)
 {
-
     PARELAG_TEST_FOR_EXCEPTION(
         end < start,
         std::logic_error,
         "MultiVector::GetRangeView(): Invalid range: start > end!!");
 
-    if(view.allocsize > 0)
-        delete[] view.data;
+    view.Destroy();
 
-    view.data = data+start;
-    view.size = size - start;
-    view.allocsize = -view.size;
+    view.SetDataAndSize(GetData() + start, size - start);
     view.LDA_  = LDA_;
     view.LocalSize_ = end-start;
     view.NumVectors_ = NumVectors_;
@@ -315,11 +313,12 @@ MultiVector::Permutation(const int * p, int p_size) const
     auto out = make_unique<MultiVector>(NumVectors_, LocalSize_);
     double * it_out = out->GetData();
     int offset = 0;
+    double *d = GetData();
 
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for(const int * it = p ; it != p + LDA_; ++it, ++it_out )
-            *it_out = data[*it+offset];
+            *it_out = d[*it+offset];
         offset += LDA_;
     }
 
@@ -356,13 +355,18 @@ MultiVector::InversePermutation(const int * p, int p_size, int out_size) const
 
     auto out = make_unique<MultiVector>(NumVectors_, out_size);
     double * o = out->GetData();
-    const double * it_this = data;
+    const double * it_this = GetData();
     int offset_out = 0;
     int offset_in = 0;
 
     if(out_size > p_size)
-        std::fill(out->data, out->data+ out->size, 0.0);
+    {
+        double *d = out->GetData();
+        for (int i=0; i < out->Size(); ++i)
+            *(d++) = 0.0;
+    }
 
+    const double *d = GetData();
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for(const int * it = p ; it != p + p_size; ++it, ++it_this )
@@ -370,7 +374,7 @@ MultiVector::InversePermutation(const int * p, int p_size, int out_size) const
 
         offset_out += out_size;
         offset_in += LDA_;
-        it_this = data+offset_in;
+        it_this = d+offset_in;
     }
 
     return out;
@@ -378,11 +382,12 @@ MultiVector::InversePermutation(const int * p, int p_size, int out_size) const
 
 MultiVector &MultiVector::operator=(const double *v)
 {
+    double *d = GetData();
     int offset = 0;
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for (int i = 0; i < LocalSize_; i++)
-            data[offset+i] = *(v++);
+            d[offset+i] = *(v++);
         offset += LDA_;
     }
     return *this;
@@ -399,11 +404,12 @@ MultiVector &MultiVector::operator=(const MultiVector &v)
     int offset_v = 0;
     const int lda_v = v.LeadingDimension();
     double * data_v = v.GetData();
+    double *d = GetData();
 
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for (int i = 0; i < LocalSize_; i++)
-            data[offset_this+i] = data_v[offset_v+i];
+            d[offset_this+i] = data_v[offset_v+i];
 
         offset_this += LDA_;
         offset_v += lda_v;
@@ -414,11 +420,12 @@ MultiVector &MultiVector::operator=(const MultiVector &v)
 
 MultiVector &MultiVector::operator=(double value)
 {
+    double *d = GetData();
     int offset = 0;
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for (int i = 0; i < LocalSize_; i++)
-            data[offset+i] = value;
+            d[offset+i] = value;
         offset += LDA_;
     }
     return *this;
@@ -438,7 +445,7 @@ void MultiVector::Scale(const Vector & s)
         std::logic_error,
         "MultiVector::Scale(): Sizes don't match.");
 
-    double * it_this = data;
+    double * it_this = GetData();
     int offset = 0;
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
@@ -446,7 +453,7 @@ void MultiVector::Scale(const Vector & s)
             *it_this *= *it;
 
         offset += LDA_;
-        it_this = data + offset;
+        it_this = GetData() + offset;
     }
 }
 
@@ -466,7 +473,7 @@ void MultiVector::InverseScale(const Vector & s)
             std::logic_error,
             "MultiVector::InverseScale(): s[i] == 0 for i = " << ii);
 
-    double * it_this = data;
+    double * it_this = GetData();
     int offset = 0;
 
     for(int ivect(0); ivect < NumVectors_; ++ivect)
@@ -476,18 +483,19 @@ void MultiVector::InverseScale(const Vector & s)
             *it_this /= *it;
 
         offset += LDA_;
-        it_this = data + offset;
+        it_this = GetData() + offset;
     }
 }
 
 void MultiVector::RoundSmallEntriesToZero(double smallValue)
 {
+    double *d = GetData();
     int offset = 0;
     for(int ivect(0); ivect < NumVectors_; ++ivect)
     {
         for (int i = 0; i < LocalSize_; i++)
-            if( fabs(data[offset+i]) < smallValue )
-                data[offset+i] = 0.0;
+            if( fabs(d[offset+i]) < smallValue )
+                d[offset+i] = 0.0;
         offset += LDA_;
     }
 }
@@ -514,7 +522,8 @@ void MatrixTimesMultiVector(
     const double * val = M.GetData();
 
     int i,j,end;
-    double * xi_data(x.data), * yi_data(y.data);
+    const double * xi_data(x.GetData());
+    double * yi_data(y.GetData());
 
     for (int ivect(0); ivect < x.NumVectors_; ++ivect)
     {
@@ -550,7 +559,8 @@ void MatrixTimesMultiVector(double scaling, const SparseMatrix & M,
     const double * val = M.GetData();
 
     int i,j,end;
-    double * xi_data(x.data), * yi_data(y.data);
+    const double * xi_data(x.GetData());
+    double * yi_data(y.GetData());
 
     for( int ivect(0); ivect < x.NumVectors_; ++ivect)
     {
@@ -599,7 +609,8 @@ void MatrixTTimesMultiVector(double scaling, const SparseMatrix & M,
     const double * val = M.GetData();
 
     int i,j,end;
-    double * xi_data(x.data), * yi_data(y.data);
+    const double * xi_data(x.GetData());
+    double * yi_data(y.GetData());
 
     double sxi;
     for( int ivect(0); ivect < x.NumVectors_; ++ivect)

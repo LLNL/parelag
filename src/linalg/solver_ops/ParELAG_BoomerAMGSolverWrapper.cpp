@@ -63,7 +63,7 @@ void BoomerAMGSolverWrapper::_do_set_parameters(ParameterList& Params)
     HYPRE_BoomerAMGSetMaxIter(
         amg_h, Params.Get<int>("Maximum iterations",1));
     HYPRE_BoomerAMGSetStrongThreshold(
-        amg_h, Params.Get<double>("Thta",0.25));
+        amg_h, Params.Get<double>("Theta",0.25));
     HYPRE_BoomerAMGSetInterpType(
         amg_h, Params.Get<int>("Interpolation type",6));
     HYPRE_BoomerAMGSetPMaxElmts(

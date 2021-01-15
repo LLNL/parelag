@@ -182,7 +182,7 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
   set_tests_properties(unstructured_form1
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "u l2-like errors: 4.8096e-02 \nu energy-like errors: 4.1826e-01")
+    "u l2-like errors: 4.8096e-02 \nu energy-like errors: 4.1826e-01;u l2-like errors: 7.1756e-02 \nu energy-like errors: 4.3777e-01")
 
   # Upscaling, geometric partitioning
   add_test(geometric_form1
@@ -199,8 +199,10 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
   set_tests_properties(unstructuredDarcy
     PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "u l2-like errors: 7.3721e-02 \np l2-like errors: 2.8944e-03 \nu energy-like errors: 1.1226e-06")
-  
+    "u l2-like errors: 7.3721e-02 \np l2-like errors: 2.8944e-03 \nu energy-like errors: 1.1226e-06;\
+u l2-like errors: 7.3721e-02 \np l2-like errors: 2.8944e-03 \nu energy-like errors: 1.1089e-06;\
+u l2-like errors: 7.3721e-02 \np l2-like errors: 3.1029e-03 \nu energy-like errors: 9.2277e-07")
+
   if (${PROJECT_NAME}_ENABLE_PETSC)
     add_mpi_test(unstructuredDarcy_PETSc_fieldsplit 4 unstructuredDarcy_PETSc.exe
       --assembled --nref_parallel 1
@@ -231,7 +233,9 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
     set_tests_properties(upscaling_outside_mesh
       PROPERTIES
       PASS_REGULAR_EXPRESSION
-      "u l2-like errors: 4.4287e-08 \nu energy-like errors: 3.3158e-07")
+      "u l2-like errors: 4.4287e-08 \nu energy-like errors: 3.3158e-07;\
+u l2-like errors: 5.1508e-08 \nu energy-like errors: 3.6821e-07;\
+u l2-like errors: 6.8347e-08 \nu energy-like errors: 4.9492e-07")
   endif()
 
   # Improve topology coarsening (new algorithm for coarse facets)
@@ -243,7 +247,9 @@ if (${PROJECT_NAME}_ENABLE_TESTING)
     PASS_REGULAR_EXPRESSION
     "mpi processes: 1"
     PASS_REGULAR_EXPRESSION
-    "u l2-like errors: 8.5165e-02 4.3735e-02 \np l2-like errors: 1.9534e-04 1.0103e-04 \nu energy-like errors: 1.9577e-06 1.9438e-06")
+    "u l2-like errors: 8.5165e-02 4.3735e-02 \np l2-like errors: 1.9534e-04 1.0103e-04 \nu energy-like errors: 1.9577e-06 1.9438e-06;\
+u l2-like errors: 8.6573e-02 4.4377e-02 \np l2-like errors: 1.9933e-04 1.0208e-04 \nu energy-like errors: 1.5697e-06 1.6824e-06;
+u l2-like errors: 8.6902e-02 4.3905e-02 \np l2-like errors: 1.8645e-04 1.0685e-04 \nu energy-like errors: 1.2992e-06 1.3503e-06")
 
   add_test(geometric_partitioner
     test_GeometricBoxPartitioner.exe --x-elem 12 --y-elem 16 --partitions 9)

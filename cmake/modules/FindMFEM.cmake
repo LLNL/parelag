@@ -24,7 +24,8 @@ find_package(HYPRE REQUIRED)
 
 # Start by finding the MFEM config.mk file
 find_file(MFEM_CONFIG_FILE config.mk
-  HINTS ${MFEM_DIR} $ENV{MFEM_DIR} ${MFEM_DIR}/share/mfem
+  HINTS ${MFEM_DIR} $ENV{MFEM_DIR} 
+  HINTS ${MFEM_DIR}/build $ENV{MFEM_DIR}/build ${MFEM_DIR} $ENV{MFEM_DIR} ${MFEM_DIR}/share/mfem $ENV{MFEM_DIR}/share/mfem
   PATH_SUFFIXES config
   NO_DEFAULT_PATH
   DOC "The MFEM configuration file")
@@ -64,7 +65,7 @@ endif(MFEM_CONFIG_FILE)
   
 # Find the header
 find_path(MFEM_INCLUDE_DIRS mfem.hpp
-  HINTS ${MFEM_DIR} ${MFEM_CONFIG_DIR}
+  HINTS ${MFEM_DIR}/build $ENV{MFEM_DIR}/build ${MFEM_CONFIG_DIR} ${MFEM_DIR} $ENV{MFEM_DIR}
   PATH_SUFFIXES include
   NO_DEFAULT_PATH
   DOC "MFEM header location.")
@@ -72,7 +73,7 @@ find_path(MFEM_INCLUDE_DIRS mfem.hpp)
 
 # Find the library
 find_library(MFEM_LIBRARY mfem
-  HINTS ${MFEM_DIR} ${MFEM_CONFIG_DIR}
+  HINTS ${MFEM_DIR}/build $ENV{MFEM_DIR}/build ${MFEM_CONFIG_DIR} ${MFEM_DIR} $ENV{MFEM_DIR}
   PATH_SUFFIXES lib
   NO_DEFAULT_PATH
   DOC "The MFEM library.")
@@ -133,4 +134,4 @@ mark_as_advanced(FORCE MFEM_CONFIG_FILE)
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(MFEM
   DEFAULT_MSG
-  MFEM_LIBRARY MFEM_CONFIG_FILE MFEM_USE_MPI MFEM_INCLUDE_DIRS)
+  MFEM_CONFIG_FILE MFEM_USE_MPI MFEM_INCLUDE_DIRS)

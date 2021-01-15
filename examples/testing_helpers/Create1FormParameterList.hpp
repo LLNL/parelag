@@ -81,7 +81,7 @@ std::unique_ptr<ParameterList> Create1FormTestParameters()
             {
                 auto& solver_list = list.Sublist("Solver Parameters");
                 solver_list.Set("Maximum levels", -1);
-                solver_list.Set("Forms", 1);
+                solver_list.Set("Forms", std::vector<int>{1});
                 solver_list.Set("PreSmoother", "Hiptmair-GS-GS");
                 solver_list.Set("PostSmoother", "Hiptmair-GS-GS");
                 solver_list.Set("Coarse solver", "PCG-AMS");

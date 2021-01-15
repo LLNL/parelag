@@ -56,6 +56,16 @@ void MFEMRefinedMeshPartitioner::Partition(int nElements, int nParts, Array<int>
     int coarseningFactor = nElements / nParts;
     elag_assert(coarseningFactor % nsplits == 0);
 
+    int * p = partitioning.GetData();
+
+    // MFEM 4.1 changed the numbering in refinement.
+#if (MFEM_VERSION_MAJOR >= 4 && MFEM_VERSION_MINOR >= 1)
+    int j = 0;
+    for(int i = 0; i < nParts; ++i)
+        for(int k = 0; k < coarseningFactor; ++k)
+            p[j++] = i;
+    elag_assert(j == nElements);
+#else
     int npass = 0;
     int tmp = coarseningFactor;
 
@@ -64,8 +74,6 @@ void MFEMRefinedMeshPartitioner::Partition(int nElements, int nParts, Array<int>
         tmp /= nsplits;
         ++npass;
     }
-
-    int * p = partitioning.GetData();
 
     for(int i = 0; i < nParts; ++i)
         p[i] = i;
@@ -78,6 +86,7 @@ void MFEMRefinedMeshPartitioner::Partition(int nElements, int nParts, Array<int>
         copyXtimes(nsplits-1, orig, xcopy);
         len *= nsplits;
     }
+#endif
 }
 
 MFEMRefinedMeshPartitioner::~MFEMRefinedMeshPartitioner()

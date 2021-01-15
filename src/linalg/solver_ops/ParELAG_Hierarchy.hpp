@@ -287,7 +287,7 @@ private:
     /** \brief The cycle strategy for each level. */
     std::vector<int> CycleMu_;
 
-    /** \brief \c true of we should use \f$R=P^T\f$. */
+    /** \brief \c true if we should use \f$R=P^T\f$. */
     bool ImplicitTranspose_;
 
     /** \name Auxiliary vectors */

@@ -45,7 +45,7 @@ public:
     /// entity_dof tables. (Be sure to std::move the vector in)
     DofHandler(
         MPI_Comm comm,size_t maxCodimensionBaseForDof,size_t nDim,
-        std::vector<std::unique_ptr<mfem::SparseMatrix>>&& entity_dof_);
+        std::vector<std::unique_ptr<const mfem::SparseMatrix>>&& entity_dof_);
 
     virtual ~DofHandler();
 
@@ -167,9 +167,9 @@ protected:
     size_t maxCodimensionBaseForDof;
     size_t nDim;
 
-    std::vector<std::unique_ptr<mfem::SparseMatrix>> entity_dof;
-    std::vector<std::unique_ptr<mfem::SparseMatrix>> rDof_dof;
-    std::vector<std::unique_ptr<mfem::SparseMatrix>> entity_rdof;
+    std::vector<std::unique_ptr<const mfem::SparseMatrix>> entity_dof;
+    std::vector<std::unique_ptr<const mfem::SparseMatrix>> rDof_dof;
+    std::vector<std::unique_ptr<const mfem::SparseMatrix>> entity_rdof;
 
     SharingMap dofTrueDof;
 };
@@ -361,7 +361,7 @@ public:
 
     DofHandlerSCRATCH(
         MPI_Comm comm,size_t maxCodimensionBaseForDof,size_t nDim,
-        std::vector<std::unique_ptr<mfem::SparseMatrix>>&& entity_dof_):
+        std::vector<std::unique_ptr<const mfem::SparseMatrix>>&& entity_dof_):
         DofHandler(comm, maxCodimensionBaseForDof, nDim, std::move(entity_dof_))
     {
     }

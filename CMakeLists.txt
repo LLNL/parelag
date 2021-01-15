@@ -272,6 +272,11 @@ find_package(LAPACK REQUIRED)
 # affect whether ParElag will be built with OpenMP support,
 # etc. This should be fixed. :/
 find_package(MFEM REQUIRED)
+# Check if any executables need to be linked, while the MFEM library was not
+# discovered.
+if ((${PROJECT_NAME}_BUILD_EXAMPLES OR ${PROJECT_NAME}_BUILD_TESTSUITE) AND (NOT MFEM_LIBRARY))
+message(FATAL_ERROR "Failed to find the MFEM library file, while Examples and Testsuite linking is ON!")
+endif ()
 
 # Look for METIS; this should be the same metis used to build MFEM,
 # but if it links, it links.
