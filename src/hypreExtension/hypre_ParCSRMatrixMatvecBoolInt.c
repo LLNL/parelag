@@ -159,7 +159,7 @@ hypre_ParCSRMatrixMatvecBoolInt(
    int     *x_tmp, *x_buf;
 
 
-   x_tmp = hypre_CTAlloc(HYPRE_Int, num_cols_offd );
+   x_tmp = parelag_hypre_CTAlloc(HYPRE_Int, num_cols_offd );
 
    /*---------------------------------------------------------------------
     * If there exists no CommPkg for A, a CommPkg is generated using
@@ -173,7 +173,7 @@ hypre_ParCSRMatrixMatvecBoolInt(
 
    num_sends = hypre_ParCSRCommPkgNumSends(comm_pkg);
 
-   x_buf = hypre_CTAlloc(int, hypre_ParCSRCommPkgSendMapStart(comm_pkg, num_sends));
+   x_buf = parelag_hypre_CTAlloc(int, hypre_ParCSRCommPkgSendMapStart(comm_pkg, num_sends));
 
    {
       index = 0;
@@ -195,8 +195,8 @@ hypre_ParCSRMatrixMatvecBoolInt(
 
    if (num_cols_offd) hypre_CSRMatrixMatvecBoolInt( alpha, offd, x_tmp, 1, y_local);
 
-   hypre_TFree(x_tmp);
-   hypre_TFree(x_buf);
+   parelag_hypre_TFree(x_tmp);
+   parelag_hypre_TFree(x_buf);
 
    return ierr;
 }

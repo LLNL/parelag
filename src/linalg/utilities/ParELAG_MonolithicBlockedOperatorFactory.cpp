@@ -24,6 +24,8 @@
 #include "utilities/elagError.hpp"
 #include "utilities/MPIDataTypes.hpp"
 
+#include "mfem.hpp"
+
 namespace parelag
 {
 
@@ -64,8 +66,8 @@ MonolithicBlockedOperatorFactory::BuildOperator(BlockedOperatorType& op)
 
     // Create the row/col starts
     global_index_type * row_starts, * col_starts;
-    row_starts = hypre_CTAlloc(global_index_type,2);
-    col_starts = hypre_CTAlloc(global_index_type,2);
+    row_starts = hypre_CTAlloc(global_index_type,2,HYPRE_MEMORY_HOST);
+    col_starts = hypre_CTAlloc(global_index_type,2,HYPRE_MEMORY_HOST);
     row_starts[0] = 0; row_starts[1] = 0;
     col_starts[0] = 0; col_starts[1] = 0;
 
