@@ -385,7 +385,9 @@ void SharingMap::SetUp(SerialCSRMatrix & e_AE, SharingMap & e_Te)
     resetHypreParVectors();
     storeSharedEntitiesIds();
 
-    elag_assert( DebugCheck() == 0 );
+    // TODO CLS(1/21/2021): hypre_ParCSRMatrixCompare does not work with newer
+    // version of hypre (some issue with big_j), so I commented it out for now.
+//    elag_assert( DebugCheck() == 0 );
 }
 
 int SharingMap::DebugCheck()

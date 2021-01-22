@@ -218,7 +218,10 @@ unique_ptr<TopologyTable> MultBoolean(
 unique_ptr<TopologyTable>
 TransposeOrientation(const Array<int> & j,int nrowsOut)
 {
-    elag_assert(j.Max() < nrowsOut );
+    if (j.Size() > 0)
+    {
+        elag_assert(j.Max() < nrowsOut );
+    }
 
     int * const i_out = new int[nrowsOut+2];
     std::fill(i_out, i_out + nrowsOut+2, 0);

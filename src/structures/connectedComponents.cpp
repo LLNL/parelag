@@ -22,6 +22,8 @@ using namespace mfem;
 /// TODO should this warn (optionally) when it finds disconnected components?
 int connectedComponents(Array<int> & partitioning, const SerialCSRMatrix & conn)
 {
+    if (partitioning.Size() == 0) { return 0; }
+
     elag_assert(partitioning.Size() == conn.Height() );
     elag_assert(partitioning.Size() == conn.Width() );
     int num_nodes = conn.Size();

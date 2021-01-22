@@ -305,7 +305,7 @@ private:
     HypreTraits<hypre_ParVector>::unique_ptr_t xTrue_;
     HypreTraits<hypre_ParVector>::unique_ptr_t x_;
     //@}
-    bool hypre_style_delete;
+    bool hypre_style_delete; // CSL(1/20/2021): not used anymore?
 };
 
 #ifdef ParELAG_ENABLE_PETSC

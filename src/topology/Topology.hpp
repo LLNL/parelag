@@ -26,9 +26,11 @@
 #include "structures/SharingMap.hpp"
 #include "topology/TopologyTable.hpp"
 #include "utilities/elagError.hpp"
+#include "partitioning/MetisGraphPartitioner.hpp"
 
 namespace parelag
 {
+
 //! @class
 /*!
  * @brief A structure to describe an (agglomerated) topology
@@ -98,6 +100,16 @@ public:
     AgglomeratedTopology(
         const std::shared_ptr<mfem::ParMesh>& pmesh,int ncodim);
 
+//    /// Construct a topology by redistributing another topology
+//    ///
+//    /// This constructor is typically needed only when some AgglomeratedTopology
+//    /// cannot be further coarsen locally in some processor (e.g., NumElem = 1).
+//    /// @param topo the AgglomeratedTopology to be redistributed from.
+//    /// @param proc an array of size number of elements, procs[i] indicates the
+//    ///        processor ID where element i will be redistributed to.
+//    AgglomeratedTopology(const AgglomeratedTopology& topo,
+//                         const std::vector<int>& elem_redist_procs);
+
     /// Destructor
     ~AgglomeratedTopology() = default;
     ///@}
@@ -142,6 +154,26 @@ public:
         elag_assert(AEntity_entity[codim]);
 
         return *(AEntity_entity[codim]);
+    }
+
+    /// Get the (agglomerated entity)_(entity) table (const version)
+    par_table_t & ATrueEntityTrueEntity(int codim)
+    {
+        elag_assert(0 <= codim && nCodim_ >= codim);
+        elag_assert(ATrueEntity_trueEntity.size() > 0);
+        elag_assert(ATrueEntity_trueEntity[codim]);
+
+        return *(ATrueEntity_trueEntity[codim]);
+    }
+
+    /// Get the (agglomerated entity)_(entity) table (const version)
+    const par_table_t & ATrueEntityTrueEntity(int codim) const
+    {
+        elag_assert(0 <= codim && nCodim_ >= codim);
+        elag_assert(ATrueEntity_trueEntity.size() > 0);
+        elag_assert(ATrueEntity_trueEntity[codim]);
+
+        return *(ATrueEntity_trueEntity[codim]);
     }
 
     /// Get a reference to the partitioning
@@ -218,7 +250,7 @@ public:
     par_table_t & TrueB(int codim);
 
     /// Return the weight vector for the TrueEntity
-    std::unique_ptr<array_t> TrueWeight(int codim);
+    std::unique_ptr<array_t> TrueWeight(int codim) const;
 
     /// Return a reference to the array of element attributes
     mfem::Array<int> & ElementAttribute() noexcept { return element_attribute; }
@@ -349,6 +381,12 @@ public:
         bool checkTopology,
         bool preserveMaterialInterfaces);
 
+    std::shared_ptr<AgglomeratedTopology> RedistributeAndCoarsen(
+        const std::vector<int>& elem_redist_procs,
+        const MetisGraphPartitioner& partitioner,
+        int num_partitions, bool check_topology,
+        bool preserve_material_interfaces, int coarsefaces_algo = 0);
+
     /// Split agglomerates that are deemed "bad" into agglomerates
     /// that are... "not bad"? (Hopefully)
     void DeAgglomerateBadAgglomeratedEntities(
@@ -377,6 +415,8 @@ public:
     {
         return CoarserTopology_.lock();
     }
+
+    bool PerformGlobalAgglomeration() const { return globalAgglomeration; }
 
 protected:
 
@@ -482,7 +522,7 @@ protected:
     ///@{
     ///
     /// If globalAgglomeration == true, then agglomerates may span across
-    /// processors. --> NOT SUPPORTED
+    /// processors. --> NOT SUPPORTED (TODO: trying to support it)
     ///
     /// If globalAgglomeration == false, then agglomerates will be local to
     /// the processor. --> ONLY REAL OPTION
@@ -531,6 +571,10 @@ protected:
         // parelag; likewise with owns_trueBt, so they are gone now.
     }  workspace;
     ///@}
+
+    /// These are probably temporary (we may remove them once the algo is clear)
+    std::vector<std::unique_ptr<par_table_t>> redTrueEntity_TrueEntity;
+    std::vector<std::unique_ptr<par_table_t>> redEntity_redTrueEntity;
 
 private:
 

@@ -22,7 +22,7 @@ MetisGraphPartitioner::MetisGraphPartitioner()
 {
     options = new int[METIS_NOPTIONS];
     METIS_SetDefaultOptions(options);
-    options[METIS_OPTION_CONTIG] = 1;
+    options[METIS_OPTION_CONTIG] = 0;
     setDefaultUnbalanceToll();
 }
 
