@@ -238,8 +238,6 @@ int main(int argc, char *argv[])
     const int num_samples = 10000;
 
     // The number of times to refine in serial.
-    // Negative means refine until mesh is big enough to distribute, i.e.,
-    // until the number of elements is 6 times the number of processes.
     int ser_ref_levels = 0;
 
     // The order of the finite elements on the finest level.
