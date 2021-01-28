@@ -835,9 +835,12 @@ AgglomeratedTopology::RedistributeAndCoarsen(
     bool preserve_material_interfaces, int coarsefaces_algo)
 {
    // Redistribute the current topology to another set of processors
+   // TODO: currently only elements and faces are redistributed, need to
+   // generalize the code to cover edges and vertices as well.
    auto redist_topo = make_shared<AgglomeratedTopology>(Comm_, nCodim_);
    redist_topo->nDim_ = Dimensions();
 
+   // Redistribute core topological data
    auto elem_redProc = matred::EntityToProcessor(Comm_, elem_redist_procs);
    auto redProc_elem = matred::Transpose(elem_redProc);
    auto redElem_elem = matred::BuildRedistributedEntityToTrueEntity(redProc_elem);
@@ -880,9 +883,15 @@ AgglomeratedTopology::RedistributeAndCoarsen(
 
    auto redTE_redE = matred::Transpose(redEntity_redTrueEntity);
 
-   auto redTrueEntity_trueEntity = matred::Mult(redTE_redE, redEntity_trueEntity);
-   matred::SetConstantValue(redTrueEntity_trueEntity, 1.);
+   auto redTE_trueE = matred::Mult(redTE_redE, redEntity_trueEntity);
+   matred::SetConstantValue(redTE_trueE, 1.);
 
+   // Put the redistribution matrices into a container (does not own!)
+   vector<unique_ptr<par_table_t>> redTrueEntity_trueEntity(nCodim_+1);
+   redTrueEntity_trueEntity[0].reset(new par_table_t(redElem_elem, false));
+   redTrueEntity_trueEntity[1].reset(new par_table_t(redTE_trueE, false));
+
+   // Redistribute other remaining data
    auto redElem_redEntity = matred::Mult(redElem_trueEntity, tE_redE);
 
    SerialCSRMatrix redElem_redEntity_diag;
@@ -898,13 +907,12 @@ AgglomeratedTopology::RedistributeAndCoarsen(
    unique_ptr<SerialCSRMatrix> redF_bdrAttr(mfem::Mult(redEnt_tEnt_diag, *tF_bdrAttr));
    redist_topo->facet_bdrAttribute = make_unique<TopologyTable>(std::move(redF_bdrAttr));
 
-   par_table_t redElem_elem_mfem(redElem_elem, false);
-   redist_topo->element_attribute.SetSize(redElem_elem_mfem.NumRows());
-   redElem_elem_mfem.BooleanMult(1.0, ElementAttribute(),
-                                 0.0, redist_topo->element_attribute);
+   redist_topo->element_attribute.SetSize(redTrueEntity_trueEntity[0]->NumRows());
+   redTrueEntity_trueEntity[0]->BooleanMult(1.0, ElementAttribute(),
+                                            0.0, redist_topo->element_attribute);
 
-   redist_topo->Weights_[0]->SetSize(redElem_elem_mfem.NumRows());
-   redElem_elem_mfem.Mult(Weight(0), *(redist_topo->Weights_[0]));
+   redist_topo->Weights_[0]->SetSize(redTrueEntity_trueEntity[0]->NumRows());
+   redTrueEntity_trueEntity[0]->Mult(Weight(0), *(redist_topo->Weights_[0]));
 
    auto trueFacetWeight = TrueWeight(1);
    redist_topo->Weights_[1]->SetSize(redist_topo->B_[0]->NumCols());
@@ -927,17 +935,21 @@ AgglomeratedTopology::RedistributeAndCoarsen(
    // store intergrid operators
    this->globalAgglomeration = true;
    ATrueEntity_trueEntity.resize(nCodim_+1);
-//   for (int i = 0; i < nCodim_+1; ++i)
-//   {
-   auto AEnt_TAEnt = coarse_redist_topo->EntityTrueEntity(0).get_entity_trueEntity();
-   auto Ent_TEnt = redist_topo->EntityTrueEntity(0).get_entity_trueEntity();
+   for (int i = 0; i < nCodim_+1; ++i)
+   {
+      auto redAEnt_redTAEnt = coarse_redist_topo->EntityTrueEntity(i).get_entity_trueEntity();
+      auto redEnt_redTEnt = redist_topo->EntityTrueEntity(i).get_entity_trueEntity();
 
-   par_table_t AEnt_Ent(Comm_, AEnt_TAEnt->M(), Ent_TEnt->M(), AEnt_TAEnt->RowPart(),
-                        Ent_TEnt->RowPart(), &redist_topo->AEntityEntity(0));
-   assert(AEnt_Ent.NumCols() == redElem_elem_mfem.NumRows());
-   ATrueEntity_trueEntity[0].reset(mfem::ParMult(&AEnt_Ent, &redElem_elem_mfem, true));
-   //TODO: ATrueFacet_trueFacet
-//   }
+      par_table_t redAEnt_redEnt(Comm_, redAEnt_redTAEnt->M(), redEnt_redTEnt->M(),
+                                 redAEnt_redTAEnt->RowPart(), redEnt_redTEnt->RowPart(),
+                                 &redist_topo->AEntityEntity(i));
+
+      unique_ptr<par_table_t> redTAEnt_redTEnt(
+               mfem::RAP(redAEnt_redTAEnt, &redAEnt_redEnt, redEnt_redTEnt));
+
+      ATrueEntity_trueEntity[i].reset(
+               mfem::ParMult(redTAEnt_redTEnt.get(), redTrueEntity_trueEntity[i].get(), true));
+   }
 
    coarse_redist_topo->FinerTopology_ = shared_from_this();
    CoarserTopology_ = coarse_redist_topo;
