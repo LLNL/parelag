@@ -911,11 +911,13 @@ AgglomeratedTopology::RedistributeAndCoarsen(
    par_table_t(redEntity_trueEntity, false).Mult(
             *trueFacetWeight, *(redist_topo->Weights_[1]));
 
-   // Coarsen redist_topo (TODO)
+   // Coarsen redist_topo
    Array<int> partitioning(redist_topo->GetNumberLocalEntities(ELEMENT));
-//   partitioner.doPartition(*redist_topo->LocalElementElementTable(),
-//                           num_partitions, partitioning);
-   partitioning = 0;
+   if (redist_topo->GetNumberLocalEntities(ELEMENT) > 0)
+   {
+      partitioner.doPartition(*redist_topo->LocalElementElementTable(),
+                              num_partitions, partitioning);
+   }
 
    auto coarse_redist_topo = redist_topo->CoarsenLocalPartitioning(
             partitioning, check_topology, preserve_material_interfaces, coarsefaces_algo);
