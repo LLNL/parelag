@@ -108,8 +108,7 @@ int main (int argc, char *argv[])
     if (!myid)
     {
         mesh_msg << '\n' << std::string(50,'*') << '\n'
-                 << "*  Mesh: " << meshfile << "\n*\n" << std::boolalpha
-                 << "*\n";
+                 << "*  Mesh: " << meshfile << "\n*\n";
     }
 
     shared_ptr<ParMesh> pmesh;
@@ -162,14 +161,12 @@ int main (int argc, char *argv[])
         if (print_progress_report)
         {
             std::cout << "-- Refined mesh in serial " << ser_ref_levels
-                      << " times.\n\n";
+                      << " times.\n";
         }
 
         if (!myid)
         {
-            mesh_msg << "*    Serial refinements: " << ser_ref_levels << '\n'
-                     << "*      Coarse mesh size: " << mesh->GetNE() << '\n'
-                     << "*\n";
+            mesh_msg << "*    Serial refinements: " << ser_ref_levels << '\n';
         }
 
         if (print_progress_report)
@@ -178,7 +175,7 @@ int main (int argc, char *argv[])
         pmesh = make_shared<ParMesh>(comm, *mesh);
 
         if (pmesh && print_progress_report)
-            std::cout << "-- Built parallel mesh successfully.\n\n";
+            std::cout << "-- Built parallel mesh successfully.\n";
     }
 
     const int nDimensions = pmesh->Dimension();
@@ -209,7 +206,6 @@ int main (int argc, char *argv[])
         {
             mesh_msg << "*  Parallel refinements: " << par_ref_levels << '\n'
                      << "*        Fine Mesh Size: " << global_num_elmts << '\n'
-                     << "*          Total levels: " << nLevels << '\n'
                      << std::string(50,'*') << '\n' << std::endl;
         }
     }
@@ -218,6 +214,7 @@ int main (int argc, char *argv[])
         std::cout << mesh_msg.str();
 
     const int num_redist_coarsen_levels = 3;
+    auto elem_t = AgglomeratedTopology::ELEMENT;
 
     if (print_progress_report)
         std::cout << "-- Agglomerating topology to " << nLevels+num_redist_coarsen_levels
@@ -246,6 +243,9 @@ int main (int argc, char *argv[])
             topology[ilevel+1] = topology[ilevel]->CoarsenLocalPartitioning(
                         partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
             ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
+            if (print_progress_report)
+                std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
+                          << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
         }
 
         int num_redist_procs = 4;
@@ -256,7 +256,7 @@ int main (int argc, char *argv[])
             timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
             Timer inner = TimeManager::AddTimer(timer_name.str());
 
-            auto flag = num_redist_procs < 9 ? MetisGraphPartitioner::RECURSIVE : MetisGraphPartitioner::KWAY;
+            auto flag = MetisGraphPartitioner::RECURSIVE;
             metis_partitioner.setFlags(flag);
 
             std::vector<int> redistributed_procs(topology[ilevel]->GetB(0).NumRows());
@@ -266,15 +266,18 @@ int main (int argc, char *argv[])
 
             topology[ilevel+1] =
                 topology[ilevel]->RedistributeAndCoarsen(
-                        redistributed_procs, metis_partitioner, 1, 0, 0, nDimensions == 2 ? 0 : 2);
+                        redistributed_procs, metis_partitioner, 2, 0, 0, nDimensions == 2 ? 0 : 2);
 
             ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
+
+            if (print_progress_report)
+                std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
+                          << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
         }
     }
 
-
     if (print_progress_report)
-        std::cout << "-- Successfully agglomerated topology.\n\n";
+        std::cout << "-- Successfully agglomerated topology.\n";
 
     if (print_time)
         TimeManager::Print(std::cout);
