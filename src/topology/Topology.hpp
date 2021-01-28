@@ -100,16 +100,6 @@ public:
     AgglomeratedTopology(
         const std::shared_ptr<mfem::ParMesh>& pmesh,int ncodim);
 
-//    /// Construct a topology by redistributing another topology
-//    ///
-//    /// This constructor is typically needed only when some AgglomeratedTopology
-//    /// cannot be further coarsen locally in some processor (e.g., NumElem = 1).
-//    /// @param topo the AgglomeratedTopology to be redistributed from.
-//    /// @param proc an array of size number of elements, procs[i] indicates the
-//    ///        processor ID where element i will be redistributed to.
-//    AgglomeratedTopology(const AgglomeratedTopology& topo,
-//                         const std::vector<int>& elem_redist_procs);
-
     /// Destructor
     ~AgglomeratedTopology() = default;
     ///@}
