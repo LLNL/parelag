@@ -250,22 +250,19 @@ int main (int argc, char *argv[])
 
         int num_redist_procs = 4;
         MetisGraphPartitioner metis_partitioner;
+        metis_partitioner.setFlags(MetisGraphPartitioner::RECURSIVE);
         for (int ilevel = nLevels-1; ilevel < topology.size()-1; ++ilevel)
         {
             std::ostringstream timer_name;
             timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
             Timer inner = TimeManager::AddTimer(timer_name.str());
 
-            auto flag = MetisGraphPartitioner::RECURSIVE;
-            metis_partitioner.setFlags(flag);
-
             std::vector<int> redistributed_procs(topology[ilevel]->GetB(0).NumRows());
             std::fill_n(redistributed_procs.begin(), redistributed_procs.size(), myid % num_redist_procs);
 
             num_redist_procs /= 2;
 
-            topology[ilevel+1] =
-                topology[ilevel]->RedistributeAndCoarsen(
+            topology[ilevel+1] = topology[ilevel]->RedistributeAndCoarsen(
                         redistributed_procs, metis_partitioner, 2, 0, 0, nDimensions == 2 ? 0 : 2);
 
             ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
