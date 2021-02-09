@@ -392,12 +392,6 @@ public:
         int num_partitions, bool check_topology,
         bool preserve_material_interfaces);
 
-    std::shared_ptr<AgglomeratedTopology> RedistributeAndCoarsen(
-        const ParallelCSRMatrix& redistProc_elem,
-        const MetisGraphPartitioner& partitioner,
-        int num_partitions, bool check_topology,
-        bool preserve_material_interfaces);
-
     std::shared_ptr<AgglomeratedTopology>
     Coarsen(const TopologyRedistributor& redistributor,
             const MetisGraphPartitioner& partitioner,

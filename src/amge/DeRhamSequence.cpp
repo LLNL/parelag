@@ -700,13 +700,17 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::RedistributeAndCoarsen(
       int num_partitions, bool check_topology,
       bool preserve_material_interfaces)
 {
-   auto elem_redProc = matred::EntityToProcessor(Comm_, elem_redist_procs);
-   auto redProc_elem = matred::Transpose(elem_redProc);
-   ParallelCSRMatrix redistProc_elem(redProc_elem, false);
+//   auto elem_redProc = matred::EntityToProcessor(Comm_, elem_redist_procs);
+//   auto redProc_elem = matred::Transpose(elem_redProc);
+//   ParallelCSRMatrix redistProc_elem(redProc_elem, false);
 
-   auto redist_topo = this->Topo_->RedistributeAndCoarsen(
-            redistProc_elem, partitioner, num_partitions,
-                                       check_topology, preserve_material_interfaces);
+//   auto redist_topo = this->Topo_->RedistributeAndCoarsen(
+//            redistProc_elem, partitioner, num_partitions,
+//            check_topology, preserve_material_interfaces);
+
+   TopologyRedistributor redistributor(*(this->Topo_), elem_redist_procs);
+   auto redist_topo = this->Topo_->Coarsen(redistributor, partitioner, num_partitions,
+                                           check_topology, preserve_material_interfaces);
 
    auto redist_seq = std::make_shared<DeRhamSequenceAlg>(
        redist_topo, nForms_);
