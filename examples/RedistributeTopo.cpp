@@ -263,7 +263,7 @@ int main (int argc, char *argv[])
             num_redist_procs /= 2;
 
             topology[ilevel+1] = topology[ilevel]->RedistributeAndCoarsen(
-                        redistributed_procs, metis_partitioner, 2, 0, 0, nDimensions == 2 ? 0 : 2);
+                        redistributed_procs, metis_partitioner, 2, 0, 0);
 
             ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
 

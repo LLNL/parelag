@@ -28,8 +28,13 @@
 #include "utilities/elagError.hpp"
 #include "partitioning/MetisGraphPartitioner.hpp"
 
+// not needed if redistributor at the end is moved.
+#include "matred.hpp"
+
 namespace parelag
 {
+
+class TopologyRedistributor;
 
 //! @class
 /*!
@@ -385,7 +390,23 @@ public:
         const std::vector<int>& elem_redist_procs,
         const MetisGraphPartitioner& partitioner,
         int num_partitions, bool check_topology,
-        bool preserve_material_interfaces, int coarsefaces_algo = 0);
+        bool preserve_material_interfaces);
+
+    std::shared_ptr<AgglomeratedTopology> RedistributeAndCoarsen(
+        const ParallelCSRMatrix& redistProc_elem,
+        const MetisGraphPartitioner& partitioner,
+        int num_partitions, bool check_topology,
+        bool preserve_material_interfaces);
+
+    std::shared_ptr<AgglomeratedTopology>
+    RedistributeAndCoarsen(
+        const TopologyRedistributor& redistributor,
+        const MetisGraphPartitioner& partitioner,
+        int num_partitions, bool check_topology,
+        bool preserve_material_interfaces);
+
+    std::shared_ptr<AgglomeratedTopology> Redistribute(
+        const ParallelCSRMatrix& redistProc_elem);
 
     /// Split agglomerates that are deemed "bad" into agglomerates
     /// that are... "not bad"? (Hopefully)
@@ -604,6 +625,31 @@ void ShowTopologyBdrFacets(
 void ShowAgglomeratedTopology3D(
     AgglomeratedTopology * topo,
     mfem::ParMesh * mesh);
+
+
+// TODO: put in a separate file
+class TopologyRedistributor
+{
+   // Enumeration convention follows the one in AgglomeratedTopology
+   vector<matred::ParMatrix> redTrueEntity_trueEntity;
+   vector<unique_ptr<ParallelCSRMatrix> > redTE_TE_helper;
+
+   vector<matred::ParMatrix> redEntity_redTrueEntity;
+   vector<unique_ptr<ParallelCSRMatrix> > redE_redTE_helper;
+public:
+   TopologyRedistributor(const AgglomeratedTopology& topo,
+                         const std::vector<int>& elem_redist_procs);
+
+   const ParallelCSRMatrix& TrueEntityRedistribution(int codim) const
+   {
+      return *(redTE_TE_helper[codim]);
+   }
+
+   const ParallelCSRMatrix& Redistributed_EntityTrueEntity(int codim) const
+   {
+      return *(redE_redTE_helper[codim]);
+   }
+};
 
 }//namespace parelag
 #endif

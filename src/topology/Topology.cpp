@@ -832,7 +832,21 @@ AgglomeratedTopology::RedistributeAndCoarsen(
     const std::vector<int>& elem_redist_procs,
     const MetisGraphPartitioner& partitioner,
     int num_partitions, bool check_topology,
-    bool preserve_material_interfaces, int coarsefaces_algo)
+    bool preserve_material_interfaces)
+{
+   auto elem_redProc = matred::EntityToProcessor(Comm_, elem_redist_procs);
+   auto redProc_elem = matred::Transpose(elem_redProc);
+   par_table_t redistProc_elem(redProc_elem, false);
+   return RedistributeAndCoarsen(redistProc_elem, partitioner, num_partitions,
+                                 check_topology, preserve_material_interfaces);
+}
+
+std::shared_ptr<AgglomeratedTopology>
+AgglomeratedTopology::RedistributeAndCoarsen(
+    const ParallelCSRMatrix& redistProc_elem,
+    const MetisGraphPartitioner& partitioner,
+    int num_partitions, bool check_topology,
+    bool preserve_material_interfaces)
 {
    // Redistribute the current topology to another set of processors
    // TODO: currently only elements and faces are redistributed, need to
@@ -841,8 +855,7 @@ AgglomeratedTopology::RedistributeAndCoarsen(
    redist_topo->nDim_ = Dimensions();
 
    // Redistribute core topological data
-   auto elem_redProc = matred::EntityToProcessor(Comm_, elem_redist_procs);
-   auto redProc_elem = matred::Transpose(elem_redProc);
+   matred::ParMatrix redProc_elem(redistProc_elem, false);
    auto redElem_elem = matred::BuildRedistributedEntityToTrueEntity(redProc_elem);
 
    int num_redElem = ((hypre_ParCSRMatrix*)redElem_elem)->diag->num_rows;
@@ -927,6 +940,7 @@ AgglomeratedTopology::RedistributeAndCoarsen(
                               num_partitions, partitioning);
    }
 
+   int coarsefaces_algo = this->Dimensions() == 3 ? 2 : 0;
    auto coarse_redist_topo = redist_topo->CoarsenLocalPartitioning(
             partitioning, check_topology, preserve_material_interfaces, coarsefaces_algo);
 
@@ -949,6 +963,185 @@ AgglomeratedTopology::RedistributeAndCoarsen(
 
       ATrueEntity_trueEntity[i].reset(
                mfem::ParMult(redTAEnt_redTEnt.get(), redTrueEntity_trueEntity[i].get(), true));
+   }
+
+   coarse_redist_topo->FinerTopology_ = shared_from_this();
+   CoarserTopology_ = coarse_redist_topo;
+
+   return coarse_redist_topo;
+}
+
+std::shared_ptr<AgglomeratedTopology>
+AgglomeratedTopology::RedistributeAndCoarsen(
+    const TopologyRedistributor& redistributor,
+    const MetisGraphPartitioner& partitioner,
+    int num_partitions, bool check_topology,
+    bool preserve_material_interfaces)
+{
+   // Redistribute the current topology to another set of processors
+   // TODO: currently only elements and faces are redistributed, need to
+   // generalize the code to cover edges and vertices as well.
+   auto redist_topo = make_shared<AgglomeratedTopology>(Comm_, nCodim_);
+   redist_topo->nDim_ = Dimensions();
+
+   // Redistribute core topological data
+   const int num_redElem = redistributor.TrueEntityRedistribution(0).NumRows();
+   redist_topo->entityTrueEntity[0]->SetUp(num_redElem);
+
+
+
+//   auto elem_trueElem = entityTrueEntity[0]->get_entity_trueEntity();
+//   auto f_tF = entityTrueEntity[1]->get_entity_trueEntity();
+//   auto elem_starts = elem_trueElem->RowPart();
+
+//   unique_ptr<par_table_t> elem_tF(f_tF->LeftDiagMult(GetB(0), elem_starts));
+//   matred::ParMatrix elem_trueFacet(*elem_tF, false);
+
+   auto& redist0 = const_cast<par_table_t&>(redistributor.TrueEntityRedistribution(0));
+   auto& redist1 = redistributor.TrueEntityRedistribution(1);
+
+//   matred::ParMatrix redElem_elem(redEl_el, false);
+
+
+//   auto redElem_trueEntity = matred::Mult(redElem_elem, elem_trueFacet);
+
+//   auto redEntity_trueEntity =
+//         matred::BuildRedistributedEntityToTrueEntity(redElem_trueEntity);
+
+//   auto tE_redE = matred::Transpose(redEntity_trueEntity);
+//   auto redE_tE_redE = matred::Mult(redEntity_trueEntity, tE_redE);
+
+//   auto redEntity_redTrueEntity = matred::BuildEntityToTrueEntity(redE_tE_redE);
+
+   auto& redE_redTE_ref = redistributor.Redistributed_EntityTrueEntity(1);
+   auto redE_redTE = make_unique<par_table_t>(redE_redTE_ref, false);
+
+   Array<int> redE_starts(3);
+   Array<int> redTE_starts(3);
+   redE_starts[0] = redE_redTE->RowPart()[0];
+   redE_starts[1] = redE_redTE->RowPart()[1];
+   redE_starts[2] = redE_redTE->M();
+   redTE_starts[0] = redE_redTE->ColPart()[0];
+   redTE_starts[1] = redE_redTE->ColPart()[1];
+   redTE_starts[2] = redE_redTE->N();
+
+   redist_topo->entityTrueEntity[1]->SetUp(
+            redE_starts, redTE_starts, std::move(redE_redTE));
+
+   // Redistribute other remaining data
+//   auto redElem_redEntity = matred::Mult(redElem_trueEntity, tE_redE);
+
+   auto trueB = Assemble(EntityTrueEntity(0), *B_[0], EntityTrueEntity(1));
+//   unique_ptr<par_table_t> redist1T(redist1.Transpose());
+//   unique_ptr<par_table_t> redTE_redE(redE_redTE_ref.Transpose());
+
+   unique_ptr<par_table_t> redE_TE(ParMult(&redE_redTE_ref, &redist1));
+   unique_ptr<par_table_t> TE_redE(redE_TE->Transpose());
+
+   unique_ptr<par_table_t> tmpB(ParMult(&redist0, trueB.get()));
+   unique_ptr<par_table_t> redB(ParMult(tmpB.get(), TE_redE.get()));
+
+//   unique_ptr<par_table_t> redB(RAP(&redist0, trueB.get(), TE_redE.get()));
+//   unique_ptr<par_table_t> redB(ParMult(redTrueB.get(), redTE_redE.get()));
+
+   SerialCSRMatrix redB_diag;
+   redB->GetDiag(redB_diag);
+   SerialCSRMatrix redB_diag_copy(redB_diag);
+   redist_topo->B_[0] = make_unique<TopologyTable>(redB_diag_copy);
+
+   auto e_tE = EntityTrueEntity(1).get_entity_trueEntity();
+   unique_ptr<par_table_t> tE_E(e_tE->Transpose());
+//   SerialCSRMatrix tF_f_diag, redEnt_tEnt_diag;
+//   trueFacet_facet->GetDiag(tF_f_diag);
+//   par_table_t(redEntity_trueEntity, false).GetDiag(redEnt_tEnt_diag);
+
+   //   unique_ptr<SerialCSRMatrix> tF_bdrAttr(mfem::Mult(tF_f_diag, FacetBdrAttribute()));
+   //   unique_ptr<SerialCSRMatrix> redF_bdrAttr(mfem::Mult(redEnt_tEnt_diag, *tF_bdrAttr));
+   //   redist_topo->facet_bdrAttribute = make_unique<TopologyTable>(std::move(redF_bdrAttr));
+
+
+   int myid;
+   MPI_Comm_rank(Comm_, &myid);
+
+   Array<int> e_starts(3), attr_starts(3), attr_map;
+   e_starts[0] = e_tE->RowPart()[0];
+   e_starts[1] = e_tE->RowPart()[1];
+   e_starts[2] = e_tE->M();
+   attr_starts[0] = myid > 0 ? facet_bdrAttribute->NumCols() : 0;
+   attr_starts[1] = facet_bdrAttribute->NumCols();
+   attr_starts[2] = facet_bdrAttribute->NumCols();
+
+   if (myid > 0)
+   {
+      attr_map.SetSize(facet_bdrAttribute->NumCols());
+      iota(attr_map.GetData(), attr_map.GetData()+attr_starts[2], 0);
+   }
+
+   ParallelCSRMatrix e_bdrattr(Comm_, e_tE->M(), attr_starts[2], e_starts,
+         attr_starts, myid ? nullptr : facet_bdrAttribute.get(),
+         myid ? facet_bdrAttribute.get() : nullptr, attr_map);
+
+   unique_ptr<par_table_t> tE_bdrattr(ParMult(tE_E.get(), &e_bdrattr));
+   unique_ptr<par_table_t> redE_bdrattr(ParMult(redE_TE.get(), tE_bdrattr.get()));
+
+   HYPRE_Int* trash_map;
+   mfem::SparseMatrix redE_bdrattr_local_ref;
+   if (myid == 0)
+   {
+      redE_bdrattr->GetDiag(redE_bdrattr_local_ref);
+   }
+   else
+   {
+      redE_bdrattr->GetOffd(redE_bdrattr_local_ref, trash_map);
+   }
+   mfem::SparseMatrix redE_bdrattr_local(redE_bdrattr_local_ref);
+   redist_topo->facet_bdrAttribute = make_unique<TopologyTable>(redE_bdrattr_local);
+
+
+   redist_topo->element_attribute.SetSize(num_redElem);
+   redist0.BooleanMult(1.0, element_attribute, 0.0, redist_topo->element_attribute);
+
+   redist_topo->Weights_[0]->SetSize(num_redElem);
+   redist0.Mult(Weight(0), redist_topo->Weight(0));
+
+   auto trueFacetWeight = TrueWeight(1);
+   redist_topo->Weights_[1]->SetSize(redist_topo->B_[0]->NumCols());
+   redE_TE->Mult(*trueFacetWeight, *(redist_topo->Weights_[1]));
+
+   // Coarsen redist_topo
+   Array<int> partitioning(redist_topo->GetNumberLocalEntities(ELEMENT));
+   if (redist_topo->GetNumberLocalEntities(ELEMENT) > 0)
+   {
+      partitioner.doPartition(*redist_topo->LocalElementElementTable(),
+                              num_partitions, partitioning);
+   }
+
+   const int coarsefaces_algo = this->Dimensions() == 3 ? 2 : 0;
+   auto coarse_redist_topo = redist_topo->CoarsenLocalPartitioning(
+            partitioning, check_topology, preserve_material_interfaces, coarsefaces_algo);
+
+   coarse_redist_topo->BuildConnectivity();
+
+   // store intergrid operators
+   this->globalAgglomeration = true;
+   ATrueEntity_trueEntity.resize(nCodim_+1);
+   for (int i = 0; i < nCodim_+1; ++i)
+   {
+      auto redAEnt_redTAEnt = coarse_redist_topo->EntityTrueEntity(i);
+      auto redEnt_redTEnt = redist_topo->EntityTrueEntity(i);
+
+//      par_table_t redAEnt_redEnt(Comm_, redAEnt_redTAEnt->M(), redEnt_redTEnt->M(),
+//                                 redAEnt_redTAEnt->RowPart(), redEnt_redTEnt->RowPart(),
+//                                 &redist_topo->AEntityEntity(i));
+
+//      unique_ptr<par_table_t> redTAEnt_redTEnt(
+//               mfem::RAP(redAEnt_redTAEnt, &redAEnt_redEnt, redEnt_redTEnt));
+
+      auto redTAEnt_redTEnt = Assemble(
+               redAEnt_redTAEnt, redist_topo->AEntityEntity(i), redEnt_redTEnt );
+
+      ATrueEntity_trueEntity[i].reset(
+               mfem::ParMult(redTAEnt_redTEnt.get(), &redistributor.TrueEntityRedistribution(i), true));
    }
 
    coarse_redist_topo->FinerTopology_ = shared_from_this();
@@ -1730,5 +1923,43 @@ int augment_ja_data_AF_f_inner(int * ia_AF_face, int * ja_AF_face, double * data
     return 0;
 }
 
+TopologyRedistributor::TopologyRedistributor(
+      const AgglomeratedTopology& topo, const std::vector<int>& elem_redist_procs)
+   : redTrueEntity_trueEntity(topo.Codimensions()+1),
+     redTE_TE_helper(topo.Codimensions()+1),
+     redEntity_redTrueEntity(topo.Codimensions()+1),
+     redE_redTE_helper(topo.Codimensions()+1)
+{
+   auto elem_redProc = matred::EntityToProcessor(topo.GetComm(), elem_redist_procs);
+   auto redProc_elem = matred::Transpose(elem_redProc);
+   redTrueEntity_trueEntity[0] = matred::BuildRedistributedEntityToTrueEntity(redProc_elem);
+
+   auto elem_starts = topo.EntityTrueEntity(0).get_entity_trueEntity()->RowPart();
+   auto f_tF = topo.EntityTrueEntity(1).get_entity_trueEntity();
+
+   unique_ptr<ParallelCSRMatrix> elem_tF(f_tF->LeftDiagMult(topo.GetB(0), elem_starts));
+   matred::ParMatrix elem_trueFacet(*elem_tF, false);
+
+   auto redElem_trueEntity = matred::Mult(redTrueEntity_trueEntity[0], elem_trueFacet);
+   auto redEntity_trueEntity =
+         matred::BuildRedistributedEntityToTrueEntity(redElem_trueEntity);
+
+   auto tE_redE = matred::Transpose(redEntity_trueEntity);
+   auto redE_tE_redE = matred::Mult(redEntity_trueEntity, tE_redE);
+   redEntity_redTrueEntity[1] = matred::BuildEntityToTrueEntity(redE_tE_redE);
+   auto redTE_redE = matred::Transpose(redEntity_redTrueEntity[1]);
+
+   redTrueEntity_trueEntity[1] = matred::Mult(redTE_redE, redEntity_trueEntity);
+   redTrueEntity_trueEntity[1] = 1.0;
+
+   for (int codim = 0; codim < topo.Codimensions()+1; ++ codim)
+   {
+      redTE_TE_helper[codim].reset(
+               new ParallelCSRMatrix(redTrueEntity_trueEntity[codim], false));
+      if (codim == 0) { continue; }
+      redE_redTE_helper[codim].reset(
+               new ParallelCSRMatrix(redEntity_redTrueEntity[codim], false));
+   }
+}
 
 }//namespace parelag

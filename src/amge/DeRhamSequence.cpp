@@ -28,6 +28,9 @@
 
 #include <cmath>
 
+// TODO: add preprocess flag
+#include "matred.hpp"
+
 namespace parelag
 {
 using namespace mfem;
@@ -689,6 +692,99 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
     Pi_[nForms_-1]->Project(fine_const, coarse_const);
 
     return coarser_sequence;
+}
+
+std::shared_ptr<DeRhamSequence> DeRhamSequence::RedistributeAndCoarsen(
+      const std::vector<int>& elem_redist_procs,
+      const MetisGraphPartitioner& partitioner,
+      int num_partitions, bool check_topology,
+      bool preserve_material_interfaces)
+{
+   auto elem_redProc = matred::EntityToProcessor(Comm_, elem_redist_procs);
+   auto redProc_elem = matred::Transpose(elem_redProc);
+   ParallelCSRMatrix redistProc_elem(redProc_elem, false);
+
+   auto redist_topo = this->Topo_->RedistributeAndCoarsen(
+            redistProc_elem, partitioner, num_partitions,
+                                       check_topology, preserve_material_interfaces);
+
+   auto redist_seq = std::make_shared<DeRhamSequenceAlg>(
+       redist_topo, nForms_);
+   redist_seq->jformStart_ = jformStart_;
+
+//   for (int codim = 0; codim < nForms_; ++codim)
+//   {
+//       int jform = nForms_-codim-1;
+//       if (jform < jformStart_)
+//           break;
+
+//       redist_seq->Dof_[jform] = make_unique<DofHandlerALG>(
+//           codim, redist_topo );
+
+//       P_[jform] = make_unique<SparseMatrix>(
+//           Dof_[jform]->GetNDofs(),
+//           EstimateUpperBoundNCoarseDof(jform) );
+//       Pi_[jform] = make_unique<CochainProjector>(
+//           coarser_sequence->Topo_.get(),
+//           coarser_sequence->Dof_[jform].get(),
+//           DofAgg_[jform].get(),
+//           P_[jform].get() );
+
+//       ComputeCoarseTraces(jform);
+
+//       if (codim > 0)
+//       {
+//           hFacetExtension(jform);
+//           if (codim > 1)
+//           {
+//               const AgglomeratedTopology::Entity codim_dom_ridge
+//                   = static_cast<AgglomeratedTopology::Entity>(
+//                       nForms_ - jform - 3);
+//               hRidgePeakExtension(jform, codim_dom_ridge);
+//               if (codim > 2)
+//               {
+//                   const AgglomeratedTopology::Entity codim_dom_peak
+//                       = static_cast<AgglomeratedTopology::Entity>(
+//                           nForms_ - jform - 4);
+//                   hRidgePeakExtension(jform, codim_dom_peak);
+//               }
+//           }
+
+//           // The projector for jform can be finalized now.
+//           // Also Dof_[jform] is finalized;
+//           P_[jform]->SetWidth();
+//           P_[jform]->Finalize();
+//           coarser_sequence->D_[jform]->SetWidth(P_[jform]->Width());
+//           coarser_sequence->D_[jform]->Finalize();
+//       }
+//       else
+//       {
+//           P_[jform]->SetWidth();
+//           P_[jform]->Finalize();
+//       }
+
+//       Pi_[jform]->ComputeProjector();
+//       if (jform == nForms_-1)
+//       {
+//           coarser_sequence->Dof_[jform]->GetDofTrueDof().SetUp(
+//               Pi_[jform]->GetProjectorMatrix(),
+//               Dof_[jform]->GetDofTrueDof(),
+//               *(P_[jform]) );
+//       }
+//       else
+//       {
+//           unique_ptr<SparseMatrix> unextendedP
+//               = getUnextendedInterpolator(jform);
+//           unique_ptr<SparseMatrix> incompletePi
+//               = Pi_[jform]->GetIncompleteProjector();
+//           coarser_sequence->Dof_[jform]->GetDofTrueDof().SetUp(
+//               *incompletePi,
+//               Dof_[jform]->GetDofTrueDof(),
+//               *unextendedP );
+//       }
+
+//   }
+
 }
 
 void DeRhamSequence::CheckInvariants()
