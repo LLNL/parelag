@@ -25,6 +25,7 @@
 #include "structures/SharedEntityCommunication.hpp"
 #include "utilities/MemoryUtils.hpp"
 #include "utilities/mpiUtils.hpp"
+#include "structures/Redistributor.hpp"
 
 #include <cmath>
 
@@ -700,30 +701,58 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::RedistributeAndCoarsen(
       int num_partitions, bool check_topology,
       bool preserve_material_interfaces)
 {
-//   auto elem_redProc = matred::EntityToProcessor(Comm_, elem_redist_procs);
-//   auto redProc_elem = matred::Transpose(elem_redProc);
-//   ParallelCSRMatrix redistProc_elem(redProc_elem, false);
-
-//   auto redist_topo = this->Topo_->RedistributeAndCoarsen(
-//            redistProc_elem, partitioner, num_partitions,
-//            check_topology, preserve_material_interfaces);
-
-   TopologyRedistributor redistributor(*(this->Topo_), elem_redist_procs);
-   auto redist_topo = this->Topo_->Coarsen(redistributor, partitioner, num_partitions,
+   Redistributor redistributor(*(this->Topo_), elem_redist_procs);
+   auto coarse_topo = this->Topo_->Coarsen(redistributor, partitioner, num_partitions,
                                            check_topology, preserve_material_interfaces);
+   auto redist_topo = redistributor.Redistribute(*this->Topo_);
 
-   auto redist_seq = std::make_shared<DeRhamSequenceAlg>(
-       redist_topo, nForms_);
-   redist_seq->jformStart_ = jformStart_;
-
-//   for (int codim = 0; codim < nForms_; ++codim)
+   // Coarsen redist_topo
+//   Array<int> partitioning(redist_topo->GetB(0).NumRows());
+//   if (partitioning.Size() > 0)
 //   {
-//       int jform = nForms_-codim-1;
-//       if (jform < jformStart_)
-//           break;
+//      partitioner.doPartition(*redist_topo->LocalElementElementTable(),
+//                              num_partitions, partitioning);
+//   }
+
+//   const int coarsefaces_algo = this->Topo_->Dimensions() == 3 ? 2 : 0;
+//   auto coarse_redist_topo = redist_topo->CoarsenLocalPartitioning(
+//            partitioning, check_topology, preserve_material_interfaces, coarsefaces_algo);
+//   coarse_redist_topo->BuildConnectivity();
+
+//   // store intergrid operators
+//   this->Topo_->globalAgglomeration = true;
+//   this->Topo_->ATrueEntity_trueEntity.resize(nCodim_+1);
+//   for (int i = 0; i < nCodim_+1; ++i)
+//   {
+//      auto& redAE_redTAE = coarse_redist_topo->EntityTrueEntity(i);
+//      auto& redE_redTE = redist_topo->EntityTrueEntity(i);
+//      auto redTAE_redTE = Assemble(redAE_redTAE, redist_topo->AEntityEntity(i), redE_redTE);
+//      ATrueEntity_trueEntity[i].reset(
+//               ParMult(redTAE_redTE.get(), &redistributor.TrueEntityRedistribution(i), true));
+//   }
+
+//   coarse_redist_topo->FinerTopology_ = shared_from_this();
+//   CoarserTopology_ = coarse_redist_topo;
+
+//   return coarse_redist_topo;
+
+
+   auto coarser_sequence = std::make_shared<DeRhamSequenceAlg>(
+       coarse_topo, nForms_);
+   coarser_sequence->jformStart_ = jformStart_;
+
+   // Update the weak_ptrs
+   CoarserSequence_ = coarser_sequence;
+   coarser_sequence->FinerSequence_ = shared_from_this();
+
+   for (int codim = 0; codim < nForms_; ++codim)
+   {
+       int jform = nForms_-codim-1;
+       if (jform < jformStart_)
+           break;
 
 //       redist_seq->Dof_[jform] = make_unique<DofHandlerALG>(
-//           codim, redist_topo );
+//           codim, redist_topo);
 
 //       P_[jform] = make_unique<SparseMatrix>(
 //           Dof_[jform]->GetNDofs(),
@@ -787,7 +816,7 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::RedistributeAndCoarsen(
 //               *unextendedP );
 //       }
 
-//   }
+   }
 
 }
 

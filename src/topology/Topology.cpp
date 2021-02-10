@@ -22,13 +22,11 @@
 #include "utilities/MemoryUtils.hpp"
 #include "utilities/mpiUtils.hpp"
 #include "utilities/Trace.hpp"
+#include "structures/Redistributor.hpp"
 
 // for book's algorithm in topology coarsening
 #include "linalg/utilities/ParELAG_SubMatrixExtraction.hpp"
 #include "linalg/utilities/ParELAG_MatrixUtils.hpp"
-
-// TODO: add preprocess flag
-#include "matred.hpp"
 
 namespace parelag
 {
@@ -834,13 +832,20 @@ AgglomeratedTopology::RedistributeAndCoarsen(
     int num_partitions, bool check_topology,
     bool preserve_material_interfaces)
 {
-   TopologyRedistributor redistributor(*this, elem_redist_procs);
+   Redistributor redistributor(*this, elem_redist_procs);
    return Coarsen(redistributor, partitioner, num_partitions,
                   check_topology, preserve_material_interfaces);
 }
 
 std::shared_ptr<AgglomeratedTopology>
-AgglomeratedTopology::Coarsen(const TopologyRedistributor& redistributor,
+AgglomeratedTopology::Redistribute(const std::vector<int>& elem_redist_procs)
+{
+   Redistributor redistributor(*this, elem_redist_procs);
+   return redistributor.Redistribute(*this);
+}
+
+std::shared_ptr<AgglomeratedTopology>
+AgglomeratedTopology::Coarsen(const Redistributor& redistributor,
                               const MetisGraphPartitioner& partitioner,
                               int num_partitions, bool check_topology,
                               bool preserve_material_interfaces)
@@ -1744,43 +1749,6 @@ int augment_ja_data_AF_f_inner(int * ia_AF_face, int * ja_AF_face, double * data
     }
 
     return 0;
-}
-
-TopologyRedistributor::TopologyRedistributor(
-      const AgglomeratedTopology& topo, const std::vector<int>& elem_redist_procs)
-   : redTrueEntity_trueEntity(topo.Codimensions()+1),
-     redTE_TE_helper(topo.Codimensions()+1),
-     redEntity_redTrueEntity(topo.Codimensions()+1),
-     redE_redTE_helper(topo.Codimensions()+1)
-{
-   // TODO: entities in codimension > 1 (need to adjust B)
-   auto elem_redProc = matred::EntityToProcessor(topo.GetComm(), elem_redist_procs);
-   auto redProc_elem = matred::Transpose(elem_redProc);
-   redTrueEntity_trueEntity[0] = matred::BuildRedistributedEntityToTrueEntity(redProc_elem);
-
-   auto& B0 = const_cast<TopologyTable&>(topo.GetB(0));
-   auto elem_tEnt = Assemble(topo.EntityTrueEntity(0), B0, topo.EntityTrueEntity(1));
-   matred::ParMatrix elem_trueEnt(*elem_tEnt, false);
-
-   auto redElem_trueEnt = matred::Mult(redTrueEntity_trueEntity[0], elem_trueEnt);
-   auto redEnt_trueEnt = matred::BuildRedistributedEntityToTrueEntity(redElem_trueEnt);
-
-   auto tE_redE = matred::Transpose(redEnt_trueEnt);
-   auto redE_tE_redE = matred::Mult(redEnt_trueEnt, tE_redE);
-   redEntity_redTrueEntity[1] = matred::BuildEntityToTrueEntity(redE_tE_redE);
-   auto redTE_redE = matred::Transpose(redEntity_redTrueEntity[1]);
-
-   redTrueEntity_trueEntity[1] = matred::Mult(redTE_redE, redEnt_trueEnt);
-   redTrueEntity_trueEntity[1] = 1.0;
-
-   for (int codim = 0; codim < topo.Codimensions()+1; ++ codim)
-   {
-      redTE_TE_helper[codim].reset(
-               new ParallelCSRMatrix(redTrueEntity_trueEntity[codim], false));
-      if (codim == 0) { continue; }
-      redE_redTE_helper[codim].reset(
-               new ParallelCSRMatrix(redEntity_redTrueEntity[codim], false));
-   }
 }
 
 }//namespace parelag

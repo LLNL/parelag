@@ -158,6 +158,8 @@ public:
 
     void CheckInvariants() const;
 
+    friend class Redistributor;
+
 protected:
 
     virtual int getNumberOf(int type) const = 0;

@@ -27,14 +27,12 @@
 #include "topology/TopologyTable.hpp"
 #include "utilities/elagError.hpp"
 #include "partitioning/MetisGraphPartitioner.hpp"
-
-// not needed if redistributor at the end is moved.
-#include "matred.hpp"
+//#include "structures/Redistributor.hpp"
 
 namespace parelag
 {
 
-class TopologyRedistributor;
+class Redistributor;
 
 //! @class
 /*!
@@ -393,13 +391,13 @@ public:
         bool preserve_material_interfaces);
 
     std::shared_ptr<AgglomeratedTopology>
-    Coarsen(const TopologyRedistributor& redistributor,
+    Coarsen(const Redistributor& redistributor,
             const MetisGraphPartitioner& partitioner,
             int num_partitions, bool check_topology,
             bool preserve_material_interfaces);
 
     std::shared_ptr<AgglomeratedTopology> Redistribute(
-        const ParallelCSRMatrix& redistProc_elem);
+          const std::vector<int>& elem_redist_procs);
 
     /// Split agglomerates that are deemed "bad" into agglomerates
     /// that are... "not bad"? (Hopefully)
@@ -431,6 +429,8 @@ public:
     }
 
     bool PerformGlobalAgglomeration() const { return globalAgglomeration; }
+
+    friend class Redistributor;
 
 protected:
 
@@ -618,31 +618,6 @@ void ShowTopologyBdrFacets(
 void ShowAgglomeratedTopology3D(
     AgglomeratedTopology * topo,
     mfem::ParMesh * mesh);
-
-
-// TODO: put in a separate file
-class TopologyRedistributor
-{
-   // Enumeration convention follows the one in AgglomeratedTopology
-   vector<matred::ParMatrix> redTrueEntity_trueEntity;
-   vector<unique_ptr<ParallelCSRMatrix> > redTE_TE_helper;
-
-   vector<matred::ParMatrix> redEntity_redTrueEntity;
-   vector<unique_ptr<ParallelCSRMatrix> > redE_redTE_helper;
-public:
-   TopologyRedistributor(const AgglomeratedTopology& topo,
-                         const std::vector<int>& elem_redist_procs);
-
-   const ParallelCSRMatrix& TrueEntityRedistribution(int codim) const
-   {
-      return *(redTE_TE_helper[codim]);
-   }
-
-   const ParallelCSRMatrix& Redistributed_EntityTrueEntity(int codim) const
-   {
-      return *(redE_redTE_helper[codim]);
-   }
-};
 
 }//namespace parelag
 #endif
