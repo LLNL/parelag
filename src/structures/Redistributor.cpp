@@ -22,6 +22,7 @@ using namespace mfem;
 using std::shared_ptr;
 using std::make_shared;
 using std::unique_ptr;
+using matred::ParMatrix;
 
 Redistributor::Redistributor(
       const AgglomeratedTopology& topo, const std::vector<int>& elem_redist_procs)
@@ -40,7 +41,8 @@ Redistributor::Redistributor(
 
    auto redEnt_trueEnt = BuildRedEntToTrueEnt(*elem_tEnt);
    redEntity_redTrueEntity[1] = BuildNewEntTrueEnt(redEnt_trueEnt);
-   redTrueEntity_trueEntity[1] = BuildRedTrueEntTrueEnt(redEnt_trueEnt);
+   redTrueEntity_trueEntity[1] = BuildRedTrueEntTrueEnt(
+               redEntity_redTrueEntity[1], redEnt_trueEnt);
 
    for (int codim = 0; codim < topo.Codimensions()+1; ++ codim)
    {
@@ -52,26 +54,28 @@ Redistributor::Redistributor(
    }
 }
 
-matred::ParMatrix
-Redistributor::BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_trueEntity)
+ParMatrix
+Redistributor::BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_trueEntity) const
 {
     matred::ParMatrix elem_trueEnt(elem_trueEntity, false);
     auto redElem_trueEnt = matred::Mult(redTrueEntity_trueEntity[0], elem_trueEnt);
     return matred::BuildRedistributedEntityToTrueEntity(redElem_trueEnt);
 }
 
-matred::ParMatrix
-Redistributor::BuildNewEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity)
+ParMatrix
+Redistributor::BuildNewEntTrueEnt(const ParMatrix& redEntity_trueEntity) const
 {
     auto tE_redE = matred::Transpose(redEntity_trueEntity);
     auto redE_tE_redE = matred::Mult(redEntity_trueEntity, tE_redE);
     return matred::BuildEntityToTrueEntity(redE_tE_redE);
 }
 
-matred::ParMatrix
-Redistributor::BuildRedTrueEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity)
+ParMatrix
+Redistributor::BuildRedTrueEntTrueEnt(
+        const ParMatrix& redEntity_redTrueEntity,
+        const ParMatrix& redEntity_trueEntity) const
 {
-    auto redTE_redE = matred::Transpose(redEntity_redTrueEntity[1]);
+    auto redTE_redE = matred::Transpose(redEntity_redTrueEntity);
     auto out = matred::Mult(redTE_redE, redEntity_trueEntity);
     out = 1.0;
     return out;
@@ -180,19 +184,46 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(
         const DofHandler& dof,
         const std::shared_ptr<AgglomeratedTopology>& redist_topo) const
 {
-//   auto alg_handler = dynamic_cast<const DofHandlerALG*>(&topo);
-//   PARELAG_ASSERT(alg_handler); // only DofHandlerALG can be redistributed currently
+    auto& nonconst_dof = const_cast<DofHandler&>(dof);
+    auto dof_alg = dynamic_cast<DofHandlerALG*>(&nonconst_dof);
+    PARELAG_ASSERT(dof_alg); // only DofHandlerALG can be redistributed currently
 
+    const int max_codim_base = dof.GetMaxCodimensionBaseForDof();
+    unique_ptr<DofHandlerALG> out = make_unique<DofHandlerALG>(max_codim_base, redist_topo);
 
-   const int max_codim_base = dof.maxCodimensionBaseForDof;
-   auto out = make_unique<DofHandlerALG>(max_codim_base, redist_topo);
+    auto& elem_dof = const_cast<SerialCSRMatrix&>(dof.GetEntityDofTable(AgglomeratedTopology::ELEMENT));
+    auto& dof_trueDof = dof.GetDofTrueDof();
+    auto elem_trueDof = Assemble(dof.GetEntityTrueEntity(0), elem_dof, dof_trueDof);
 
-   auto& elem_dof = *dof.entity_dof[0];
+    auto redDof_trueDof = BuildRedEntToTrueEnt(*elem_trueDof);
+    auto redDof_redTrueDof = BuildNewEntTrueEnt(redDof_trueDof);
+    auto redTrueDof_trueDof = BuildRedTrueEntTrueEnt(redDof_redTrueDof, redDof_trueDof);
+    auto trueDof_redTrueDof = matred::Transpose(redTrueDof_trueDof);
+    ParallelCSRMatrix tD_redTD(trueDof_redTrueDof, false);
 
-   for (int i = 0; i < max_codim_base; ++i)
-   {
-       dof.entity_dof[i];
-   }
+    for (int i = 1; i < max_codim_base; ++i)
+    {
+        auto codim = static_cast<AgglomeratedTopology::Entity>(i);
+        auto& ent_dof = const_cast<SerialCSRMatrix&>(dof.GetEntityDofTable(codim));
+        auto trueEnt_trueDof = Assemble(dof.GetEntityTrueEntity(i), ent_dof, dof_trueDof);
+
+        unique_ptr<ParallelCSRMatrix> redTrueEnt_redTrueDof(
+                    RAP(&TrueEntityRedistribution(i), trueEnt_trueDof.get(), &tD_redTD));
+
+        SerialCSRMatrix redTrueEnt_redTrueDof_diag;
+        redTrueEnt_redTrueDof->GetDiag(redTrueEnt_redTrueDof_diag); // TODO:distribute true entities and dofs
+        out->entity_dof[i].reset(new SerialCSRMatrix(redTrueEnt_redTrueDof_diag)); // TODO: just steal
+        out->finalized[i] = true;
+
+        // need to convert to double and then convert the results back
+        Array<int> num_int_dofs_null(dof_alg->entity_NumberOfInteriorDofsNullSpace[i].data(),
+                                     dof_alg->GetNumberEntities(codim));
+        Array<int> red_num_int_dofs_null(out->entity_NumberOfInteriorDofsNullSpace[i].data(),
+                                         out->GetNumberEntities(codim));
+
+        redTE_TE_helper[i]->BooleanMult(1.0, num_int_dofs_null, 0.0, red_num_int_dofs_null);
+
+    }
 
 
 }

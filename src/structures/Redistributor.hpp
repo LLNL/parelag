@@ -34,6 +34,8 @@ namespace parelag
 
 class Redistributor
 {
+    using ParMatrix = matred::ParMatrix;
+
    // Enumeration convention follows the one in AgglomeratedTopology
    vector<matred::ParMatrix> redTrueEntity_trueEntity;
    vector<unique_ptr<ParallelCSRMatrix> > redTE_TE_helper;
@@ -41,10 +43,15 @@ class Redistributor
    vector<matred::ParMatrix> redEntity_redTrueEntity;
    vector<unique_ptr<ParallelCSRMatrix> > redE_redTE_helper;
 
-   matred::ParMatrix BuildRedEntToTrueEnt(const SerialCSRMatrix& elem_trueEntity);
-   matred::ParMatrix BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_trueEntity);
-   matred::ParMatrix BuildNewEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity);
-   matred::ParMatrix BuildRedTrueEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity);
+//   vector<matred::ParMatrix> redTrueDof_trueDof;
+//   vector<matred::ParMatrix> redDof_redTrueDof;
+
+
+   ParMatrix BuildRedEntToTrueEnt(const SerialCSRMatrix& elem_trueEntity) const;
+   ParMatrix BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_trueEntity) const;
+   ParMatrix BuildNewEntTrueEnt(const ParMatrix& redEntity_trueEntity) const;
+   ParMatrix BuildRedTrueEntTrueEnt(const ParMatrix& redEntity_redTrueEntity,
+                                    const ParMatrix& redEntity_trueEntity) const;
 public:
    Redistributor(const AgglomeratedTopology& topo,
                  const std::vector<int>& elem_redist_procs);
