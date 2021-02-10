@@ -38,17 +38,9 @@ Redistributor::Redistributor(
    auto& B0 = const_cast<TopologyTable&>(topo.GetB(0));
    auto elem_tEnt = Assemble(topo.EntityTrueEntity(0), B0, topo.EntityTrueEntity(1));
 
-   matred::ParMatrix elem_trueEnt(*elem_tEnt, false);
-   auto redElem_trueEnt = matred::Mult(redTrueEntity_trueEntity[0], elem_trueEnt);
-   auto redEnt_trueEnt = matred::BuildRedistributedEntityToTrueEntity(redElem_trueEnt);
-
-   auto tE_redE = matred::Transpose(redEnt_trueEnt);
-   auto redE_tE_redE = matred::Mult(redEnt_trueEnt, tE_redE);
-   redEntity_redTrueEntity[1] = matred::BuildEntityToTrueEntity(redE_tE_redE);
-   auto redTE_redE = matred::Transpose(redEntity_redTrueEntity[1]);
-
-   redTrueEntity_trueEntity[1] = matred::Mult(redTE_redE, redEnt_trueEnt);
-   redTrueEntity_trueEntity[1] = 1.0;
+   auto redEnt_trueEnt = BuildRedEntToTrueEnt(*elem_tEnt);
+   redEntity_redTrueEntity[1] = BuildNewEntTrueEnt(redEnt_trueEnt);
+   redTrueEntity_trueEntity[1] = BuildRedTrueEntTrueEnt(redEnt_trueEnt);
 
    for (int codim = 0; codim < topo.Codimensions()+1; ++ codim)
    {
@@ -74,6 +66,15 @@ Redistributor::BuildNewEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity)
     auto tE_redE = matred::Transpose(redEntity_trueEntity);
     auto redE_tE_redE = matred::Mult(redEntity_trueEntity, tE_redE);
     return matred::BuildEntityToTrueEntity(redE_tE_redE);
+}
+
+matred::ParMatrix
+Redistributor::BuildRedTrueEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity)
+{
+    auto redTE_redE = matred::Transpose(redEntity_redTrueEntity[1]);
+    auto out = matred::Mult(redTE_redE, redEntity_trueEntity);
+    out = 1.0;
+    return out;
 }
 
 std::shared_ptr<AgglomeratedTopology>

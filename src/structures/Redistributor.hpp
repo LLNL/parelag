@@ -44,6 +44,7 @@ class Redistributor
    matred::ParMatrix BuildRedEntToTrueEnt(const SerialCSRMatrix& elem_trueEntity);
    matred::ParMatrix BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_trueEntity);
    matred::ParMatrix BuildNewEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity);
+   matred::ParMatrix BuildRedTrueEntTrueEnt(const matred::ParMatrix& redEntity_trueEntity);
 public:
    Redistributor(const AgglomeratedTopology& topo,
                  const std::vector<int>& elem_redist_procs);
