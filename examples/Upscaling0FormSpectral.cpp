@@ -30,7 +30,7 @@ const int NSTAGES = 5;
 const char * stage_names[] = {"TOPOLOGY", "SPACES", "ASSEMBLY","PRECONDITIONER",
                               "SOLVER"};
 
-double checkboard_coeff(Vector& x)
+double checkboard_coeff(const Vector& x)
 {
     elag_assert(2 <= x.Size() && x.Size() <= 3);
     double d = 10.;

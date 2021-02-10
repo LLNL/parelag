@@ -34,7 +34,7 @@ int is;
 int *pxind, *pyind;
 const double *plam;
 
-double KLmode(Vector &xc)
+double KLmode(const Vector &xc)
 {
     return ((sin((*pOMx)(pxind[is])*xc(0)) + plam[0]*(*pOMx)(pxind[is])*cos((*pOMx)(pxind[is])*xc(0)))
             * (sin((*pOMy)(pyind[is])*xc(1)) + plam[1]*(*pOMy)(pyind[is])*cos((*pOMy)(pyind[is])*xc(1))));

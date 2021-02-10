@@ -53,7 +53,7 @@ void electricField(const Vector & x, Vector & y)
         y *= 1./3.;
 }
 
-double electricField_r(Vector & x)
+double electricField_r(const Vector & x)
 {
 
     double r = x.Norml2();
@@ -64,7 +64,7 @@ double electricField_r(Vector & x)
         return r/3.;
 }
 
-double electricPotential(Vector & x)
+double electricPotential(const Vector & x)
 {
     double r = x.Norml2();
     if (r > 1.)

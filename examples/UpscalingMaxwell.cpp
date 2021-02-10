@@ -139,7 +139,7 @@ double fh(double v)
     return fhv;
 }
 
-double sig_spc(Vector &x)
+double sig_spc(const Vector &x)
 {  //Expression for the electrical conductivity
 
    // Expression for continuous conductivity
