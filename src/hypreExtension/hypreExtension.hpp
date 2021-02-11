@@ -14,9 +14,20 @@
 #ifndef HYPREEXTENSION_H_
 #define HYPREEXTENSION_H_
 
+#include <config/config.hpp>
+
 #include "seq_mv.h"
 #include "_hypre_parcsr_mv.h"
 #include "_hypre_parcsr_ls.h"
+
+#if MFEM_HYPRE_VERSION >= 21400
+#define parelag_hypre_CTAlloc(type, size) \
+   hypre_CTAlloc(type, size, HYPRE_MEMORY_HOST)
+#define parelag_hypre_TFree(ptr) hypre_TFree(ptr, HYPRE_MEMORY_HOST)
+#else // MFEM_HYPRE_VERSION < 21400
+#define parelag_hypre_CTAlloc(type, size) hypre_CTAlloc(type, size)
+#define parelag_hypre_TFree(ptr) hypre_TFree(ptr)
+#endif
 
 #ifdef __cplusplus
 extern "C"
