@@ -122,7 +122,7 @@ unique_ptr<TopologyTable> TopologyTable::GetSubTable(
         ExtractRowAndColumns(*this,rows,cols,marker));
 }
 
-unique_ptr<TopologyTable> TopologyTable::Transpose()
+unique_ptr<TopologyTable> TopologyTable::Transpose() const
 {
     return make_unique<TopologyTable>(ToUnique(mfem::Transpose(*this)));
 }

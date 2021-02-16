@@ -83,7 +83,7 @@ public:
         mfem::Array<int> & marker);
 
     /// Compute the transpose of this table
-    std::unique_ptr<TopologyTable> Transpose();
+    std::unique_ptr<TopologyTable> Transpose() const;
 };
 
 /// Multiply two topology tables by looking at orientation only.
