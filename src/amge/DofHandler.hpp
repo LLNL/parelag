@@ -44,7 +44,7 @@ public:
     /// Constructor that assumes unique owership of user-provided
     /// entity_dof tables. (Be sure to std::move the vector in)
     DofHandler(
-        MPI_Comm comm,size_t maxCodimensionBaseForDof,size_t nDim,
+        MPI_Comm comm, size_t maxCodimensionBaseForDof, size_t nDim,
         std::vector<std::unique_ptr<const mfem::SparseMatrix>>&& entity_dof_);
 
     virtual ~DofHandler();
@@ -278,7 +278,6 @@ public:
                   const std::shared_ptr<AgglomeratedTopology>& topology);
 
     virtual ~DofHandlerALG() override;
-
 
     virtual int GetNumberInteriorDofs(entity type) override;
 

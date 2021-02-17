@@ -51,14 +51,9 @@ Redistributor::Redistributor(
    auto redElem_elem = matred::BuildRedistributedEntityToTrueEntity(redProc_elem);
    redTE_TE[0] = Move(redElem_elem);
 
-//   auto& B0 = const_cast<TopologyTable&>(topo.GetB(0));
-//   auto elem_tEnt = Assemble(topo.EntityTrueEntity(0), B0, topo.EntityTrueEntity(1));
    auto elem_trueEnt = const_cast<AgglomeratedTopology&>(topo).TrueB(0);
 
    redE_TE[1] = BuildRedEntToTrueEnt(elem_trueEnt);
-//   auto redE_redTE = BuildRedEntToRedTrueEnt(redEntity_trueEntity[1]);
-//   redTrueEntity_trueEntity[1] = BuildRedTrueEntToTrueEnt(
-//               redE_redTE, redEntity_trueEntity[1]);
 
 //   for (int codim = 0; codim < topo.Codimensions()+1; ++ codim)
 //   {
@@ -129,25 +124,14 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
    const int num_redElem = TrueEntityRedistribution(0).NumRows();
    out->EntityTrueEntity(0).SetUp(num_redElem);
 
-//   auto& redist0 = *redTE_TE[0];
-//   auto& redist1 = TrueEntityRedistribution(1);
-//   redTE_TE[0] = new ParallelCSRMatrix(redTrueEntity_trueEntity[0], false);
-
-//   ParallelCSRMatrix redE_redTE(redEntity_redTrueEntity[1], false);
-//   auto& redE_redTE = redEntity_redTrueEntity[1];
    auto redE_redTE = BuildRedEntToRedTrueEnt(*redE_TE[1]);
    redTE_TE[1] = BuildRedTrueEntToTrueEnt(*redE_redTE, *redE_TE[1]);
-
-//   SetupSharingMap(*out->entityTrueEntity[1], std::move(redE_redTE));
    out->entityTrueEntity[1]->SetUp(std::move(redE_redTE));
-//   auto redE_TE_tmp = matred::Mult(redE_redTE, redTrueEntity_trueEntity[1]);
-//   ParallelCSRMatrix redE_TE(redE_TE_tmp, false);
-   unique_ptr<ParallelCSRMatrix> TE_redE(redE_TE[1]->Transpose());
 
    // Redistribute other remaining data
    auto& trueB = const_cast<AgglomeratedTopology&>(topo).TrueB(0);
+   unique_ptr<ParallelCSRMatrix> TE_redE(redE_TE[1]->Transpose());
    auto redB = parelag::RAP(*redTE_TE[0], trueB, *TE_redE);
-//   unique_ptr<ParallelCSRMatrix> redB(ParMult(tmpB.get(), TE_redE.get()));
 
    SerialCSRMatrix redB_diag;
    redB->GetDiag(redB_diag);
@@ -233,7 +217,6 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(
 
     std::unique_ptr<ParallelCSRMatrix> tD_redD(redDof_trueDof->Transpose());
 
-//    SetupSharingMap(out->dofTrueDof, std::move(redDof_redTrueDof));
     out->dofTrueDof.SetUp(std::move(redDof_redTrueDof));
 
     for (int i = 1; i < max_codim_base; ++i)
