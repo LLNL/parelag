@@ -48,12 +48,16 @@ int main (int argc, char *argv[])
     // Get options from command line
     const char *xml_file_c = "BuildTestParameters";
     double W_weight = 0.0;
+    bool reportTiming = true;
     mfem::OptionsParser args(argc, argv);
     args.AddOption(&xml_file_c, "-f", "--xml-file",
                    "XML parameter list.");
     // The constant weight in the system [M B^T; B -(W_weight*W)]
     args.AddOption(&W_weight, "-w", "--L2mass-weight",
                    "The constant weight in the system [M B^T; B -(W_weight*W)]");
+    args.AddOption(&reportTiming, "--report_timing", "--report_timing",
+                   "--no_report_timing", "--no_report_timing",
+                   "Output timings to stdout.");
     args.Parse();
     PARELAG_ASSERT(args.Good());
     std::string xml_file(xml_file_c);
@@ -221,60 +225,118 @@ int main (int argc, char *argv[])
                   << " levels...\n";
 
     std::vector<shared_ptr<AgglomeratedTopology>> topology(nLevels+num_redist_coarsen_levels);
+    std::vector<shared_ptr<DeRhamSequence>> sequence(topology.size());
+
+    Timer outer = TimeManager::AddTimer("Mesh Agglomeration -- Total");
     {
-        Timer outer = TimeManager::AddTimer("Mesh Agglomeration -- Total");
-        {
-            Timer inner = TimeManager::AddTimer("Mesh Agglomeration -- Level 0");
-            topology[0] = make_shared<AgglomeratedTopology>(pmesh, 1);
-            ShowTopologyAgglomeratedElements(topology[0].get(), pmesh.get(), nullptr);
-        }
+        Timer inner = TimeManager::AddTimer("Mesh Agglomeration -- Level 0");
+        topology[0] = make_shared<AgglomeratedTopology>(pmesh, 1);
+        ShowTopologyAgglomeratedElements(topology[0].get(), pmesh.get(), nullptr);
+    }
 
-        MFEMRefinedMeshPartitioner mfem_partitioner(nDimensions);
-        for (int ilevel = 0; ilevel < nLevels-1; ++ilevel)
-        {
-            std::ostringstream timer_name;
-            timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
-            Timer inner = TimeManager::AddTimer(timer_name.str());
+    MFEMRefinedMeshPartitioner mfem_partitioner(nDimensions);
+    for (int ilevel = 0; ilevel < nLevels-1; ++ilevel)
+    {
+        std::ostringstream timer_name;
+        timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
+        Timer inner = TimeManager::AddTimer(timer_name.str());
 
-            Array<int> partitioning(topology[ilevel]->GetB(0).NumRows());
-            mfem_partitioner.Partition(topology[ilevel]->GetB(0).NumRows(),
-                                       level_nElements[ilevel+1], partitioning);
+        Array<int> partitioning(topology[ilevel]->GetB(0).NumRows());
+        mfem_partitioner.Partition(topology[ilevel]->GetB(0).NumRows(),
+                                   level_nElements[ilevel+1], partitioning);
 
-            topology[ilevel+1] = topology[ilevel]->CoarsenLocalPartitioning(
-                        partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
-            ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
-            if (print_progress_report)
-                std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
-                          << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
-        }
-
-        int num_redist_procs = 4;
-        MetisGraphPartitioner metis_partitioner;
-        metis_partitioner.setFlags(MetisGraphPartitioner::RECURSIVE);
-        for (int ilevel = nLevels-1; ilevel < topology.size()-1; ++ilevel)
-        {
-            std::ostringstream timer_name;
-            timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
-            Timer inner = TimeManager::AddTimer(timer_name.str());
-
-            std::vector<int> redistributed_procs(topology[ilevel]->GetB(0).NumRows());
-            std::fill_n(redistributed_procs.begin(), redistributed_procs.size(), myid % num_redist_procs);
-
-            num_redist_procs /= 2;
-
-            topology[ilevel+1] = topology[ilevel]->RedistributeAndCoarsen(
-                        redistributed_procs, metis_partitioner, 2, 0, 0);
-
-            ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
-
-            if (print_progress_report)
-                std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
-                          << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
-        }
+        topology[ilevel+1] = topology[ilevel]->CoarsenLocalPartitioning(
+                    partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
+        ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
+        if (print_progress_report)
+            std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
+                      << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
     }
 
     if (print_progress_report)
-        std::cout << "-- Successfully agglomerated topology.\n";
+        std::cout << "-- Successfully agglomerated topology before redistribution.\n";
+
+    const int feorder = 0;
+    const int upscalingOrder = 0;
+    const int jFormStart = nDimensions-1;
+
+    sequence[0] = make_shared<DeRhamSequence3D_FE>(
+                topology[0], pmesh.get(), feorder);
+
+    DeRhamSequenceFE * DRSequence_FE = sequence[0]->FemSequence();
+    PARELAG_ASSERT(DRSequence_FE);
+
+    ConstantCoefficient coeffL2(1.);
+    ConstantCoefficient coeffHdiv(1.);
+
+    sequence[0]->SetjformStart(jFormStart);
+
+    DRSequence_FE->ReplaceMassIntegrator(
+                elem_t, 3, make_unique<MassIntegrator>(coeffL2), false);
+    DRSequence_FE->ReplaceMassIntegrator(
+                elem_t, 2, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
+
+    // set up coefficients / targets
+    sequence[0]->FemSequence()->SetUpscalingTargets(nDimensions, upscalingOrder, 2);
+
+    StopWatch chrono;
+    chrono.Clear();
+    chrono.Start();
+    constexpr double tolSVD = 1e-9;
+    for (int i(0); i < nLevels-1; ++i)
+    {
+        sequence[i]->SetSVDTol( tolSVD );
+        StopWatch chronoInterior;
+        chronoInterior.Clear();
+        chronoInterior.Start();
+        sequence[i+1] = sequence[i]->Coarsen();
+        chronoInterior.Stop();
+        if (myid == 0 && reportTiming)
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Coarsening done in "
+                      << chronoInterior.RealTime() << " seconds.\n";
+    }
+    chrono.Stop();
+
+    if (myid == 0 && reportTiming)
+        std::cout << "Timing ELEM_AGG: Coarsening before redistribution done in " << chrono.RealTime()
+                  << " seconds.\n";
+
+    chrono.Clear();
+    chrono.Start();
+
+    int num_redist_procs = 4;
+    MetisGraphPartitioner metis_partitioner;
+    metis_partitioner.setFlags(MetisGraphPartitioner::RECURSIVE);
+    for (int ilevel = nLevels-1; ilevel < topology.size()-1; ++ilevel)
+    {
+        std::ostringstream timer_name;
+        timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
+        Timer inner = TimeManager::AddTimer(timer_name.str());
+
+        std::vector<int> redistributed_procs(topology[ilevel]->GetB(0).NumRows());
+        std::fill_n(redistributed_procs.begin(), redistributed_procs.size(), myid % num_redist_procs);
+
+        num_redist_procs /= 2;
+
+        Redistributor redistributor(*topology[ilevel], redistributed_procs);
+        auto redist_topo = redistributor.Redistribute(*topology[ilevel]);
+        topology[ilevel+1] = topology[ilevel]->Coarsen(
+                 redistributor, redist_topo, metis_partitioner, 2, 0, 0);
+
+        ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
+
+        if (print_progress_report)
+            std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
+                      << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
+
+        auto redist_seq = redistributor.Redistribute(*sequence[ilevel], redist_topo);
+        sequence[ilevel+1] = sequence[ilevel]->Coarsen(redist_seq);
+    }
+
+    if (myid == 0 && reportTiming)
+        std::cout << "Timing ELEM_AGG: Coarsening before redistribution done in " << chrono.RealTime()
+                  << " seconds.\n";
+
 
     if (print_time)
         TimeManager::Print(std::cout);
