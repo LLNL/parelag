@@ -15,6 +15,8 @@
 
 #include "Redistributor.hpp"
 #include "utilities/MemoryUtils.hpp"
+#include "linalg/utilities/ParELAG_MatrixUtils.hpp"
+
 
 namespace parelag
 {
@@ -24,65 +26,98 @@ using std::make_shared;
 using std::unique_ptr;
 using matred::ParMatrix;
 
+unique_ptr<ParallelCSRMatrix> Move(ParMatrix& A)
+{
+   auto out = make_unique<ParallelCSRMatrix>(A);
+   A.SetOwnerShip(false);
+   out->CopyRowStarts();
+   out->CopyColStarts();
+   return out;
+}
+
 Redistributor::Redistributor(
       const AgglomeratedTopology& topo, const std::vector<int>& elem_redist_procs)
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
-     redTE_TE_helper(topo.Codimensions()+1),
-     redEntity_redTrueEntity(topo.Codimensions()+1),
-     redE_redTE_helper(topo.Codimensions()+1)
+     redTE_TE(topo.Codimensions()+1),
+     redEntity_trueEntity(topo.Codimensions()+1),
+     redE_TE(topo.Codimensions()+1),
+//     redEntity_redTrueEntity(topo.Codimensions()+1),
+//     redE_redTE_helper(topo.Codimensions()+1)
+     redTrueDof_trueDof(topo.Codimensions()+1)
 {
    // TODO: entities in codimension > 1 (need to adjust B)
    auto elem_redProc = matred::EntityToProcessor(topo.GetComm(), elem_redist_procs);
    auto redProc_elem = matred::Transpose(elem_redProc);
-   redTrueEntity_trueEntity[0] = matred::BuildRedistributedEntityToTrueEntity(redProc_elem);
+   auto redElem_elem = matred::BuildRedistributedEntityToTrueEntity(redProc_elem);
+   redTE_TE[0] = Move(redElem_elem);
 
-   auto& B0 = const_cast<TopologyTable&>(topo.GetB(0));
-   auto elem_tEnt = Assemble(topo.EntityTrueEntity(0), B0, topo.EntityTrueEntity(1));
+//   auto& B0 = const_cast<TopologyTable&>(topo.GetB(0));
+//   auto elem_tEnt = Assemble(topo.EntityTrueEntity(0), B0, topo.EntityTrueEntity(1));
+   auto elem_trueEnt = const_cast<AgglomeratedTopology&>(topo).TrueB(0);
 
-   auto redEnt_trueEnt = BuildRedEntToTrueEnt(*elem_tEnt);
-   redEntity_redTrueEntity[1] = BuildNewEntTrueEnt(redEnt_trueEnt);
-   redTrueEntity_trueEntity[1] = BuildRedTrueEntTrueEnt(
-               redEntity_redTrueEntity[1], redEnt_trueEnt);
+   redE_TE[1] = BuildRedEntToTrueEnt(elem_trueEnt);
+//   auto redE_redTE = BuildRedEntToRedTrueEnt(redEntity_trueEntity[1]);
+//   redTrueEntity_trueEntity[1] = BuildRedTrueEntToTrueEnt(
+//               redE_redTE, redEntity_trueEntity[1]);
 
-   for (int codim = 0; codim < topo.Codimensions()+1; ++ codim)
-   {
-      redTE_TE_helper[codim].reset(
-               new ParallelCSRMatrix(redTrueEntity_trueEntity[codim], false));
-      if (codim == 0) { continue; }
-      redE_redTE_helper[codim].reset(
-               new ParallelCSRMatrix(redEntity_redTrueEntity[codim], false));
-   }
+//   for (int codim = 0; codim < topo.Codimensions()+1; ++ codim)
+//   {
+//      redTE_TE[codim] = new ParallelCSRMatrix(redTrueEntity_trueEntity[codim], false);
+//      redE_TE[codim] = new ParallelCSRMatrix(redEntity_trueEntity[codim], false);
+//      if (codim == 0) { continue; }
+//      redE_redTE_helper[codim].reset(
+//               new ParallelCSRMatrix(redEntity_redTrueEntity[codim], false));
+//   }
 }
 
-ParMatrix
+unique_ptr<ParallelCSRMatrix>
 Redistributor::BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_trueEntity) const
 {
-    matred::ParMatrix elem_trueEnt(elem_trueEntity, false);
-    auto redElem_trueEnt = matred::Mult(redTrueEntity_trueEntity[0], elem_trueEnt);
-    return matred::BuildRedistributedEntityToTrueEntity(redElem_trueEnt);
+    matred::ParMatrix elem_trueEnt(elem_trueEntity, false); // TODO
+    matred::ParMatrix redElem_elem(*redTE_TE[0], false);
+    auto redElem_trueEnt = matred::Mult(redElem_elem, elem_trueEnt);
+    auto out = matred::BuildRedistributedEntityToTrueEntity(redElem_trueEnt);
+    return Move(out);
 }
 
-ParMatrix
-Redistributor::BuildNewEntTrueEnt(const ParMatrix& redEntity_trueEntity) const
+unique_ptr<ParallelCSRMatrix>
+Redistributor::BuildRedEntToRedTrueEnt(const ParallelCSRMatrix& redE_tE) const
 {
-    auto tE_redE = matred::Transpose(redEntity_trueEntity);
-    auto redE_tE_redE = matred::Mult(redEntity_trueEntity, tE_redE);
-    return matred::BuildEntityToTrueEntity(redE_tE_redE);
+    matred::ParMatrix redE_tE_ref(redE_tE, false);
+    auto tE_redE = matred::Transpose(redE_tE_ref);
+    auto redE_tE_redE = matred::Mult(redE_tE_ref, tE_redE);
+    auto out = matred::BuildEntityToTrueEntity(redE_tE_redE);
+    return Move(out);
 }
 
-ParMatrix
-Redistributor::BuildRedTrueEntTrueEnt(
-        const ParMatrix& redEntity_redTrueEntity,
-        const ParMatrix& redEntity_trueEntity) const
+unique_ptr<ParallelCSRMatrix>
+Redistributor::BuildRedTrueEntToTrueEnt(
+        const ParallelCSRMatrix& redE_redTE,
+        const ParallelCSRMatrix& redE_tE) const
 {
-    auto redTE_redE = matred::Transpose(redEntity_redTrueEntity);
-    auto out = matred::Mult(redTE_redE, redEntity_trueEntity);
+    ParMatrix redE_redTE_ref(redE_redTE, false);
+    ParMatrix redE_tE_ref(redE_tE, false);
+    auto redTE_redE = matred::Transpose(redE_redTE_ref);
+    auto out = matred::Mult(redTE_redE, redE_tE_ref);
     out = 1.0;
-    return out;
+    return Move(out);
+}
+
+void Redistributor::SetupSharingMap(
+      SharingMap& map, unique_ptr<ParallelCSRMatrix> redE_redTE) const
+{
+   Array<int> redE_starts(3), redTE_starts(3);
+   redE_starts[0] = redE_redTE->RowPart()[0];
+   redE_starts[1] = redE_redTE->RowPart()[1];
+   redE_starts[2] = redE_redTE->M();
+   redTE_starts[0] = redE_redTE->ColPart()[0];
+   redTE_starts[1] = redE_redTE->ColPart()[1];
+   redTE_starts[2] = redE_redTE->N();
+   map.SetUp(redE_starts, redTE_starts, std::move(redE_redTE));
 }
 
 std::shared_ptr<AgglomeratedTopology>
-Redistributor::Redistribute(const AgglomeratedTopology& topo) const
+Redistributor::Redistribute(const AgglomeratedTopology& topo)
 {
    // Redistribute the current topology to another set of processors
    // TODO: currently only elements and faces are redistributed, need to
@@ -94,30 +129,25 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo) const
    const int num_redElem = TrueEntityRedistribution(0).NumRows();
    out->EntityTrueEntity(0).SetUp(num_redElem);
 
-   auto& redist0 = *redTE_TE_helper[0];
-   auto& redist1 = TrueEntityRedistribution(1);
+//   auto& redist0 = *redTE_TE[0];
+//   auto& redist1 = TrueEntityRedistribution(1);
+//   redTE_TE[0] = new ParallelCSRMatrix(redTrueEntity_trueEntity[0], false);
 
-   auto redE_redTE = make_unique<ParallelCSRMatrix>(*redE_redTE_helper[1], false);
-   unique_ptr<ParallelCSRMatrix> redE_TE(ParMult(redE_redTE.get(), &redist1));
-   unique_ptr<ParallelCSRMatrix> TE_redE(redE_TE->Transpose());
+//   ParallelCSRMatrix redE_redTE(redEntity_redTrueEntity[1], false);
+//   auto& redE_redTE = redEntity_redTrueEntity[1];
+   auto redE_redTE = BuildRedEntToRedTrueEnt(*redE_TE[1]);
+   redTE_TE[1] = BuildRedTrueEntToTrueEnt(*redE_redTE, *redE_TE[1]);
 
-   Array<int> redE_starts(3);
-   Array<int> redTE_starts(3);
-   redE_starts[0] = redE_redTE->RowPart()[0];
-   redE_starts[1] = redE_redTE->RowPart()[1];
-   redE_starts[2] = redE_redTE->M();
-   redTE_starts[0] = redE_redTE->ColPart()[0];
-   redTE_starts[1] = redE_redTE->ColPart()[1];
-   redTE_starts[2] = redE_redTE->N();
-
-   out->entityTrueEntity[1]->SetUp(
-            redE_starts, redTE_starts, std::move(redE_redTE));
+//   SetupSharingMap(*out->entityTrueEntity[1], std::move(redE_redTE));
+   out->entityTrueEntity[1]->SetUp(std::move(redE_redTE));
+//   auto redE_TE_tmp = matred::Mult(redE_redTE, redTrueEntity_trueEntity[1]);
+//   ParallelCSRMatrix redE_TE(redE_TE_tmp, false);
+   unique_ptr<ParallelCSRMatrix> TE_redE(redE_TE[1]->Transpose());
 
    // Redistribute other remaining data
-   auto trueB = Assemble(topo.EntityTrueEntity(0), *topo.B_[0], topo.EntityTrueEntity(1));
-
-   unique_ptr<ParallelCSRMatrix> tmpB(ParMult(&redist0, trueB.get()));
-   unique_ptr<ParallelCSRMatrix> redB(ParMult(tmpB.get(), TE_redE.get()));
+   auto& trueB = const_cast<AgglomeratedTopology&>(topo).TrueB(0);
+   auto redB = parelag::RAP(*redTE_TE[0], trueB, *TE_redE);
+//   unique_ptr<ParallelCSRMatrix> redB(ParMult(tmpB.get(), TE_redE.get()));
 
    SerialCSRMatrix redB_diag;
    redB->GetDiag(redB_diag);
@@ -151,8 +181,8 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo) const
          attr_starts, myid ? &empty : topo.facet_bdrAttribute.get(),
          myid ? topo.facet_bdrAttribute.get() : &empty, attr_map);
 
-   unique_ptr<ParallelCSRMatrix> tE_bdrattr(ParMult(tE_E.get(), &e_bdrattr));
-   unique_ptr<ParallelCSRMatrix> redE_bdrattr(ParMult(redE_TE.get(), tE_bdrattr.get()));
+   auto tE_bdrattr = Mult(*tE_E, e_bdrattr);
+   auto redE_bdrattr = Mult(*redE_TE[1], *tE_bdrattr);
 
    HYPRE_Int* trash_map;
    mfem::SparseMatrix redE_bdrattr_local_ref;
@@ -168,21 +198,21 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo) const
    out->facet_bdrAttribute = make_unique<TopologyTable>(redE_bdrattr_local);
 
    out->element_attribute.SetSize(num_redElem);
-   redist0.BooleanMult(1.0, topo.element_attribute, 0.0, out->element_attribute);
+   redTE_TE[0]->BooleanMult(1.0, topo.element_attribute, 0.0, out->element_attribute); // TODO
 
    out->Weights_[0]->SetSize(num_redElem);
-   redist0.Mult(topo.Weight(0), out->Weight(0));
+   redTE_TE[0]->Mult(topo.Weight(0), out->Weight(0));
 
    auto trueFacetWeight = topo.TrueWeight(1);
    out->Weights_[1]->SetSize(out->B_[0]->NumCols());
-   redE_TE->Mult(*trueFacetWeight, *(out->Weights_[1]));
+   redE_TE[1]->Mult(*trueFacetWeight, *(out->Weights_[1]));
 
    return out;
 }
 
 std::unique_ptr<DofHandler> Redistributor::Redistribute(
         const DofHandler& dof,
-        const std::shared_ptr<AgglomeratedTopology>& redist_topo) const
+        const std::shared_ptr<AgglomeratedTopology>& redist_topo)
 {
     auto& nonconst_dof = const_cast<DofHandler&>(dof);
     auto dof_alg = dynamic_cast<DofHandlerALG*>(&nonconst_dof);
@@ -194,38 +224,58 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(
     auto& elem_dof = const_cast<SerialCSRMatrix&>(dof.GetEntityDofTable(AgglomeratedTopology::ELEMENT));
     auto& dof_trueDof = dof.GetDofTrueDof();
     auto elem_trueDof = Assemble(dof.GetEntityTrueEntity(0), elem_dof, dof_trueDof);
+    auto redElem_trueDof = Mult(*redTE_TE[0], *elem_trueDof);
 
-    auto redDof_trueDof = BuildRedEntToTrueEnt(*elem_trueDof);
-    auto redDof_redTrueDof = BuildNewEntTrueEnt(redDof_trueDof);
-    auto redTrueDof_trueDof = BuildRedTrueEntTrueEnt(redDof_redTrueDof, redDof_trueDof);
-    auto trueDof_redTrueDof = matred::Transpose(redTrueDof_trueDof);
-    ParallelCSRMatrix tD_redTD(trueDof_redTrueDof, false);
+    auto redDof_trueDof = BuildRedEntToTrueEnt(*redElem_trueDof);
+    auto redDof_redTrueDof = BuildRedEntToRedTrueEnt(*redDof_trueDof);
+    redTD_TD[max_codim_base] = // TODO: prabably need to take case of rdof ordering
+          BuildRedTrueEntToTrueEnt(*redDof_redTrueDof, *redDof_trueDof);
+
+    std::unique_ptr<ParallelCSRMatrix> tD_redD(redDof_trueDof->Transpose());
+
+//    SetupSharingMap(out->dofTrueDof, std::move(redDof_redTrueDof));
+    out->dofTrueDof.SetUp(std::move(redDof_redTrueDof));
 
     for (int i = 1; i < max_codim_base; ++i)
     {
         auto codim = static_cast<AgglomeratedTopology::Entity>(i);
         auto& ent_dof = const_cast<SerialCSRMatrix&>(dof.GetEntityDofTable(codim));
-        auto trueEnt_trueDof = Assemble(dof.GetEntityTrueEntity(i), ent_dof, dof_trueDof);
+        auto tE_tD = Assemble(dof.GetEntityTrueEntity(i), ent_dof, dof_trueDof);
+        auto redEnt_redDof = parelag::RAP(*redE_TE[i], *tE_tD, *tD_redD);
 
-        unique_ptr<ParallelCSRMatrix> redTrueEnt_redTrueDof(
-                    RAP(&TrueEntityRedistribution(i), trueEnt_trueDof.get(), &tD_redTD));
-
-        SerialCSRMatrix redTrueEnt_redTrueDof_diag;
-        redTrueEnt_redTrueDof->GetDiag(redTrueEnt_redTrueDof_diag); // TODO:distribute true entities and dofs
-        out->entity_dof[i].reset(new SerialCSRMatrix(redTrueEnt_redTrueDof_diag)); // TODO: just steal
+        SerialCSRMatrix redEnt_redDof_diag;
+        redEnt_redDof->GetDiag(redEnt_redDof_diag);
+        out->entity_dof[i].reset(new SerialCSRMatrix(redEnt_redDof_diag));
         out->finalized[i] = true;
 
-        // need to convert to double and then convert the results back
-        Array<int> num_int_dofs_null(dof_alg->entity_NumberOfInteriorDofsNullSpace[i].data(),
-                                     dof_alg->GetNumberEntities(codim));
-        Array<int> red_num_int_dofs_null(out->entity_NumberOfInteriorDofsNullSpace[i].data(),
-                                         out->GetNumberEntities(codim));
-
-        redTE_TE_helper[i]->BooleanMult(1.0, num_int_dofs_null, 0.0, red_num_int_dofs_null);
-
+//        Mult(*redTE_TE_helper[i], dof_alg->entity_NumberOfInteriorDofsNullSpace[i],
+//             out->entity_NumberOfInteriorDofsNullSpace[i]);
+//        Mult(*redTE_TE_helper[i], dof_alg->entity_NumberOfInteriorDofsRangeTSpace[i],
+//             out->entity_NumberOfInteriorDofsRangeTSpace[i]);
+//        Mult(*redTE_TE_helper[i], dof_alg->entity_InteriorDofOffsets[i],
+//             out->entity_InteriorDofOffsets[i]);
     }
 
+    return out;
+}
 
+void Mult(const ParallelCSRMatrix& A, const std::vector<int>& x, std::vector<int>& Ax)
+{
+   PARELAG_ASSERT(A.NumRows() == Ax.size() && A.NumCols() == x.size());
+
+   mfem::Vector x_vec(x.size());
+   for (int i = 0; i < x.size(); ++i)
+   {
+      x_vec[i] = x[i];
+   }
+
+   mfem::Vector Ax_vec(Ax.size());
+   A.Mult(x_vec, Ax_vec);
+
+   for (int i = 0; i < x.size(); ++i)
+   {
+      Ax[i] = Ax_vec[i];
+   }
 }
 
 } // namespace parelag

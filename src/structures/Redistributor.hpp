@@ -20,11 +20,11 @@
 #include <mfem.hpp>
 
 #include "topology/Topology.hpp"
-#include "structures/BooleanMatrix.hpp"
-#include "structures/SharingMap.hpp"
-#include "topology/TopologyTable.hpp"
-#include "utilities/elagError.hpp"
-#include "partitioning/MetisGraphPartitioner.hpp"
+//#include "structures/BooleanMatrix.hpp"
+//#include "structures/SharingMap.hpp"
+//#include "topology/TopologyTable.hpp"
+//#include "utilities/elagError.hpp"
+//#include "partitioning/MetisGraphPartitioner.hpp"
 #include "amge/DofHandler.hpp"
 
 #include "matred.hpp"
@@ -32,48 +32,68 @@
 namespace parelag
 {
 
+unique_ptr<ParallelCSRMatrix> Move(matred::ParMatrix& A);
+
 class Redistributor
 {
     using ParMatrix = matred::ParMatrix;
 
    // Enumeration convention follows the one in AgglomeratedTopology
-   vector<matred::ParMatrix> redTrueEntity_trueEntity;
-   vector<unique_ptr<ParallelCSRMatrix> > redTE_TE_helper;
+   std::vector<matred::ParMatrix> redTrueEntity_trueEntity;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redTE_TE;
 
-   vector<matred::ParMatrix> redEntity_redTrueEntity;
-   vector<unique_ptr<ParallelCSRMatrix> > redE_redTE_helper;
+   std::vector<matred::ParMatrix> redEntity_trueEntity;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redE_TE;
 
-//   vector<matred::ParMatrix> redTrueDof_trueDof;
+
+//   std::vector<matred::ParMatrix> redEntity_redTrueEntity;
+//   std::vector<unique_ptr<ParallelCSRMatrix> > redE_redTE_helper;
+
+   mutable std::vector<matred::ParMatrix> redTrueDof_trueDof;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redTD_TD;
 //   vector<matred::ParMatrix> redDof_redTrueDof;
 
+//   ParMatrix BuildRedEntToTrueEnt(const SerialCSRMatrix& elem_trueEntity) const;
+   unique_ptr<ParallelCSRMatrix> BuildRedEntToTrueEnt(
+         const ParallelCSRMatrix& elem_trueEntity) const;
 
-   ParMatrix BuildRedEntToTrueEnt(const SerialCSRMatrix& elem_trueEntity) const;
-   ParMatrix BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_trueEntity) const;
-   ParMatrix BuildNewEntTrueEnt(const ParMatrix& redEntity_trueEntity) const;
-   ParMatrix BuildRedTrueEntTrueEnt(const ParMatrix& redEntity_redTrueEntity,
-                                    const ParMatrix& redEntity_trueEntity) const;
+   unique_ptr<ParallelCSRMatrix> BuildRedEntToRedTrueEnt(
+         const ParallelCSRMatrix& redE_tE) const;
+
+   unique_ptr<ParallelCSRMatrix> BuildRedTrueEntToTrueEnt(
+         const ParallelCSRMatrix& redE_redTE,
+         const ParallelCSRMatrix& redE_tE) const;
+
+   void SetupSharingMap(
+         SharingMap& map, unique_ptr<ParallelCSRMatrix> redE_redTE) const;
 public:
    Redistributor(const AgglomeratedTopology& topo,
                  const std::vector<int>& elem_redist_procs);
 
    const ParallelCSRMatrix& TrueEntityRedistribution(int codim) const
    {
-      return *(redTE_TE_helper[codim]);
+      return *(redTE_TE[codim]);
    }
 
-   const ParallelCSRMatrix& Redistributed_EntityTrueEntity(int codim) const
+   const ParallelCSRMatrix& TrueDofRedistribution(int jform) const
    {
-      return *(redE_redTE_helper[codim]);
+      return *(redTD_TD[jform]);
    }
+
+//   const ParallelCSRMatrix& Redistributed_EntityTrueEntity(int codim) const
+//   {
+//      return *(redE_redTE_helper[codim]);
+//   }
 
    std::shared_ptr<AgglomeratedTopology> Redistribute(
-         const AgglomeratedTopology& topo) const;
-
+         const AgglomeratedTopology& topo);
 
    std::unique_ptr<DofHandler> Redistribute(
            const DofHandler& dof,
-           const std::shared_ptr<AgglomeratedTopology>& redist_topo) const;
+           const std::shared_ptr<AgglomeratedTopology>& redist_topo);
 };
+
+void Mult(const ParallelCSRMatrix& A, const std::vector<int>& x, std::vector<int>& Ax);
 
 } // namespace parelag
 
