@@ -75,6 +75,9 @@ public:
                mfem::Array<int> & trueEntityStart,
                std::unique_ptr<ParallelCSRMatrix> entity_trueEntity);
 
+    /// entity_trueEntity is assumed to own starts array
+    void SetUp(std::unique_ptr<ParallelCSRMatrix> entity_trueEntity);
+
     /// Set up a SharingMap when entity and trueEntity coincide. In
     /// this case we just pass the local (True) size.
     void SetUp(int localSize);
