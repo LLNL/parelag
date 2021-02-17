@@ -153,7 +153,7 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
    out->facet_bdrAttribute = make_unique<TopologyTable>(redE_bdrattr_local);
 
    out->element_attribute.SetSize(num_redElem);
-   redTrueEntity_trueEntity[0]->BooleanMult(1.0, topo.element_attribute, 0.0, out->element_attribute); // TODO
+   Mult(*redTrueEntity_trueEntity[0], topo.element_attribute, out->element_attribute);
 
    out->Weights_[0]->SetSize(num_redElem);
    redTrueEntity_trueEntity[0]->Mult(topo.Weight(0), out->Weight(0));
@@ -213,20 +213,20 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(
     return out;
 }
 
-void Mult(const ParallelCSRMatrix& A, const std::vector<int>& x, std::vector<int>& Ax)
+void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax)
 {
-   PARELAG_ASSERT(A.NumRows() == Ax.size() && A.NumCols() == x.size());
+   PARELAG_ASSERT(A.NumRows() == Ax.Size() && A.NumCols() == x.Size());
 
-   mfem::Vector x_vec(x.size());
-   for (int i = 0; i < x.size(); ++i)
+   mfem::Vector x_vec(x.Size());
+   for (int i = 0; i < x.Size(); ++i)
    {
       x_vec[i] = x[i];
    }
 
-   mfem::Vector Ax_vec(Ax.size());
+   mfem::Vector Ax_vec(Ax.Size());
    A.Mult(x_vec, Ax_vec);
 
-   for (int i = 0; i < x.size(); ++i)
+   for (int i = 0; i < x.Size(); ++i)
    {
       Ax[i] = Ax_vec[i];
    }

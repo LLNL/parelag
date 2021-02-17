@@ -79,7 +79,7 @@ public:
            const std::shared_ptr<AgglomeratedTopology>& redist_topo);
 };
 
-void Mult(const ParallelCSRMatrix& A, const std::vector<int>& x, std::vector<int>& Ax);
+void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax);
 
 } // namespace parelag
 
