@@ -37,13 +37,9 @@ unique_ptr<ParallelCSRMatrix> Move(ParMatrix& A)
 
 Redistributor::Redistributor(
       const AgglomeratedTopology& topo, const std::vector<int>& elem_redist_procs)
-   : redTrueEntity_trueEntity(topo.Codimensions()+1),
-     redTE_TE(topo.Codimensions()+1),
-     redEntity_trueEntity(topo.Codimensions()+1),
+   : redTE_TE(topo.Codimensions()+1),
      redE_TE(topo.Codimensions()+1),
-//     redEntity_redTrueEntity(topo.Codimensions()+1),
-//     redE_redTE_helper(topo.Codimensions()+1)
-     redTrueDof_trueDof(topo.Codimensions()+1)
+     redTD_TD(topo.Codimensions()+1)
 {
    // TODO: entities in codimension > 1 (need to adjust B)
    auto elem_redProc = matred::EntityToProcessor(topo.GetComm(), elem_redist_procs);

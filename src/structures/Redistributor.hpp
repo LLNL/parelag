@@ -38,22 +38,11 @@ class Redistributor
 {
     using ParMatrix = matred::ParMatrix;
 
-   // Enumeration convention follows the one in AgglomeratedTopology
-   std::vector<matred::ParMatrix> redTrueEntity_trueEntity;
+   // Enumeration convention follows the ones in AgglomeratedTopology/DofHandler
    std::vector<unique_ptr<ParallelCSRMatrix> > redTE_TE;
-
-   std::vector<matred::ParMatrix> redEntity_trueEntity;
    std::vector<unique_ptr<ParallelCSRMatrix> > redE_TE;
-
-
-//   std::vector<matred::ParMatrix> redEntity_redTrueEntity;
-//   std::vector<unique_ptr<ParallelCSRMatrix> > redE_redTE_helper;
-
-   mutable std::vector<matred::ParMatrix> redTrueDof_trueDof;
    std::vector<unique_ptr<ParallelCSRMatrix> > redTD_TD;
-//   vector<matred::ParMatrix> redDof_redTrueDof;
 
-//   ParMatrix BuildRedEntToTrueEnt(const SerialCSRMatrix& elem_trueEntity) const;
    unique_ptr<ParallelCSRMatrix> BuildRedEntToTrueEnt(
          const ParallelCSRMatrix& elem_trueEntity) const;
 
