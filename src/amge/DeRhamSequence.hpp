@@ -236,12 +236,8 @@ public:
     /// User is responsible for deleting the created object.
     std::shared_ptr<DeRhamSequence> Coarsen();
 
-    std::shared_ptr<DeRhamSequence> RedistributeAndCoarsen(
-          const std::vector<int>& elem_redist_procs,
-          const MetisGraphPartitioner& partitioner,
-          int num_partitions,
-          bool check_topology,
-          bool preserve_material_interfaces);
+    std::shared_ptr<DeRhamSequence> Coarsen(
+          std::shared_ptr<DeRhamSequence> redist_sequence);
 
     /// Fills in dofAgg.
     void AgglomerateDofs();
@@ -476,6 +472,7 @@ public:
 
     ///@}
 
+    friend class Redistributor;
 protected:
     /// \name Routines called by CheckInvariants()
     ///@{
@@ -671,6 +668,8 @@ protected:
 
     /// P is the interpolation matrix from the coarser level to this
     std::vector<std::unique_ptr<mfem::SparseMatrix>> P_;
+
+    std::vector<std::unique_ptr<mfem::HypreParMatrix>> trueP_;
     // FIXME: (trb 12/14/2015): I think it would be good if this went the
     // other way. That is, P should be the interpolation matrix from
     // this level to the finer. With that configuration, if x is a
@@ -738,6 +737,7 @@ public:
                                           mfem::VectorCoefficient & c,
                                           mfem::Vector & v) override;
 
+//    friend class Redistributor;
 protected:
     void computePVTraces(AgglomeratedTopology::Entity icodim,
                          mfem::Vector & PVinAgg) override;
