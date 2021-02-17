@@ -39,34 +39,31 @@ class Redistributor
     using ParMatrix = matred::ParMatrix;
 
    // Enumeration convention follows the ones in AgglomeratedTopology/DofHandler
-   std::vector<unique_ptr<ParallelCSRMatrix> > redTE_TE;
-   std::vector<unique_ptr<ParallelCSRMatrix> > redE_TE;
-   std::vector<unique_ptr<ParallelCSRMatrix> > redTD_TD;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redTrueEntity_trueEntity;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redEntity_trueEntity;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redTrueDof_TrueDof;
 
    unique_ptr<ParallelCSRMatrix> BuildRedEntToTrueEnt(
          const ParallelCSRMatrix& elem_trueEntity) const;
 
    unique_ptr<ParallelCSRMatrix> BuildRedEntToRedTrueEnt(
-         const ParallelCSRMatrix& redE_tE) const;
+         const ParallelCSRMatrix& redEntity_trueEntity) const;
 
    unique_ptr<ParallelCSRMatrix> BuildRedTrueEntToTrueEnt(
-         const ParallelCSRMatrix& redE_redTE,
-         const ParallelCSRMatrix& redE_tE) const;
-
-   void SetupSharingMap(
-         SharingMap& map, unique_ptr<ParallelCSRMatrix> redE_redTE) const;
+         const ParallelCSRMatrix& redEntity_redTrueEntity,
+         const ParallelCSRMatrix& redEntity_trueEntity) const;
 public:
    Redistributor(const AgglomeratedTopology& topo,
                  const std::vector<int>& elem_redist_procs);
 
    const ParallelCSRMatrix& TrueEntityRedistribution(int codim) const
    {
-      return *(redTE_TE[codim]);
+      return *(redTrueEntity_trueEntity[codim]);
    }
 
    const ParallelCSRMatrix& TrueDofRedistribution(int jform) const
    {
-      return *(redTD_TD[jform]);
+      return *(redTrueDof_TrueDof[jform]);
    }
 
 //   const ParallelCSRMatrix& Redistributed_EntityTrueEntity(int codim) const
