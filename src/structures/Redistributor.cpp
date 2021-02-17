@@ -38,7 +38,8 @@ Redistributor::Redistributor(
       const AgglomeratedTopology& topo, const std::vector<int>& elem_redist_procs)
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
      redEntity_trueEntity(topo.Codimensions()+1),
-     redTrueDof_TrueDof(topo.Codimensions()+1)
+     redTrueDof_trueDof(topo.Codimensions()+1),
+     redDof_trueDof(topo.Codimensions()+1)
 {
    // TODO: entities in codimension > 1 (need to adjust B)
    auto elem_redProc = matred::EntityToProcessor(topo.GetComm(), elem_redist_procs);
@@ -166,31 +167,30 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
 }
 
 std::unique_ptr<DofHandler> Redistributor::Redistribute(
-        const DofHandler& dof,
-        const std::shared_ptr<AgglomeratedTopology>& redist_topo)
+      const DofHandler& dof,
+      const std::shared_ptr<AgglomeratedTopology>& redist_topo)
 {
     auto& nonconst_dof = const_cast<DofHandler&>(dof);
     auto dof_alg = dynamic_cast<DofHandlerALG*>(&nonconst_dof);
     PARELAG_ASSERT(dof_alg); // only DofHandlerALG can be redistributed currently
 
-    const int max_codim_base = dof.GetMaxCodimensionBaseForDof();
-    auto out = make_unique<DofHandlerALG>(max_codim_base, redist_topo);
+    const int max_codim = dof.GetMaxCodimensionBaseForDof();
+    auto out = make_unique<DofHandlerALG>(max_codim, redist_topo);
 
-    auto at_elem = AgglomeratedTopology::ELEMENT;
-    auto& elem_dof = const_cast<SerialCSRMatrix&>(dof.GetEntityDofTable(at_elem));
+    auto elem = AgglomeratedTopology::ELEMENT;
+    auto& elem_dof = const_cast<SerialCSRMatrix&>(dof.GetEntityDofTable(elem));
     auto& dof_trueDof = dof.GetDofTrueDof();
     auto elem_trueDof = Assemble(dof.GetEntityTrueEntity(0), elem_dof, dof_trueDof);
-    auto redElem_trueDof = Mult(*redTrueEntity_trueEntity[0], *elem_trueDof);
 
-    auto redDof_trueDof = BuildRedEntToTrueEnt(*redElem_trueDof);
-    auto redDof_redTrueDof = BuildRedEntToRedTrueEnt(*redDof_trueDof);
-    redTrueDof_TrueDof[max_codim_base] = // TODO: prabably need to take case of rdof ordering
-          BuildRedTrueEntToTrueEnt(*redDof_redTrueDof, *redDof_trueDof);
+    redDof_trueDof[max_codim] = BuildRedEntToTrueEnt(*elem_trueDof);
+    auto redDof_redTrueDof = BuildRedEntToRedTrueEnt(*redDof_trueDof[max_codim]);
+    redTrueDof_trueDof[max_codim] = // TODO: prabably need to take case of rdof ordering
+          BuildRedTrueEntToTrueEnt(*redDof_redTrueDof, *redDof_trueDof[max_codim]);
 
-    std::unique_ptr<ParallelCSRMatrix> tD_redD(redDof_trueDof->Transpose());
+    std::unique_ptr<ParallelCSRMatrix> tD_redD(redDof_trueDof[max_codim]->Transpose());
     out->dofTrueDof.SetUp(std::move(redDof_redTrueDof));
 
-    for (int i = 1; i < max_codim_base; ++i)
+    for (int i = 1; i < max_codim; ++i)
     {
         auto codim = static_cast<AgglomeratedTopology::Entity>(i);
         auto& ent_dof = const_cast<SerialCSRMatrix&>(dof.GetEntityDofTable(codim));
@@ -211,6 +211,63 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(
     }
 
     return out;
+}
+
+
+std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
+      const DeRhamSequence& sequence,
+      const std::shared_ptr<AgglomeratedTopology>& redist_topo)
+{
+   const int dim = redist_topo->Dimensions();
+   const int num_forms = sequence.GetNumberOfForms();
+   shared_ptr<DeRhamSequenceAlg> redist_seq = std::make_shared<DeRhamSequenceAlg>(redist_topo, num_forms);
+   redist_seq->Targets_.resize(num_forms);
+
+   for (int codim = 0; codim < num_forms; ++codim)
+   {
+      const int jform = num_forms-codim-1;
+      if (jform < sequence.jformStart_) { break; }
+
+      auto& redTE_tE = TrueEntityRedistribution(codim);
+      auto& dof_handler = *sequence.Dof_[jform];
+
+      redist_seq->Dof_[jform] = Redistribute(dof_handler, redist_topo);
+      auto redD_tD = RedistributedDofToTrueDof(jform);
+
+      if (jform != (num_forms - 1))
+      {
+         auto trueD = sequence.ComputeTrueD(jform);
+         auto redD1_tD1 = RedistributedDofToTrueDof(jform+1);
+         unique_ptr<ParallelCSRMatrix> tD_redD(redD_tD.Transpose());
+         auto redD = RAP(redD1_tD1, *trueD, *tD_redD);
+
+         SerialCSRMatrix redD_diag;
+         redD->GetDiag(redD_diag);
+         redist_seq->D_[jform].reset(new SerialCSRMatrix(redD_diag));
+      }
+
+      for (int j = jform; j < num_forms; ++j)
+      {
+         const int idx = (dim-j)*(num_forms-j)/2 + codim;
+//              M_[idx]; // TODO: need to match with rdof, shared enetities need to combine first
+      }
+
+      const int true_size = dof_handler.GetDofTrueDof().GetTrueLocalSize();
+      auto& Targets = *(sequence.Targets_[jform]);
+      MultiVector trueTargets(Targets.NumberOfVectors(), true_size);
+      trueTargets = 0.0;
+      auto type = static_cast<AgglomeratedTopology::Entity>(codim);
+      dof_handler.AssembleGlobalMultiVector(type, Targets, trueTargets);
+
+      const int redist_size = redist_seq->Dof_[jform]->GetNDofs();
+      redist_seq->Targets_[jform].reset(
+               new MultiVector(trueTargets.NumberOfVectors(), redist_size));
+      Mult(redD_tD, trueTargets, *(redist_seq->Targets_[jform]));
+   }
+
+   auto redTD_tD = TrueDofRedistribution(0);
+   redist_seq->L2_const_rep_.SetSize(redTD_tD.NumRows());
+   redTD_tD.Mult(sequence.L2_const_rep_, redist_seq->L2_const_rep_);
 }
 
 void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax)

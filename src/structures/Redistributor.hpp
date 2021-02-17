@@ -19,13 +19,15 @@
 
 #include <mfem.hpp>
 
-#include "topology/Topology.hpp"
+//#include "topology/Topology.hpp"
 //#include "structures/BooleanMatrix.hpp"
 //#include "structures/SharingMap.hpp"
 //#include "topology/TopologyTable.hpp"
 //#include "utilities/elagError.hpp"
 //#include "partitioning/MetisGraphPartitioner.hpp"
-#include "amge/DofHandler.hpp"
+//#include "amge/DofHandler.hpp"
+#include "amge/DeRhamSequence.hpp"
+
 
 #include "matred.hpp"
 
@@ -41,7 +43,8 @@ class Redistributor
    // Enumeration convention follows the ones in AgglomeratedTopology/DofHandler
    std::vector<unique_ptr<ParallelCSRMatrix> > redTrueEntity_trueEntity;
    std::vector<unique_ptr<ParallelCSRMatrix> > redEntity_trueEntity;
-   std::vector<unique_ptr<ParallelCSRMatrix> > redTrueDof_TrueDof;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redTrueDof_trueDof;
+   std::vector<unique_ptr<ParallelCSRMatrix> > redDof_trueDof;
 
    unique_ptr<ParallelCSRMatrix> BuildRedEntToTrueEnt(
          const ParallelCSRMatrix& elem_trueEntity) const;
@@ -63,20 +66,24 @@ public:
 
    const ParallelCSRMatrix& TrueDofRedistribution(int jform) const
    {
-      return *(redTrueDof_TrueDof[jform]);
+      return *(redTrueDof_trueDof[jform]);
    }
 
-//   const ParallelCSRMatrix& Redistributed_EntityTrueEntity(int codim) const
-//   {
-//      return *(redE_redTE_helper[codim]);
-//   }
+   const ParallelCSRMatrix& RedistributedDofToTrueDof(int jform) const
+   {
+      return *(redDof_trueDof[jform]);
+   }
 
    std::shared_ptr<AgglomeratedTopology> Redistribute(
          const AgglomeratedTopology& topo);
 
    std::unique_ptr<DofHandler> Redistribute(
-           const DofHandler& dof,
-           const std::shared_ptr<AgglomeratedTopology>& redist_topo);
+         const DofHandler& dof,
+         const std::shared_ptr<AgglomeratedTopology>& redist_topo);
+
+   std::shared_ptr<DeRhamSequenceAlg> Redistribute(
+         const DeRhamSequence& sequence,
+         const std::shared_ptr<AgglomeratedTopology>& redist_topo);
 };
 
 void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax);
