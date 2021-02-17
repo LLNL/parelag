@@ -150,6 +150,9 @@ void add(double a, const MultiVector &x,
 //y = A * x;
 void Mult(mfem::BlockMatrix & A, const MultiVector & x, MultiVector & y);
 
+//y = A * x;
+void Mult(const mfem::HypreParMatrix & A, const MultiVector & x, MultiVector & y);
+
 // out = M*x;
 std::unique_ptr<MultiVector> MatrixTimesMultiVector(
     const mfem::SparseMatrix & M, const MultiVector & x);
