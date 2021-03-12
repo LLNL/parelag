@@ -79,7 +79,7 @@ void SVD_Calculator::setFlagON()
 
 void SVD_Calculator::AllocateOptimalSize(int maxNRows, int maxNCols)
 {
-    maxNRows_ = maxNRows;
+    maxNRows_ = std::max(maxNRows, 1);
     maxNCols_ = maxNCols;
 
     std::vector<double> tmp(maxNRows_*maxNCols_,0.);

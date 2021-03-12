@@ -70,7 +70,7 @@ const SparseMatrix & DofHandler::GetEntityDofTable(entity type) const
     return *entity_dof[type];
 }
 
-const SparseMatrix & DofHandler::GetEntityRDofTable(entity type)
+const SparseMatrix & DofHandler::GetEntityRDofTable(entity type) const
 {
     if (!entity_rdof[type])
     {
@@ -102,7 +102,7 @@ const SparseMatrix & DofHandler::GetEntityRDofTable(entity type)
     return *entity_rdof[type];
 }
 
-const SparseMatrix & DofHandler::GetrDofDofTable(entity type)
+const SparseMatrix & DofHandler::GetrDofDofTable(entity type) const
 {
     if (!rDof_dof[type])
     {

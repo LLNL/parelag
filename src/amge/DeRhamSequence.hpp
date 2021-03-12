@@ -237,6 +237,7 @@ public:
     std::shared_ptr<DeRhamSequence> Coarsen();
 
     std::shared_ptr<DeRhamSequence> Coarsen(
+          const Redistributor& redistributor,
           std::shared_ptr<DeRhamSequence> redist_sequence);
 
     /// Fills in dofAgg.
@@ -669,7 +670,6 @@ protected:
     /// P is the interpolation matrix from the coarser level to this
     std::vector<std::unique_ptr<mfem::SparseMatrix>> P_;
 
-    std::vector<std::unique_ptr<mfem::HypreParMatrix>> trueP_;
     // FIXME: (trb 12/14/2015): I think it would be good if this went the
     // other way. That is, P should be the interpolation matrix from
     // this level to the finer. With that configuration, if x is a
@@ -679,6 +679,10 @@ protected:
 
     /// The cochain projector from this level to the coarser one
     std::vector<std::unique_ptr<CochainProjector>> Pi_;
+
+    std::vector<std::unique_ptr<mfem::HypreParMatrix>> trueP_;
+
+    std::vector<std::unique_ptr<mfem::HypreParMatrix>> truePi_;
 
     /// Representation of constant one function in L2 (dim-form)
     mfem::Vector L2_const_rep_;

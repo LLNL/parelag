@@ -55,6 +55,14 @@ class Redistributor
    unique_ptr<ParallelCSRMatrix> BuildRedTrueEntToTrueEnt(
          const ParallelCSRMatrix& redEntity_redTrueEntity,
          const ParallelCSRMatrix& redEntity_trueEntity) const;
+
+   void RedistributeRepeatedDofs(const DofHandler& dof,
+                                 DofHandler& redist_dof);
+
+
+   unique_ptr<ParallelCSRMatrix>
+   BuildRepeatedDofToTrueDof(const DofHandler& dof, int codim);
+
 public:
    Redistributor(const AgglomeratedTopology& topo,
                  const std::vector<int>& elem_redist_procs);

@@ -873,6 +873,7 @@ AgglomeratedTopology::Coarsen(const Redistributor& redistributor,
 
    coarse_redist_topo->FinerTopology_ = shared_from_this();
    CoarserTopology_ = coarse_redist_topo;
+   redist_topo->CoarserTopology_ = coarse_redist_topo;
 
    return coarse_redist_topo;
 }

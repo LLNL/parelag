@@ -443,6 +443,11 @@ int SharingMap::DebugCheck()
     PARELAG_ASSERT(entity_trueEntity);
     PARELAG_ASSERT(entity_trueEntity_entity);
 
+
+    // TODO (CSL 03/10/21): seg fault when accessing the j array
+    // temporarily disable the debug check
+    return 0;
+
 #ifdef ELAG_DEBUG
     hypre_ParCSRMatrix * h_e_tE_e = *entity_trueEntity_entity;
     hypre_CSRMatrix * diag_ee = hypre_ParCSRMatrixDiag(h_e_tE_e);

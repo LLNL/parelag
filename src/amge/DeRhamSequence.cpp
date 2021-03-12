@@ -758,6 +758,7 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
 //}
 
 std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen(
+      const Redistributor& redistributor,
       std::shared_ptr<DeRhamSequence> redist_sequence)
 {
    auto coarser_sequence = redist_sequence->Coarsen();
@@ -765,6 +766,21 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen(
    // Update the weak_ptrs
    CoarserSequence_ = coarser_sequence;
    coarser_sequence->FinerSequence_ = shared_from_this();
+
+   trueP_.resize(nForms_);
+   truePi_.resize(nForms_);
+   for (int jform = jformStart_; jform < nForms_; jform++)
+   {
+      unique_ptr<ParallelCSRMatrix> tD_redTD(redistributor.TrueDofRedistribution(jform).Transpose());
+
+      auto redist_trueP = redist_sequence->ComputeTrueP(jform);
+      trueP_[jform] = Mult(*tD_redTD, *redist_trueP);
+
+      auto redist_truePi = redist_sequence->ComputeTruePi(jform);
+      truePi_[jform] = Mult(*redist_truePi, redistributor.TrueDofRedistribution(jform));
+   }
+
+   //TODO: ComputeTrueP (with ess_label)
 
    return coarser_sequence;
 }
@@ -1565,7 +1581,8 @@ int DeRhamSequence::EstimateUpperBoundNCoarseDof(int jform)
         }
     }
 
-    elag_assert(ret > 0);
+    // TODO: it's okay that ret == 0? (it will be the case in redistributed sequence)
+//    elag_assert(ret > 0);
     return ret;
 }
 

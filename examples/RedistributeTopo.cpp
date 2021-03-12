@@ -260,8 +260,14 @@ int main (int argc, char *argv[])
     const int upscalingOrder = 0;
     const int jFormStart = nDimensions-1;
 
-    sequence[0] = make_shared<DeRhamSequence3D_FE>(
-                topology[0], pmesh.get(), feorder);
+    if (nDimensions == 3)
+    {
+        sequence[0] = make_shared<DeRhamSequence3D_FE>(topology[0], pmesh.get(), feorder);
+    }
+    else
+    {
+        sequence[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(topology[0], pmesh.get(), feorder);
+    }
 
     DeRhamSequenceFE * DRSequence_FE = sequence[0]->FemSequence();
     PARELAG_ASSERT(DRSequence_FE);
@@ -272,12 +278,12 @@ int main (int argc, char *argv[])
     sequence[0]->SetjformStart(jFormStart);
 
     DRSequence_FE->ReplaceMassIntegrator(
-                elem_t, 3, make_unique<MassIntegrator>(coeffL2), false);
+                elem_t, nDimensions, make_unique<MassIntegrator>(coeffL2), false);
     DRSequence_FE->ReplaceMassIntegrator(
-                elem_t, 2, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
+                elem_t, nDimensions-1, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
 
     // set up coefficients / targets
-    sequence[0]->FemSequence()->SetUpscalingTargets(nDimensions, upscalingOrder, 2);
+    DRSequence_FE->SetUpscalingTargets(nDimensions, upscalingOrder, jFormStart);
 
     StopWatch chrono;
     chrono.Clear();
@@ -305,6 +311,7 @@ int main (int argc, char *argv[])
     chrono.Start();
 
     int num_redist_procs = 4;
+    const int coarsening_factor = std::pow(2, nDimensions);
     MetisGraphPartitioner metis_partitioner;
     metis_partitioner.setFlags(MetisGraphPartitioner::RECURSIVE);
     for (int ilevel = nLevels-1; ilevel < topology.size()-1; ++ilevel)
@@ -316,27 +323,42 @@ int main (int argc, char *argv[])
         std::vector<int> redistributed_procs(topology[ilevel]->GetB(0).NumRows());
         std::fill_n(redistributed_procs.begin(), redistributed_procs.size(), myid % num_redist_procs);
 
-        num_redist_procs /= 2;
-
         Redistributor redistributor(*topology[ilevel], redistributed_procs);
-        auto redist_topo = redistributor.Redistribute(*topology[ilevel]);
-        topology[ilevel+1] = topology[ilevel]->Coarsen(
-                 redistributor, redist_topo, metis_partitioner, 2, 0, 0);
 
-        ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
+        if (print_progress_report)
+            std::cout << "-- Topo on level " << ilevel+1 <<".\n";
+
+
+        auto redist_topo = redistributor.Redistribute(*topology[ilevel]);
+
+        if (print_progress_report)
+            std::cout << "-- Topo redist on level " << ilevel+1 <<".\n";
+
+        const int num_global_elem = topology[ilevel]->GetNumberGlobalTrueEntities(elem_t);
+        const int num_parts = num_global_elem / coarsening_factor / num_redist_procs;
+        topology[ilevel+1] = topology[ilevel]->Coarsen(
+                 redistributor, redist_topo, metis_partitioner, num_parts, 0, 0);
+
+//        ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
 
         if (print_progress_report)
             std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
                       << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
 
         auto redist_seq = redistributor.Redistribute(*sequence[ilevel], redist_topo);
-        sequence[ilevel+1] = sequence[ilevel]->Coarsen(redist_seq);
+
+
+        if (print_progress_report)
+            std::cout << "-- Seq redist on level " << ilevel+1 <<".\n";
+
+        sequence[ilevel+1] = sequence[ilevel]->Coarsen(redistributor, redist_seq);
+
+        num_redist_procs /= 2;
     }
 
     if (myid == 0 && reportTiming)
-        std::cout << "Timing ELEM_AGG: Coarsening before redistribution done in " << chrono.RealTime()
+        std::cout << "Timing ELEM_AGG: Coarsening after redistribution done in " << chrono.RealTime()
                   << " seconds.\n";
-
 
     if (print_time)
         TimeManager::Print(std::cout);
