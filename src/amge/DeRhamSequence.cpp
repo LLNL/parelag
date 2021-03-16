@@ -1212,14 +1212,6 @@ DeRhamSequence::ComputeTrueM(int jform, Vector & elemMatrixScaling)
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTrueP(int jform) const
 {
-    if (trueP_.size())
-    {
-        PARELAG_ASSERT(trueP_[jform]);
-        unique_ptr<ParallelCSRMatrix> out(
-                 mfem::Add(1.0, *trueP_[jform], 0.0, *trueP_[jform]));
-        return out;
-    }
-
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
@@ -1227,6 +1219,19 @@ unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTrueP(int jform) const
         Dof_[jform]->GetDofTrueDof(),
         *(P_[jform]),
         coarser_sequence->Dof_[jform]->GetDofTrueDof());
+}
+
+const ParallelCSRMatrix& DeRhamSequence::GetTrueP(int jform) const
+{
+   if (trueP_.size() == 0)
+   {
+      trueP_.resize(nForms_);
+   }
+   if (!trueP_[jform])
+   {
+      trueP_[jform] = ComputeTrueP(jform);
+   }
+   return *trueP_[jform];
 }
 
 unique_ptr<ParallelCSRMatrix>
@@ -1273,14 +1278,6 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTruePi(int jform)
 {
-    if (truePi_.size())
-    {
-        PARELAG_ASSERT(truePi_[jform]);
-        unique_ptr<ParallelCSRMatrix> out(
-                 mfem::Add(1.0, *truePi_[jform], 0.0, *truePi_[jform]));
-        return out;
-    }
-
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
@@ -1289,6 +1286,19 @@ unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTruePi(int jform)
         coarser_sequence->Dof_[jform]->GetDofTrueDof(),
         myPi,
         Dof_[jform]->GetDofTrueDof());
+}
+
+const ParallelCSRMatrix& DeRhamSequence::GetTruePi(int jform)
+{
+   if (truePi_.size() == 0)
+   {
+      truePi_.resize(nForms_);
+   }
+   if (!truePi_[jform])
+   {
+      truePi_[jform] = ComputeTruePi(jform);
+   }
+   return *truePi_[jform];
 }
 
 unique_ptr<ParallelCSRMatrix>

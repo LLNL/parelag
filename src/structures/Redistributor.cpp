@@ -308,13 +308,6 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(
        redEnt_redDof->GetDiag(redEnt_redDof_diag);
        out->entity_dof[i].reset(new SerialCSRMatrix(redEnt_redDof_diag));
        out->finalized[i] = true;
-
-//        Mult(*redTE_TE_helper[i], dof_alg->entity_NumberOfInteriorDofsNullSpace[i],
-//             out->entity_NumberOfInteriorDofsNullSpace[i]);
-//        Mult(*redTE_TE_helper[i], dof_alg->entity_NumberOfInteriorDofsRangeTSpace[i],
-//             out->entity_NumberOfInteriorDofsRangeTSpace[i]);
-//        Mult(*redTE_TE_helper[i], dof_alg->entity_InteriorDofOffsets[i],
-//             out->entity_InteriorDofOffsets[i]);
     }
 
     return out;
@@ -337,7 +330,6 @@ std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
 
       auto type = static_cast<AgglomeratedTopology::Entity>(codim);
 
-//      auto& redTE_tE = TrueEntityRedistribution(codim);
       auto& dof_handler = *sequence.Dof_[jform];
 
       redist_seq->Dof_[jform] = Redistribute(dof_handler, redist_topo);
@@ -369,7 +361,6 @@ std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
       Mult(redD_tD, trueTargets, *(redist_seq->Targets_[jform]));
    }
 
-
    for (int codim = 0; codim < num_forms; ++codim)
    {
       const int jform = num_forms-codim-1;
@@ -379,16 +370,10 @@ std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
 
       for (int j = sequence.jformStart_; j <= jform; ++j)
       {
-         const int idx = (dim-j)*(num_forms-j)/2 + codim;
-         //              M_[idx]; // TODO: need to match with rdof, shared enetities need to combine first
-
-         auto& dof_handler = *sequence.Dof_[j];
-
-         auto RD_TD = BuildRepeatedDofToTrueDof(dof_handler, codim);
+         auto RD_TD = BuildRepeatedDofToTrueDof(*sequence.Dof_[j], codim);
          auto redRD_redTD = BuildRepeatedDofToTrueDof(*redist_seq->Dof_[j], codim);
          unique_ptr<ParallelCSRMatrix> redTD_redRD(redRD_redTD->Transpose());
          unique_ptr<ParallelCSRMatrix> tD_redTD(redTrueDof_trueDof[j]->Transpose());
-
 
          SerialCSRMatrix M(*const_cast<DeRhamSequence&>(sequence).GetM(type, j));
          ParallelCSRMatrix pM(RD_TD->GetComm(), RD_TD->M(), RD_TD->RowPart(), &M);
@@ -401,6 +386,8 @@ std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
 
          SerialCSRMatrix redM_diag;
          redM->GetDiag(redM_diag);
+
+         const int idx = (dim-j)*(num_forms-j)/2 + codim;
          redist_seq->M_[idx].reset(new SerialCSRMatrix(redM_diag));
       }
    }

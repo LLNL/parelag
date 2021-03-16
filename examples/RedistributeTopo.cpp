@@ -19,12 +19,6 @@
 
 #include "elag.hpp"
 
-using namespace mfem;
-using namespace parelag;
-using std::unique_ptr;
-using std::shared_ptr;
-using std::make_shared;
-
 #include "linalg/utilities/ParELAG_MfemBlockOperator.hpp"
 #include "linalg/solver_core/ParELAG_SolverLibrary.hpp"
 #include "utilities/ParELAG_TimeManager.hpp"
@@ -33,7 +27,23 @@ using std::make_shared;
 
 #include "testing_helpers/Build3DHexMesh.hpp"
 #include "testing_helpers/CreateDarcyParameterList.hpp"
-//#include "matred.hpp"
+
+using namespace mfem;
+using namespace parelag;
+using std::unique_ptr;
+using std::shared_ptr;
+using std::make_shared;
+
+enum {AMGe = 0, ADS};
+enum {ASSEMBLY=0,PRECONDITIONER_AMGe,PRECONDITIONER_ADS,SOLVER_AMGe,SOLVER_ADS};
+
+const int NSOLVERS = 2;
+const char * solver_names[] = {"AMGe","ADS"};
+
+const int NSTAGES = 5;
+const char * stage_names[] = {"ASSEMBLY", "prec AMGe", "prec ADS",
+                              "SOLVER_AMGe", "SOLVER_ADS"};
+
 
 int main (int argc, char *argv[])
 {
@@ -97,6 +107,10 @@ int main (int argc, char *argv[])
 
     // The number of times to refine in parallel
     const int par_ref_levels = prob_list.Get("Parallel refinement levels", 2);
+
+    // The level of the resulting hierarchy at which you would like
+    // the solve to be performed. 0 is the finest grid.
+    const int start_level = prob_list.Get("Solve level",0);
 
     ParameterList& output_list = master_list->Sublist("Output control");
     const bool print_time = output_list.Get("Print timings",true);
@@ -235,22 +249,15 @@ int main (int argc, char *argv[])
     }
 
     MFEMRefinedMeshPartitioner mfem_partitioner(nDimensions);
-    for (int ilevel = 0; ilevel < nLevels-1; ++ilevel)
+    for (int i = 0; i < nLevels-1; ++i)
     {
-        std::ostringstream timer_name;
-        timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
-        Timer inner = TimeManager::AddTimer(timer_name.str());
+        Array<int> partitioning(topology[i]->GetB(0).NumRows());
+        mfem_partitioner.Partition(topology[i]->GetB(0).NumRows(),
+                                   level_nElements[i+1], partitioning);
 
-        Array<int> partitioning(topology[ilevel]->GetB(0).NumRows());
-        mfem_partitioner.Partition(topology[ilevel]->GetB(0).NumRows(),
-                                   level_nElements[ilevel+1], partitioning);
-
-        topology[ilevel+1] = topology[ilevel]->CoarsenLocalPartitioning(
+        topology[i+1] = topology[i]->CoarsenLocalPartitioning(
                     partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
-        ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
-        if (print_progress_report)
-            std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
-                      << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
+//        ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get(), nullptr);
     }
 
     if (print_progress_report)
@@ -259,6 +266,8 @@ int main (int argc, char *argv[])
     const int feorder = 0;
     const int upscalingOrder = 0;
     const int jFormStart = nDimensions-1;
+    const int uform = nDimensions - 1;
+    const int pform = nDimensions;
 
     if (nDimensions == 3)
     {
@@ -278,9 +287,9 @@ int main (int argc, char *argv[])
     sequence[0]->SetjformStart(jFormStart);
 
     DRSequence_FE->ReplaceMassIntegrator(
-                elem_t, nDimensions, make_unique<MassIntegrator>(coeffL2), false);
+                elem_t, pform, make_unique<MassIntegrator>(coeffL2), false);
     DRSequence_FE->ReplaceMassIntegrator(
-                elem_t, nDimensions-1, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
+                elem_t, uform, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
 
     // set up coefficients / targets
     DRSequence_FE->SetUpscalingTargets(nDimensions, upscalingOrder, jFormStart);
@@ -314,44 +323,49 @@ int main (int argc, char *argv[])
     const int coarsening_factor = std::pow(2, nDimensions);
     MetisGraphPartitioner metis_partitioner;
     metis_partitioner.setFlags(MetisGraphPartitioner::RECURSIVE);
-    for (int ilevel = nLevels-1; ilevel < topology.size()-1; ++ilevel)
+    for (int i = nLevels-1; i < topology.size()-1; ++i)
     {
-        std::ostringstream timer_name;
-        timer_name << "Mesh Agglomeration -- Level " << ilevel+1;
-        Timer inner = TimeManager::AddTimer(timer_name.str());
+        StopWatch chronoInterior;
+        chronoInterior.Clear();
+        chronoInterior.Start();
 
-        std::vector<int> redistributed_procs(topology[ilevel]->GetB(0).NumRows());
+        std::vector<int> redistributed_procs(topology[i]->GetB(0).NumRows());
         std::fill_n(redistributed_procs.begin(), redistributed_procs.size(), myid % num_redist_procs);
+        Redistributor redistributor(*topology[i], redistributed_procs);
+        auto redist_topo = redistributor.Redistribute(*topology[i]);
+        chronoInterior.Stop();
+        if (myid == 0 && reportTiming)
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology redistributed in "
+                      << chronoInterior.RealTime() << " seconds.\n";
 
-        Redistributor redistributor(*topology[ilevel], redistributed_procs);
-
-        if (print_progress_report)
-            std::cout << "-- Topo on level " << ilevel+1 <<".\n";
-
-
-        auto redist_topo = redistributor.Redistribute(*topology[ilevel]);
-
-        if (print_progress_report)
-            std::cout << "-- Topo redist on level " << ilevel+1 <<".\n";
-
-        const int num_global_elem = topology[ilevel]->GetNumberGlobalTrueEntities(elem_t);
+        chronoInterior.Clear();
+        chronoInterior.Start();
+        const int num_global_elem = topology[i]->GetNumberGlobalTrueEntities(elem_t);
         const int num_parts = num_global_elem / coarsening_factor / num_redist_procs;
-        topology[ilevel+1] = topology[ilevel]->Coarsen(
-                 redistributor, redist_topo, metis_partitioner, num_parts, 0, 0);
+        topology[i+1] = topology[i]->Coarsen(
+                    redistributor, redist_topo, metis_partitioner, num_parts, 0, 0);
+        chronoInterior.Stop();
+        if (myid == 0 && reportTiming)
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
+                      << chronoInterior.RealTime() << " seconds.\n";
 
-//        ShowTopologyAgglomeratedElements(topology[ilevel+1].get(), pmesh.get(), nullptr);
+        // ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get(), nullptr);
 
-        if (print_progress_report)
-            std::cout << "-- Number of agglomerates on level " << ilevel+1 << " is "
-                      << topology[ilevel+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
+        chronoInterior.Clear();
+        chronoInterior.Start();
+        auto redist_seq = redistributor.Redistribute(*sequence[i], redist_topo);
+        chronoInterior.Stop();
+        if (myid == 0 && reportTiming)
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": DeRhamSequence redistributed"
+                      << " in " << chronoInterior.RealTime() << " seconds.\n";
 
-        auto redist_seq = redistributor.Redistribute(*sequence[ilevel], redist_topo);
-
-
-        if (print_progress_report)
-            std::cout << "-- Seq redist on level " << ilevel+1 <<".\n";
-
-        sequence[ilevel+1] = sequence[ilevel]->Coarsen(redistributor, redist_seq);
+        chronoInterior.Clear();
+        chronoInterior.Start();
+        sequence[i+1] = sequence[i]->Coarsen(redistributor, redist_seq);
+        chronoInterior.Stop();
+        if (myid == 0 && reportTiming)
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": DeRhamSequence coarsened in "
+                      << chronoInterior.RealTime() << " seconds.\n";
 
         num_redist_procs /= 2;
     }
@@ -360,8 +374,423 @@ int main (int argc, char *argv[])
         std::cout << "Timing ELEM_AGG: Coarsening after redistribution done in " << chrono.RealTime()
                   << " seconds.\n";
 
-    if (print_time)
-        TimeManager::Print(std::cout);
+    if (print_progress_report)
+    {
+        std::cout << "\n";
+        for (int i = 0; i < topology.size()-1; ++i)
+        {
+            std::cout << "-- Number of agglomerates on level " << i+1 << " is "
+                      << topology[i+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
+        }
+    }
+
+    {
+        FiniteElementSpace * ufespace = DRSequence_FE->GetFeSpace(uform);
+        FiniteElementSpace * pfespace = DRSequence_FE->GetFeSpace(pform);
+
+        mfem::LinearForm bform(ufespace);
+        ConstantCoefficient fbdr(0.0);
+        bform.AddBoundaryIntegrator(new VectorFEBoundaryFluxLFIntegrator(fbdr));
+        bform.Assemble();
+
+        mfem::LinearForm qform(pfespace);
+        ConstantCoefficient source(1.0);
+        qform.AddDomainIntegrator(new DomainLFIntegrator(source));
+        qform.Assemble();
+
+        // Project rhs down to the level of interest
+        auto rhs_u = make_unique<mfem::Vector>(sequence[0]->GetNumTrueDofs(uform));
+        auto rhs_p = make_unique<mfem::Vector>(sequence[0]->GetNumTrueDofs(pform));
+        *rhs_u = 0.0;
+        *rhs_p = 0.0;
+        sequence[0]->GetDofHandler(uform)->GetDofTrueDof().Assemble(bform, *rhs_u);
+        sequence[0]->GetDofHandler(pform)->GetDofTrueDof().Assemble(qform, *rhs_p);
+
+        for (int ii = 0; ii < start_level; ++ii)
+        {
+            auto tmp_u = make_unique<mfem::Vector>(
+                sequence[ii+1]->GetNumTrueDofs(uform) );
+            auto tmp_p = make_unique<mfem::Vector>(
+                sequence[ii+1]->GetNumTrueDofs(pform) );
+            sequence[ii]->GetTrueP(uform).MultTranspose(*rhs_u,*tmp_u);
+            sequence[ii]->GetTrueP(pform).MultTranspose(*rhs_p,*tmp_p);
+            rhs_u = std::move(tmp_u);
+            rhs_p = std::move(tmp_p);
+        }
+
+        const SharingMap& hdiv_dofTrueDof
+            = sequence[start_level]->GetDofHandler(uform)->GetDofTrueDof();
+        const SharingMap& l2_dofTrueDof
+            = sequence[start_level]->GetDofHandler(pform)->GetDofTrueDof();
+
+        // Create the parallel linear system
+        mfem::Array<int> true_block_offsets(3);
+        true_block_offsets[0] = 0;
+        true_block_offsets[1] = hdiv_dofTrueDof.GetTrueLocalSize();
+        true_block_offsets[2] =
+            true_block_offsets[1] + l2_dofTrueDof.GetTrueLocalSize();
+
+        auto A = make_shared<MfemBlockOperator>(true_block_offsets);
+        size_t local_nnz = 0;
+        mfem::BlockVector prhs(true_block_offsets);
+        {
+            if (print_progress_report)
+                std::cout << "-- Building operator on level " << start_level
+                          << "...\n";
+
+            // The blocks, managed here
+            auto M = sequence[start_level]->ComputeMassOperator(uform);
+            auto W = sequence[start_level]->ComputeMassOperator(pform);
+            auto D = sequence[start_level]->GetDerivativeOperator(uform);
+
+            auto B = ToUnique(Mult(*W, *D));
+            auto Bt = ToUnique(Transpose(*B));
+
+            auto pM = Assemble(hdiv_dofTrueDof, *M, hdiv_dofTrueDof);
+            auto pB = Assemble(l2_dofTrueDof, *B, hdiv_dofTrueDof);
+            auto pBt = Assemble(hdiv_dofTrueDof, *Bt, l2_dofTrueDof);
+
+            hypre_ParCSRMatrix* tmp = *pM;
+            local_nnz += tmp->diag->num_nonzeros;
+            local_nnz += tmp->offd->num_nonzeros;
+            tmp = *pB;
+            local_nnz += tmp->diag->num_nonzeros;
+            local_nnz += tmp->offd->num_nonzeros;
+            tmp = *pBt;
+            local_nnz += tmp->diag->num_nonzeros;
+            local_nnz += tmp->offd->num_nonzeros;
+
+            A->SetBlock(0,0,std::move(pM));
+            A->SetBlock(0,1,std::move(pBt));
+            A->SetBlock(1,0,std::move(pB));
+
+            // Setup right-hand side
+            prhs.GetBlock(0) = *rhs_u;
+            prhs.GetBlock(1) = *rhs_p;
+
+            if (print_progress_report)
+                std::cout << "-- Built operator on level " << start_level
+                          << ".\n"
+                          <<"-- Assembled the linear system on level "
+                          << start_level << ".\n\n";
+        }
+
+        // Report some stats on global problem size
+        size_t global_height,global_width,global_nnz;
+        {
+            size_t local_height = A->Height(), local_width = A->Width();
+            MPI_Reduce(&local_height,&global_height,1,GetMPIType(local_height),
+                       MPI_SUM,0,comm);
+            MPI_Reduce(&local_width,&global_width,1,GetMPIType(local_width),
+                       MPI_SUM,0,comm);
+            MPI_Reduce(&local_nnz,&global_nnz,1,GetMPIType<size_t>(local_nnz),
+                       MPI_SUM,0,comm);
+        }
+        PARELAG_ASSERT(prhs.Size() == A->Height());
+
+        //
+        // Create the preconditioner
+        //
+
+        // Start with the solver library
+        auto lib = SolverLibrary::CreateLibrary(
+            master_list->Sublist("Preconditioner Library"));
+
+        // Get the factory
+        const std::string solver_type = prob_list.Get("Linear solver","Unknown");
+        auto prec_factory = lib->GetSolverFactory(solver_type);
+        auto solver_state = prec_factory->GetDefaultState();
+        solver_state->SetDeRhamSequence(sequence[start_level]);
+        solver_state->SetBoundaryLabels(
+            std::vector<std::vector<int>>(2,std::vector<int>()));
+        solver_state->SetForms({uform,pform});
+
+        unique_ptr<mfem::Solver> solver;
+
+        // Build the preconditioner
+        if (print_progress_report)
+            std::cout << "-- Building solver \"" << solver_type << "\"...\n";
+
+        {
+            Timer timer = TimeManager::AddTimer("Build Solver");
+            solver = prec_factory->BuildSolver(A,*solver_state);
+        }
+
+        if (print_progress_report)
+            std::cout << "-- Built solver \"" << solver_type << "\".\n";
+
+//        mfem::BlockVector sol(block_offsets);
+        mfem::BlockVector psol(true_block_offsets);
+        psol = 0.;
+
+        if (!myid)
+            std::cout << '\n' << std::string(50,'*') << '\n'
+                      << "*    Solving on level: " << start_level << '\n'
+                      << "*              A size: "
+                      << global_height << 'x' << global_width << '\n'
+                      << "*               A NNZ: " << global_nnz << "\n*\n"
+                      << "*              Solver: " << solver_type << "\n"
+                      << std::string(50,'*') << '\n' << std::endl;
+
+        if (print_progress_report)
+            std::cout << "-- Solving system with " << solver_type << "...\n";
+        {
+            double local_norm = prhs.Norml2() * prhs.Norml2();
+            double global_norm;
+            MPI_Reduce(&local_norm,&global_norm,1,GetMPIType(local_norm),
+                       MPI_SUM,0,comm);
+
+            if (!myid)
+                std::cout <<  "Initial residual norm: " << std::sqrt(global_norm)
+                          << std::endl;
+        }
+
+        {
+            Timer timer = TimeManager::AddTimer("Solve Linear System");
+            solver->Mult(prhs,psol);
+        }
+
+        {
+            mfem::Vector tmp(A->Height());
+            A->Mult(psol,tmp);
+            prhs -= tmp;
+            double local_norm = prhs.Norml2() * prhs.Norml2();
+            double global_norm;
+            MPI_Reduce(&local_norm,&global_norm,1,GetMPIType(local_norm),
+                       MPI_SUM,0,comm);
+
+            if (!myid)
+                std::cout << "Final residual norm: " << std::sqrt(global_norm)
+                          << std::endl;
+        }
+
+        if (print_progress_report)
+            std::cout << "-- Solver has exited.\n";
+    }
+
+//    {
+//        const int form = 2;
+
+//        const int nbdr = 6;
+//        Array<int> ess_attr(nbdr);
+//        ess_attr = 1;
+//        ess_attr[0] = 0;
+//        ess_attr[nbdr-1] = 0;
+
+//        Vector ess_bc(nbdr), nat_bc(nbdr);
+//        ess_bc = 0.0;
+//        nat_bc = 0.0;
+//        nat_bc[0] = -1.;
+
+//        PWConstCoefficient ubdr(ess_bc);
+//        PWConstCoefficient fbdr(nat_bc);
+
+//        //  testUpscalingHdiv(sequence);
+//        FiniteElementSpace * fespace = sequence[0]->FemSequence()->GetFeSpace(form);
+//        auto b = make_unique<LinearForm>(fespace);
+//        b->AddBoundaryIntegrator(new VectorFEBoundaryFluxLFIntegrator(fbdr));
+//        b->Assemble();
+
+//        auto lift = make_unique<GridFunction>(fespace);
+//        lift->ProjectBdrCoefficient(ubdr, ess_attr);
+
+//        DenseMatrix errors_L2_2(nLevels, nLevels);
+//        errors_L2_2 = 0.0;
+//        Vector norm_L2_2(nLevels);
+//        norm_L2_2 = 0.;
+
+//        DenseMatrix errors_div_2(nLevels, nLevels);
+//        errors_div_2 = 0.0;
+//        Vector norm_div_2(nLevels);
+//        norm_div_2 = 0.;
+
+//        DenseMatrix timings(nLevels, NSTAGES);
+//        timings = 0.0;
+
+//        Array2D<int> iter(nLevels, NSOLVERS);
+//        iter = 0;
+//        Array<int> ndofs(nLevels);
+//        ndofs = 0;
+//        Array<int> nnz(nLevels);
+//        nnz = 0;
+
+//        double tdiff;
+
+//        Array<SparseMatrix *> allP(nLevels-1);
+//        Array<SparseMatrix *> allD(nLevels);
+//        std::vector<unique_ptr<HypreParMatrix>> allC(nLevels);
+
+//        for (int i = 0; i < nLevels - 1; ++i)
+//            allP[i] = sequence[i]->GetP(form);
+
+//        for (int i = 0; i < nLevels; ++i)
+//            allC[i] = sequence[i]->ComputeTrueDerivativeOperator(form-1);
+
+//        for (int i = 0; i < nLevels; ++i)
+//            allD[i] = sequence[i]->GetDerivativeOperator(form);
+
+//        std::vector<unique_ptr<HypreParMatrix>> allP_bc(nLevels-1);
+//        std::vector<unique_ptr<HypreParMatrix>> allC_bc(nLevels);
+
+//        for (int i = 0; i < nLevels - 1; ++i)
+//            allP_bc[i] = sequence[i]->ComputeTrueP(form, ess_attr);
+
+//        for (int i = 0; i < nLevels; ++i)
+//            allC_bc[i] = sequence[i]->ComputeTrueDerivativeOperator(form-1, ess_attr);
+
+//        std::vector<unique_ptr<SparseMatrix>> Ml(nLevels);
+//        std::vector<unique_ptr<SparseMatrix>> Wl(nLevels);
+
+//        for (int k(0); k < nLevels; ++k)
+//        {
+//            chrono.Clear();
+//            chrono.Start();
+//            Ml[k] = sequence[k]->ComputeMassOperator(form);
+//            Wl[k] = sequence[k]->ComputeMassOperator(form+1);
+//            chrono.Stop();
+//            tdiff = chrono.RealTime();
+//            if (myid == 0 && reportTiming)
+//                std::cout << "Timing ELEM_AGG_LEVEL " << k << ": Assembly done in "
+//                          << tdiff << "s.\n";
+//            timings(k, ASSEMBLY) += tdiff;
+//        }
+
+//        std::vector<unique_ptr<Vector>> rhs(nLevels);
+//        std::vector<unique_ptr<Vector>> ess_data(nLevels);
+//        rhs[0] = std::move(b);
+//        ess_data[0] = std::move(lift);
+//        for (int i = 0; i < nLevels-1; ++i)
+//        {
+//            rhs[i+1] = make_unique<Vector>(sequence[i+1]->GetNumberOfDofs(form));
+//            ess_data[i+1] = make_unique<Vector>(sequence[i+1]->GetNumberOfDofs(form));
+//            sequence[i]->GetP(form)->MultTranspose(*(rhs[i]), *(rhs[i+1]));
+//            sequence[i]->GetPi(form)->ComputeProjector();
+//            sequence[i]->GetPi(form)->GetProjectorMatrix().Mult(
+//                *(ess_data[i]), *(ess_data[i+1]));
+//        }
+
+//        std::vector<unique_ptr<Vector>> sol_AMGe(nLevels);
+//        std::vector<unique_ptr<Vector>> sol_ADS(nLevels);
+//        std::vector<unique_ptr<Vector>> help(nLevels);
+
+//        for (int k(0); k < nLevels; ++k)
+//        {
+//            sol_AMGe[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
+//            *(sol_AMGe[k]) = 0.;
+//            sol_ADS[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
+//            *(sol_ADS[k]) = 0.;
+//            help[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
+//            *(help[k]) = 0.;
+//        }
+
+//        for (int k(0); k < nLevels; ++k)
+//        {
+//            chrono.Clear();
+//            chrono.Start();
+
+//            unique_ptr<HypreParMatrix> pA;
+//            const SharingMap & hdiv_dofTrueDof(
+//                sequence[k]->GetDofHandler(nDimensions-1)->GetDofTrueDof() );
+//            {
+//                auto M = Ml[k].get();
+//                auto W = Wl[k].get();
+//                auto D = allD[k];
+
+//                auto A = ToUnique(Add(*M, *ExampleRAP(*D, *W, *D)));
+
+//                const int nlocdofs = A->Height();
+//                Array<int> marker(nlocdofs);
+//                marker = 0;
+//                sequence[k]->GetDofHandler(form)->MarkDofsOnSelectedBndr(
+//                    ess_attr, marker);
+
+//                for (int mm = 0; mm < nlocdofs; ++mm)
+//                    if (marker[mm])
+//                        A->EliminateRowCol(
+//                            mm, ess_data[k]->operator ()(mm), *(rhs[k]) );
+
+//                pA = Assemble(hdiv_dofTrueDof, *A, hdiv_dofTrueDof);
+//            }
+//            Vector prhs( hdiv_dofTrueDof.GetTrueLocalSize() );
+//            hdiv_dofTrueDof.Assemble(*(rhs[k]), prhs);
+
+//            elag_assert(prhs.Size() == pA->Height() );
+
+//            chrono.Stop();
+//            tdiff = chrono.RealTime();
+//            if (myid == 0 && reportTiming)
+//                std::cout << "Timing ELEM_AGG_LEVEL " << k << ": Assembly done in "
+//                          << tdiff << "s.\n";
+//            timings(k, ASSEMBLY) += tdiff;
+
+//            ndofs[k] = pA->GetGlobalNumRows();
+//            nnz[k] = pA->NNZ();
+
+//            // AMGe SOLVER not implemented
+//            {
+//                (*sol_AMGe[k]) = 0.;
+//                timings(k, PRECONDITIONER_AMGe) = 0.;
+//                timings(k,SOLVER_AMGe) = 0.;
+//                iter(k,AMGe) = 0;
+//            }
+
+//            // default linear solver options
+//            constexpr int print_iter = 0;
+//            constexpr int max_num_iter = 500;
+//            constexpr double rtol = 1e-6;
+//            constexpr double atol = 1e-12;
+
+//            iter(k,ADS) = UpscalingHypreSolver(
+//                form, pA.get(), prhs,
+//                sequence[k].get(),
+//                k, PRECONDITIONER_ADS, SOLVER_ADS,
+//                print_iter, max_num_iter, rtol, atol,
+//                timings, hdiv_dofTrueDof, *(sol_ADS[k]), reportTiming);
+
+//            auto& sol = sol_ADS;
+//            // ERROR NORMS
+//            {
+//                *(help[k]) = *(sol[k]);
+//                for (int j = k; j > 0; --j)
+//                    allP[j-1]->Mult( *(help[j]), *(help[j-1]) );
+
+//                norm_L2_2(k) = Ml[k]->InnerProduct(*(sol[k]), *(sol[k]) );
+//                Vector dsol( allD[k]->Height() );
+//                allD[k]->Mult(*(sol[k]), dsol );
+//                norm_div_2(k) = Wl[k]->InnerProduct(dsol, dsol );
+
+//                for (int j(0); j < k; ++j)
+//                {
+//                    if (help[j]->Size() != sol[j]->Size() || sol[j]->Size() != allD[j]->Width() )
+//                        mfem_error("size don't match \n");
+
+//                    int size = sol[j]->Size();
+//                    int dsize = allD[j]->Height();
+//                    Vector u_H(help[j]->GetData(), size);
+//                    Vector u_h(sol[j]->GetData(), size);
+//                    Vector u_diff(size), du_diff(dsize);
+//                    u_diff = 0.; du_diff = 0.;
+
+//                    subtract(u_H, u_h, u_diff);
+//                    allD[j]->Mult(u_diff, du_diff);
+
+//                    errors_L2_2(k,j) =  Ml[j]->InnerProduct(u_diff, u_diff);
+//                    errors_div_2(k,j) =  Wl[j]->InnerProduct(du_diff, du_diff);
+//                }
+//            }
+
+//            //VISUALIZE SOLUTION
+////            if (do_visualize)
+////            {
+////                MultiVector tmp(sol[k]->GetData(), 1, sol[k]->Size() );
+////                sequence[k]->show(form, tmp);
+////            }
+//        }
+
+//        ReduceAndOutputUpscalingErrors(errors_L2_2, norm_L2_2,
+//                                       errors_div_2, norm_div_2);
+//    }
+
 
     if (print_progress_report)
         std::cout << "-- Good bye!\n\n";

@@ -344,6 +344,8 @@ public:
     /// Returns the parallel-ized P matrix for the given form
     std::unique_ptr<ParallelCSRMatrix> ComputeTrueP(int jform) const;
 
+    const ParallelCSRMatrix& GetTrueP(int jform) const;
+
     /// Returns the parallel-ized P matrix for the given form with
     /// boundary conditions applied.
     std::unique_ptr<ParallelCSRMatrix> ComputeTrueP(
@@ -352,6 +354,8 @@ public:
     /// Returns the parallel-ized cochain projector matrix for a given
     /// form.
     std::unique_ptr<ParallelCSRMatrix> ComputeTruePi(int jform);
+
+    const ParallelCSRMatrix& GetTruePi(int jform);
 
     /// TODO
     std::unique_ptr<ParallelCSRMatrix>
@@ -680,9 +684,9 @@ protected:
     /// The cochain projector from this level to the coarser one
     std::vector<std::unique_ptr<CochainProjector>> Pi_;
 
-    std::vector<std::unique_ptr<mfem::HypreParMatrix>> trueP_;
+    mutable std::vector<std::unique_ptr<mfem::HypreParMatrix>> trueP_;
 
-    std::vector<std::unique_ptr<mfem::HypreParMatrix>> truePi_;
+    mutable std::vector<std::unique_ptr<mfem::HypreParMatrix>> truePi_;
 
     /// Representation of constant one function in L2 (dim-form)
     mfem::Vector L2_const_rep_;
