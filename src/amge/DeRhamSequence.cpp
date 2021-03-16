@@ -695,68 +695,6 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
     return coarser_sequence;
 }
 
-//std::shared_ptr<DeRhamSequence> DeRhamSequence::RedistributeAndCoarsen(
-//      const std::vector<int>& elem_redist_procs,
-//      const MetisGraphPartitioner& partitioner,
-//      int num_partitions, bool check_topology,
-//      bool preserve_material_interfaces)
-//{
-//   Redistributor redistributor(*Topo_, elem_redist_procs);
-//   auto redist_topo = redistributor.Redistribute(*Topo_);
-//   auto coarse_topo = Topo_->Coarsen(
-//            redistributor, redist_topo, partitioner, num_partitions,
-//            check_topology, preserve_material_interfaces);
-
-//   shared_ptr<DeRhamSequenceAlg> redist_seq = std::make_shared<DeRhamSequenceAlg>(redist_topo, nForms_);
-//   redist_seq->Targets_.resize(nForms_);
-
-//   for (int codim = 0; codim < nForms_; ++codim)
-//   {
-//      const int jform = nForms_-codim-1;
-//      if (jform < jformStart_) { break; }
-
-//      auto& redTE_tE = redistributor.TrueEntityRedistribution(codim);
-
-//      redist_seq->Dof_[jform] = redistributor.Redistribute(*Dof_[jform], redist_topo);
-//      auto redD_tD = redistributor.RedistributedDofToTrueDof(jform);
-
-//      if (jform != (nForms_ - 1))
-//      {
-//         auto trueD = ComputeTrueD(jform);
-//         auto redD1_tD1 = redistributor.RedistributedDofToTrueDof(jform+1);
-//         unique_ptr<ParallelCSRMatrix> tD_redD(redD_tD.Transpose());
-//         auto redD = RAP(redD1_tD1, *trueD, *tD_redD);
-
-//         SerialCSRMatrix redD_diag;
-//         redD->GetDiag(redD_diag);
-//         redist_seq->D_[jform].reset(new SerialCSRMatrix(redD_diag));
-//      }
-
-//      for (int j = jform; j < nForms_; ++j)
-//      {
-//         const int idx = (Topo_->Dimensions()-j)*(nForms_-j)/2 + codim;
-////              M_[idx]; // TODO: need to match with rdof, shared enetities need to combine first
-//      }
-
-//      const int true_size = Dof_[jform]->GetDofTrueDof().GetTrueLocalSize();
-//      MultiVector trueTargets(Targets_[jform]->NumberOfVectors(), true_size);
-//      trueTargets = 0.0;
-//      auto type = static_cast<AgglomeratedTopology::Entity>(codim);
-//      Dof_[jform]->AssembleGlobalMultiVector(type, *Targets_[jform], trueTargets);
-
-//      const int redist_size = redist_seq->Dof_[jform]->GetNDofs();
-//      redist_seq->Targets_[jform].reset(
-//               new MultiVector(trueTargets.NumberOfVectors(), redist_size));
-//      Mult(redD_tD, trueTargets, *(redist_seq->Targets_[jform]));
-//   }
-
-//   auto redTD_tD = redistributor.TrueDofRedistribution(0);
-//   redist_seq->L2_const_rep_.SetSize(redTD_tD.NumRows());
-//   redTD_tD.Mult(L2_const_rep_, redist_seq->L2_const_rep_);
-
-////   auto coarse_seq = redist_seq->Coarsen();
-//}
-
 std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen(
       const Redistributor& redistributor,
       std::shared_ptr<DeRhamSequence> redist_sequence)
@@ -780,8 +718,6 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen(
       auto redist_truePi = redist_sequence->ComputeTruePi(jform);
       truePi_[jform] = Mult(*redist_truePi, redTD_tD);
    }
-
-   //TODO: ComputeTrueP (with ess_label)
 
    return coarser_sequence;
 }
@@ -3417,6 +3353,13 @@ void DeRhamSequenceAlg::show(int jform, MultiVector & v)
 {
     auto finer_sequence = FinerSequence_.lock();
     PARELAG_ASSERT(finer_sequence);
+
+    PARELAG_TEST_FOR_EXCEPTION(
+             !finer_sequence->GetP(jform),
+             std::runtime_error,
+             "P_[" << jform << "] is not available, this can happen when some"
+             " of the levels has been redistributed during coarsening. "
+             "Use ShowTrueData instead.");
 
     MultiVector vFine(v.NumberOfVectors(), finer_sequence->GetP(jform)->Size() );
     MatrixTimesMultiVector(*(finer_sequence->GetP(jform) ), v, vFine);
