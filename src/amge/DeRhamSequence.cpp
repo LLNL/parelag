@@ -771,13 +771,14 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen(
    truePi_.resize(nForms_);
    for (int jform = jformStart_; jform < nForms_; jform++)
    {
-      unique_ptr<ParallelCSRMatrix> tD_redTD(redistributor.TrueDofRedistribution(jform).Transpose());
+      auto& redTD_tD = redistributor.TrueDofRedistribution(jform);
+      unique_ptr<ParallelCSRMatrix> tD_redTD(redTD_tD.Transpose());
 
       auto redist_trueP = redist_sequence->ComputeTrueP(jform);
       trueP_[jform] = Mult(*tD_redTD, *redist_trueP);
 
       auto redist_truePi = redist_sequence->ComputeTruePi(jform);
-      truePi_[jform] = Mult(*redist_truePi, redistributor.TrueDofRedistribution(jform));
+      truePi_[jform] = Mult(*redist_truePi, redTD_tD);
    }
 
    //TODO: ComputeTrueP (with ess_label)
@@ -1211,6 +1212,14 @@ DeRhamSequence::ComputeTrueM(int jform, Vector & elemMatrixScaling)
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTrueP(int jform) const
 {
+    if (trueP_.size())
+    {
+        PARELAG_ASSERT(trueP_[jform]);
+        unique_ptr<ParallelCSRMatrix> out(
+                 mfem::Add(1.0, *trueP_[jform], 0.0, *trueP_[jform]));
+        return out;
+    }
+
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
@@ -1226,6 +1235,35 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
+    if (trueP_.size())
+    {
+        PARELAG_ASSERT(trueP_[jform]);
+        unique_ptr<ParallelCSRMatrix> truePT(trueP_[jform]->Transpose());
+        Array<int> marker(truePT->NumRows());
+        marker = 0;
+        const int num_marked =
+              coarser_sequence->Dof_[jform]->MarkDofsOnSelectedBndr(ess_label, marker);
+
+        auto dof_sharingmap = coarser_sequence->Dof_[jform]->GetDofTrueDof();
+        SerialCSRMatrix dof_trueDof_diag;
+        dof_sharingmap.get_entity_trueEntity()->GetDiag(dof_trueDof_diag);
+
+        Array<int> true_marker(num_marked);
+        int count = 0;
+        for (int i = 0 ; i < marker.Size(); ++i)
+        {
+            if (marker[i])
+            {
+                PARELAG_ASSERT_DEBUG(dof_sharingmap.IsShared(i) == 0);
+                const int true_dof = dof_trueDof_diag.GetRowColumns(i)[0];
+                true_marker[count++] = true_dof;
+            }
+        }
+
+        truePT->EliminateRows(true_marker);
+        return unique_ptr<ParallelCSRMatrix>(truePT->Transpose());
+    }
+
     auto Pj = GetP(jform, ess_label);
     return IgnoreNonLocalRange(
         Dof_[jform]->GetDofTrueDof(),
@@ -1235,6 +1273,14 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTruePi(int jform)
 {
+    if (truePi_.size())
+    {
+        PARELAG_ASSERT(truePi_[jform]);
+        unique_ptr<ParallelCSRMatrix> out(
+                 mfem::Add(1.0, *truePi_[jform], 0.0, *truePi_[jform]));
+        return out;
+    }
+
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
