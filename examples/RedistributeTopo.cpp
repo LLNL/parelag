@@ -34,17 +34,6 @@ using std::unique_ptr;
 using std::shared_ptr;
 using std::make_shared;
 
-enum {AMGe = 0, ADS};
-enum {ASSEMBLY=0,PRECONDITIONER_AMGe,PRECONDITIONER_ADS,SOLVER_AMGe,SOLVER_ADS};
-
-const int NSOLVERS = 2;
-const char * solver_names[] = {"AMGe","ADS"};
-
-const int NSTAGES = 5;
-const char * stage_names[] = {"ASSEMBLY", "prec AMGe", "prec ADS",
-                              "SOLVER_AMGe", "SOLVER_ADS"};
-
-
 int main (int argc, char *argv[])
 {
     // 1. Initialize MPI
@@ -115,6 +104,7 @@ int main (int argc, char *argv[])
     ParameterList& output_list = master_list->Sublist("Output control");
     const bool print_time = output_list.Get("Print timings",true);
     const bool show_progress = output_list.Get("Show progress",true);
+    const bool visualize = output_list.Get("Visualize solution",false);
 
     const bool print_progress_report = (!myid && show_progress);
 
@@ -241,11 +231,9 @@ int main (int argc, char *argv[])
     std::vector<shared_ptr<AgglomeratedTopology>> topology(nLevels+num_redist_coarsen_levels);
     std::vector<shared_ptr<DeRhamSequence>> sequence(topology.size());
 
-    Timer outer = TimeManager::AddTimer("Mesh Agglomeration -- Total");
     {
-        Timer inner = TimeManager::AddTimer("Mesh Agglomeration -- Level 0");
         topology[0] = make_shared<AgglomeratedTopology>(pmesh, 1);
-        ShowTopologyAgglomeratedElements(topology[0].get(), pmesh.get(), nullptr);
+//        ShowTopologyAgglomeratedElements(topology[0].get(), pmesh.get(), nullptr);
     }
 
     MFEMRefinedMeshPartitioner mfem_partitioner(nDimensions);
@@ -278,20 +266,17 @@ int main (int argc, char *argv[])
         sequence[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(topology[0], pmesh.get(), feorder);
     }
 
-    DeRhamSequenceFE * DRSequence_FE = sequence[0]->FemSequence();
-    PARELAG_ASSERT(DRSequence_FE);
-
     ConstantCoefficient coeffL2(1.);
     ConstantCoefficient coeffHdiv(1.);
 
     sequence[0]->SetjformStart(jFormStart);
 
+    DeRhamSequenceFE * DRSequence_FE = sequence[0]->FemSequence();
+    PARELAG_ASSERT(DRSequence_FE);
     DRSequence_FE->ReplaceMassIntegrator(
                 elem_t, pform, make_unique<MassIntegrator>(coeffL2), false);
     DRSequence_FE->ReplaceMassIntegrator(
                 elem_t, uform, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
-
-    // set up coefficients / targets
     DRSequence_FE->SetUpscalingTargets(nDimensions, upscalingOrder, jFormStart);
 
     StopWatch chrono;
@@ -545,10 +530,7 @@ int main (int argc, char *argv[])
                           << std::endl;
         }
 
-        {
-            Timer timer = TimeManager::AddTimer("Solve Linear System");
-            solver->Mult(prhs,psol);
-        }
+        solver->Mult(prhs,psol);
 
         {
             mfem::Vector tmp(A->Height());
@@ -564,233 +546,17 @@ int main (int argc, char *argv[])
                           << std::endl;
         }
 
+        if (visualize)
+        {
+            MultiVector u(psol.GetData(), 1, psol.BlockSize(0));
+            sequence[start_level]->ShowTrueData(uform, u);
+            MultiVector p(psol.GetBlock(1).GetData(), 1, psol.BlockSize(1));
+            sequence[start_level]->ShowTrueData(pform, p);
+        }
+
         if (print_progress_report)
             std::cout << "-- Solver has exited.\n";
     }
-
-//    {
-//        const int form = 2;
-
-//        const int nbdr = 6;
-//        Array<int> ess_attr(nbdr);
-//        ess_attr = 1;
-//        ess_attr[0] = 0;
-//        ess_attr[nbdr-1] = 0;
-
-//        Vector ess_bc(nbdr), nat_bc(nbdr);
-//        ess_bc = 0.0;
-//        nat_bc = 0.0;
-//        nat_bc[0] = -1.;
-
-//        PWConstCoefficient ubdr(ess_bc);
-//        PWConstCoefficient fbdr(nat_bc);
-
-//        //  testUpscalingHdiv(sequence);
-//        FiniteElementSpace * fespace = sequence[0]->FemSequence()->GetFeSpace(form);
-//        auto b = make_unique<LinearForm>(fespace);
-//        b->AddBoundaryIntegrator(new VectorFEBoundaryFluxLFIntegrator(fbdr));
-//        b->Assemble();
-
-//        auto lift = make_unique<GridFunction>(fespace);
-//        lift->ProjectBdrCoefficient(ubdr, ess_attr);
-
-//        DenseMatrix errors_L2_2(nLevels, nLevels);
-//        errors_L2_2 = 0.0;
-//        Vector norm_L2_2(nLevels);
-//        norm_L2_2 = 0.;
-
-//        DenseMatrix errors_div_2(nLevels, nLevels);
-//        errors_div_2 = 0.0;
-//        Vector norm_div_2(nLevels);
-//        norm_div_2 = 0.;
-
-//        DenseMatrix timings(nLevels, NSTAGES);
-//        timings = 0.0;
-
-//        Array2D<int> iter(nLevels, NSOLVERS);
-//        iter = 0;
-//        Array<int> ndofs(nLevels);
-//        ndofs = 0;
-//        Array<int> nnz(nLevels);
-//        nnz = 0;
-
-//        double tdiff;
-
-//        Array<SparseMatrix *> allP(nLevels-1);
-//        Array<SparseMatrix *> allD(nLevels);
-//        std::vector<unique_ptr<HypreParMatrix>> allC(nLevels);
-
-//        for (int i = 0; i < nLevels - 1; ++i)
-//            allP[i] = sequence[i]->GetP(form);
-
-//        for (int i = 0; i < nLevels; ++i)
-//            allC[i] = sequence[i]->ComputeTrueDerivativeOperator(form-1);
-
-//        for (int i = 0; i < nLevels; ++i)
-//            allD[i] = sequence[i]->GetDerivativeOperator(form);
-
-//        std::vector<unique_ptr<HypreParMatrix>> allP_bc(nLevels-1);
-//        std::vector<unique_ptr<HypreParMatrix>> allC_bc(nLevels);
-
-//        for (int i = 0; i < nLevels - 1; ++i)
-//            allP_bc[i] = sequence[i]->ComputeTrueP(form, ess_attr);
-
-//        for (int i = 0; i < nLevels; ++i)
-//            allC_bc[i] = sequence[i]->ComputeTrueDerivativeOperator(form-1, ess_attr);
-
-//        std::vector<unique_ptr<SparseMatrix>> Ml(nLevels);
-//        std::vector<unique_ptr<SparseMatrix>> Wl(nLevels);
-
-//        for (int k(0); k < nLevels; ++k)
-//        {
-//            chrono.Clear();
-//            chrono.Start();
-//            Ml[k] = sequence[k]->ComputeMassOperator(form);
-//            Wl[k] = sequence[k]->ComputeMassOperator(form+1);
-//            chrono.Stop();
-//            tdiff = chrono.RealTime();
-//            if (myid == 0 && reportTiming)
-//                std::cout << "Timing ELEM_AGG_LEVEL " << k << ": Assembly done in "
-//                          << tdiff << "s.\n";
-//            timings(k, ASSEMBLY) += tdiff;
-//        }
-
-//        std::vector<unique_ptr<Vector>> rhs(nLevels);
-//        std::vector<unique_ptr<Vector>> ess_data(nLevels);
-//        rhs[0] = std::move(b);
-//        ess_data[0] = std::move(lift);
-//        for (int i = 0; i < nLevels-1; ++i)
-//        {
-//            rhs[i+1] = make_unique<Vector>(sequence[i+1]->GetNumberOfDofs(form));
-//            ess_data[i+1] = make_unique<Vector>(sequence[i+1]->GetNumberOfDofs(form));
-//            sequence[i]->GetP(form)->MultTranspose(*(rhs[i]), *(rhs[i+1]));
-//            sequence[i]->GetPi(form)->ComputeProjector();
-//            sequence[i]->GetPi(form)->GetProjectorMatrix().Mult(
-//                *(ess_data[i]), *(ess_data[i+1]));
-//        }
-
-//        std::vector<unique_ptr<Vector>> sol_AMGe(nLevels);
-//        std::vector<unique_ptr<Vector>> sol_ADS(nLevels);
-//        std::vector<unique_ptr<Vector>> help(nLevels);
-
-//        for (int k(0); k < nLevels; ++k)
-//        {
-//            sol_AMGe[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
-//            *(sol_AMGe[k]) = 0.;
-//            sol_ADS[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
-//            *(sol_ADS[k]) = 0.;
-//            help[k] = make_unique<Vector>(sequence[k]->GetNumberOfDofs(form));
-//            *(help[k]) = 0.;
-//        }
-
-//        for (int k(0); k < nLevels; ++k)
-//        {
-//            chrono.Clear();
-//            chrono.Start();
-
-//            unique_ptr<HypreParMatrix> pA;
-//            const SharingMap & hdiv_dofTrueDof(
-//                sequence[k]->GetDofHandler(nDimensions-1)->GetDofTrueDof() );
-//            {
-//                auto M = Ml[k].get();
-//                auto W = Wl[k].get();
-//                auto D = allD[k];
-
-//                auto A = ToUnique(Add(*M, *ExampleRAP(*D, *W, *D)));
-
-//                const int nlocdofs = A->Height();
-//                Array<int> marker(nlocdofs);
-//                marker = 0;
-//                sequence[k]->GetDofHandler(form)->MarkDofsOnSelectedBndr(
-//                    ess_attr, marker);
-
-//                for (int mm = 0; mm < nlocdofs; ++mm)
-//                    if (marker[mm])
-//                        A->EliminateRowCol(
-//                            mm, ess_data[k]->operator ()(mm), *(rhs[k]) );
-
-//                pA = Assemble(hdiv_dofTrueDof, *A, hdiv_dofTrueDof);
-//            }
-//            Vector prhs( hdiv_dofTrueDof.GetTrueLocalSize() );
-//            hdiv_dofTrueDof.Assemble(*(rhs[k]), prhs);
-
-//            elag_assert(prhs.Size() == pA->Height() );
-
-//            chrono.Stop();
-//            tdiff = chrono.RealTime();
-//            if (myid == 0 && reportTiming)
-//                std::cout << "Timing ELEM_AGG_LEVEL " << k << ": Assembly done in "
-//                          << tdiff << "s.\n";
-//            timings(k, ASSEMBLY) += tdiff;
-
-//            ndofs[k] = pA->GetGlobalNumRows();
-//            nnz[k] = pA->NNZ();
-
-//            // AMGe SOLVER not implemented
-//            {
-//                (*sol_AMGe[k]) = 0.;
-//                timings(k, PRECONDITIONER_AMGe) = 0.;
-//                timings(k,SOLVER_AMGe) = 0.;
-//                iter(k,AMGe) = 0;
-//            }
-
-//            // default linear solver options
-//            constexpr int print_iter = 0;
-//            constexpr int max_num_iter = 500;
-//            constexpr double rtol = 1e-6;
-//            constexpr double atol = 1e-12;
-
-//            iter(k,ADS) = UpscalingHypreSolver(
-//                form, pA.get(), prhs,
-//                sequence[k].get(),
-//                k, PRECONDITIONER_ADS, SOLVER_ADS,
-//                print_iter, max_num_iter, rtol, atol,
-//                timings, hdiv_dofTrueDof, *(sol_ADS[k]), reportTiming);
-
-//            auto& sol = sol_ADS;
-//            // ERROR NORMS
-//            {
-//                *(help[k]) = *(sol[k]);
-//                for (int j = k; j > 0; --j)
-//                    allP[j-1]->Mult( *(help[j]), *(help[j-1]) );
-
-//                norm_L2_2(k) = Ml[k]->InnerProduct(*(sol[k]), *(sol[k]) );
-//                Vector dsol( allD[k]->Height() );
-//                allD[k]->Mult(*(sol[k]), dsol );
-//                norm_div_2(k) = Wl[k]->InnerProduct(dsol, dsol );
-
-//                for (int j(0); j < k; ++j)
-//                {
-//                    if (help[j]->Size() != sol[j]->Size() || sol[j]->Size() != allD[j]->Width() )
-//                        mfem_error("size don't match \n");
-
-//                    int size = sol[j]->Size();
-//                    int dsize = allD[j]->Height();
-//                    Vector u_H(help[j]->GetData(), size);
-//                    Vector u_h(sol[j]->GetData(), size);
-//                    Vector u_diff(size), du_diff(dsize);
-//                    u_diff = 0.; du_diff = 0.;
-
-//                    subtract(u_H, u_h, u_diff);
-//                    allD[j]->Mult(u_diff, du_diff);
-
-//                    errors_L2_2(k,j) =  Ml[j]->InnerProduct(u_diff, u_diff);
-//                    errors_div_2(k,j) =  Wl[j]->InnerProduct(du_diff, du_diff);
-//                }
-//            }
-
-//            //VISUALIZE SOLUTION
-////            if (do_visualize)
-////            {
-////                MultiVector tmp(sol[k]->GetData(), 1, sol[k]->Size() );
-////                sequence[k]->show(form, tmp);
-////            }
-//        }
-
-//        ReduceAndOutputUpscalingErrors(errors_L2_2, norm_L2_2,
-//                                       errors_div_2, norm_div_2);
-//    }
-
 
     if (print_progress_report)
         std::cout << "-- Good bye!\n\n";

@@ -3423,6 +3423,16 @@ void DeRhamSequenceAlg::show(int jform, MultiVector & v)
     finer_sequence->show(jform, vFine);
 }
 
+void DeRhamSequenceAlg::ShowTrueData(int jform, MultiVector & true_v)
+{
+   auto finer_sequence = FinerSequence_.lock();
+   PARELAG_ASSERT(finer_sequence);
+
+   MultiVector vFine(true_v.NumberOfVectors(), finer_sequence->GetNumTrueDofs(jform));
+   Mult(finer_sequence->GetTrueP(jform), true_v, vFine);
+   finer_sequence->ShowTrueData(jform, vFine);
+}
+
 void DeRhamSequenceAlg::ExportGLVis(int jform, Vector & v, std::ostream & os)
 {
     auto finer_sequence = FinerSequence_.lock();

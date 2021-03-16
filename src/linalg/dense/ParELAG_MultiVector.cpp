@@ -593,8 +593,6 @@ void MatrixTTimesMultiVector(
     MatrixTTimesMultiVector(1.0, M, x, y);
 }
 
-
-
 void MatrixTTimesMultiVector(double scaling, const SparseMatrix & M,
                              const MultiVector & x, MultiVector & y)
 {

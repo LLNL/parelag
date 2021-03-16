@@ -291,6 +291,9 @@ public:
     virtual void show(int jform, MultiVector & v) = 0;
 
     /// TODO
+    virtual void ShowTrueData(int jform, MultiVector & true_v) = 0;
+
+    /// TODO
     virtual void ExportGLVis(int jform, mfem::Vector & v, std::ostream & os) = 0;
 
     ///@}
@@ -727,6 +730,8 @@ public:
 
     virtual void show(int jform,
                       MultiVector & v) override;
+
+    virtual void ShowTrueData(int jform, MultiVector & true_v) override;
 
     virtual void ExportGLVis(int jform,
                              mfem::Vector & v,

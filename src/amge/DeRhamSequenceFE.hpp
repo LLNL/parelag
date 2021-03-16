@@ -125,6 +125,9 @@ public:
     /// interactive visualization of v with GLVis
     virtual void show(int jform, MultiVector & v) override;
 
+    /// same as show, except v is assumed to be "true"
+    virtual void ShowTrueData(int jform, MultiVector & true_v) override;
+
     /// save a meshfile and vector file for visualization with GLVis
     virtual void ExportGLVis(int jform,
                              mfem::Vector & v,
