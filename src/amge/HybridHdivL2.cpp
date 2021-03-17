@@ -234,8 +234,11 @@ void HybridHdivL2::AssembleHybridSystem()
 
     // Determine whether to construct rescaling vector (CC^T)^{-1}CB^T1
     // (rescaling works in fine level or if number of HdivDof on each facet = 1)
-    const bool make_rescale = !IsSameOrient || (nFacet == facet_HdivDof.NumCols());
-    mfem::Vector CCT_diag(make_rescale ? HybridSystem->NumRows() : 0);
+    bool do_rescale;
+    bool do_rescale_loc = !IsSameOrient || (nFacet == facet_HdivDof.NumCols());
+    MPI_Allreduce(&do_rescale_loc, &do_rescale, 1, MPI::BOOL, MPI_LAND, topo->GetComm());
+
+    mfem::Vector CCT_diag(do_rescale ? HybridSystem->NumRows() : 0);
     mfem::Vector CBT1(CCT_diag.Size());
     CCT_diag = 0.0;
     CBT1 = 0.0;
@@ -425,7 +428,7 @@ void HybridHdivL2::AssembleHybridSystem()
                                    1);
 
         // Save CCT and CBT1
-        if (make_rescale)
+        if (do_rescale)
         {
             mfem::DenseMatrix CCT(nMultiplierDofLoc);
             mfem::MultAAt(ClocT, CCT);
@@ -507,7 +510,7 @@ void HybridHdivL2::AssembleHybridSystem()
     	}
 
     // Assemble global rescaling vector (CC^T)^{-1}CB^T 1
-    if (make_rescale)
+    if (do_rescale)
     {
         mfem::Vector CCT_diag_global(MultiplierTrueMultiplier.GetTrueLocalSize());
         MultiplierTrueMultiplier.Assemble(CCT_diag, CCT_diag_global);
@@ -634,11 +637,6 @@ void HybridHdivL2::RecoverOriginalSolution(const Vector& HybridSol,
 
     const int nElem = elem_L2Dof.Size();
     const int nHdivDof = rHdivDof_HdivDof.Width();
-
-    Array<int> offsets(3);
-    offsets[0] = 0;
-    offsets[1] = nHdivDof;
-    offsets[2] = nHdivDof+elem_L2Dof.Width();
 
     RecoveredSol = 0.;
 

@@ -38,9 +38,9 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
 
     if (hybrid_strategy == "Darcy")
     {
-    	auto& sequence = state.GetDeRhamSequence();
-    	auto sequence_ptr = state.GetDeRhamSequencePtr();
-    	auto forms = state.GetForms();
+        auto& sequence = state.GetDeRhamSequence();
+        auto sequence_ptr = state.GetDeRhamSequencePtr();
+        auto forms = state.GetForms();
 
         // Whether the element H(div) dofs have same orientation on shared facet
         bool IsSameOrient = state.GetExtraParameter("IsSameOrient",false);
@@ -48,19 +48,21 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         // The constant weight in the system [M B^T; B -(W_weight*W)]
         double L2MassWeight = state.GetExtraParameter("L2MassWeight",0.0);
 
+        bool act_on_trueDofs = state.GetExtraParameter("ActOnTrueDofs",false);
+
         // Scales of element H(div) mass matrices for the problem being solved
         // If not provided, the scale is treated as 1.0
         auto elemMatrixScaling = state.GetVector("elemMatrixScaling");
 
-    	auto label_ess = state.GetBoundaryLabels(0);
-    	mfem::Array<int> ess_HdivDofs;
+        auto label_ess = state.GetBoundaryLabels(0);
+        mfem::Array<int> ess_HdivDofs;
         if (label_ess.size() > 0)
-    	{
-    		mfem::Array<int> ess_attr(label_ess.data(),label_ess.size());
-    		ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
-    		sequence.GetDofHandler(forms[0])->MarkDofsOnSelectedBndr(
-    				ess_attr, ess_HdivDofs);
-    	}
+        {
+            mfem::Array<int> ess_attr(label_ess.data(),label_ess.size());
+            ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
+            sequence.GetDofHandler(forms[0])->MarkDofsOnSelectedBndr(
+                 ess_attr, ess_HdivDofs);
+        }
         else
         {
             ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
@@ -71,18 +73,12 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
                                                L2MassWeight, ess_HdivDofs,
                                                elemMatrixScaling);
 
-        mfem::Array<int> Offsets(3);
-    	Offsets[0] = 0;
-    	Offsets[1] = sequence.GetNumberOfDofs(forms[0]);
-    	Offsets[2] = Offsets[1] + sequence.GetNumberOfDofs(forms[1]);
-
         // Copy the hybridized matrix and eliminate the boundary condition
         // for the matrix. Note that at this stage no rhs is given, so the
         // original hybridized matrix (before elimination) is kept so that
         // later it can be used to finish the elimination process (for rhs)
-        mfem::SparseMatrix HB_mat_copy(*hybridization->GetHybridSystem());
-        SharingMap& mult_dofTrueDof = hybridization->
-                GetDofMultiplier()->GetDofTrueDof();
+        mfem::SparseMatrix HB_mat_copy(hybridization->GetHybridSystem());
+        auto& mult_dofTrueDof = hybridization->GetDofMultiplier().GetDofTrueDof();
 
         // Eliminate essential multiplier dofs (1-1 map to natural Hdiv dofs)
         for (int i = 0; i < HB_mat_copy.Size(); i++)
@@ -139,8 +135,9 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
 
         std::unique_ptr<mfem::Solver> hybrid_solve =
                 make_unique<HybridizationSolver>(std::move(hybridization),
-                                                 std::move(solver), Offsets,
-                                                 std::move(D_Scale));
+                                                 std::move(solver), sequence,
+                                                 std::move(D_Scale),
+                                                 act_on_trueDofs);
 
         return hybrid_solve;
     }

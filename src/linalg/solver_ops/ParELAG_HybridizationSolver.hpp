@@ -37,10 +37,11 @@ public:
 
     /// Constructor taking Operators to move
     HybridizationSolver(
-        std::shared_ptr<HybridHdivL2> Hybridization,
+        std::shared_ptr<HybridHdivL2> hybridization,
         std::shared_ptr<mfem::Solver> solver,
-        mfem::Array<int>& Offsets,
-        std::shared_ptr<mfem::SparseMatrix> D_Scale);
+        const DeRhamSequence& sequence,
+        std::shared_ptr<mfem::SparseMatrix> D_Scale,
+        bool act_on_trueDofs = false);
 
     /// Destructor
     ~HybridizationSolver() = default;
@@ -76,10 +77,10 @@ public:
     ///@{
 
     /// Set the convert-to-hybridized-form operator
-    void SetHybridization(std::shared_ptr<HybridHdivL2> Hybridization)
+    void SetHybridization(std::shared_ptr<HybridHdivL2> hybridization)
     {
-        PARELAG_ASSERT(Hybridization);
-        Hybridization_ = std::move(Hybridization);
+        PARELAG_ASSERT(hybridization);
+        hybridization_ = std::move(hybridization);
     }
 
     ///@}
@@ -87,7 +88,7 @@ public:
 private:
     /// Hybridization object containing transformation between
     /// non-hybridized form and hybridized form
-    std::shared_ptr<HybridHdivL2> Hybridization_;
+    std::shared_ptr<HybridHdivL2> hybridization_;
 
     /// The solver for the hybridized system
     std::shared_ptr<mfem::Solver> Solver_;
@@ -95,8 +96,11 @@ private:
     /// Auxiliary vectors for solving in the hybridized form
     mutable mfem::Vector pHybridRHS_, pHybridSol_;
 
+    bool act_on_trueDofs_;
+
     // Offsets of the original block system
     mfem::Array<int> Offsets_;
+    mfem::Array<int> TrueOffsets_;
 
     std::shared_ptr<mfem::SparseMatrix> D_Scale_;
 };
