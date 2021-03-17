@@ -490,6 +490,10 @@ int main (int argc, char *argv[])
             std::vector<std::vector<int>>(2,std::vector<int>()));
         solver_state->SetForms({uform,pform});
 
+        // These are for hybridization solver
+        solver_state->SetExtraParameter("IsSameOrient",(start_level>0));
+        solver_state->SetExtraParameter("ActOnTrueDofs",true);
+
         unique_ptr<mfem::Solver> solver;
 
         // Build the preconditioner
@@ -499,12 +503,12 @@ int main (int argc, char *argv[])
         {
             Timer timer = TimeManager::AddTimer("Build Solver");
             solver = prec_factory->BuildSolver(A,*solver_state);
+            solver->iterative_mode=false;
         }
 
         if (print_progress_report)
             std::cout << "-- Built solver \"" << solver_type << "\".\n";
 
-//        mfem::BlockVector sol(block_offsets);
         mfem::BlockVector psol(true_block_offsets);
         psol = 0.;
 
