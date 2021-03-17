@@ -39,7 +39,7 @@ public:
     HybridizationSolver(
         std::shared_ptr<HybridHdivL2> hybridization,
         std::shared_ptr<mfem::Solver> solver,
-        const DeRhamSequence& sequence,
+        std::shared_ptr<DeRhamSequence> sequence,
         std::shared_ptr<mfem::SparseMatrix> D_Scale,
         bool act_on_trueDofs = false);
 
@@ -96,7 +96,7 @@ private:
     /// Auxiliary vectors for solving in the hybridized form
     mutable mfem::Vector pHybridRHS_, pHybridSol_;
 
-    bool act_on_trueDofs_;
+    bool act_on_trueDofs_;std::shared_ptr<DeRhamSequence> sequence_;
 
     // Offsets of the original block system
     mfem::Array<int> Offsets_;

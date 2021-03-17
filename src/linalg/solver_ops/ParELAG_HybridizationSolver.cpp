@@ -18,12 +18,13 @@ namespace parelag
 
 HybridizationSolver::HybridizationSolver(std::shared_ptr<HybridHdivL2> hybridization,
     std::shared_ptr<mfem::Solver> solver,
-    const DeRhamSequence &sequence,
+    std::shared_ptr<DeRhamSequence> sequence,
     std::shared_ptr<mfem::SparseMatrix> D_Scale,
     bool act_on_trueDofs)
     : hybridization_(std::move(hybridization)),
       Solver_(std::move(solver)),
       act_on_trueDofs_(act_on_trueDofs),
+      sequence_(sequence),
       Offsets_(3),
       TrueOffsets_(3),
       D_Scale_(std::move(D_Scale))
@@ -35,16 +36,14 @@ HybridizationSolver::HybridizationSolver(std::shared_ptr<HybridHdivL2> hybridiza
     pHybridSol_.SetSize(nTrueDofs);
     pHybridSol_ = 0.0;
 
-    const int l2_form = sequence.GetNumForms()-1;
+    const int l2_form = sequence->GetNumForms()-1;
     const int hdiv_form = l2_form-1;
-
     Offsets_[0] = 0;
-    Offsets_[1] = sequence.GetNumDofs(hdiv_form);
-    Offsets_[2] = Offsets_[1] + sequence.GetNumDofs(l2_form);
-
+    Offsets_[1] = sequence->GetNumDofs(hdiv_form);
+    Offsets_[2] = Offsets_[1] + sequence->GetNumDofs(l2_form);
     TrueOffsets_[0] = 0;
-    TrueOffsets_[1] = sequence.GetNumTrueDofs(hdiv_form);
-    TrueOffsets_[2] = TrueOffsets_[1] + sequence.GetNumTrueDofs(l2_form);
+    TrueOffsets_[1] = sequence->GetNumTrueDofs(hdiv_form);
+    TrueOffsets_[2] = TrueOffsets_[1] + sequence->GetNumTrueDofs(l2_form);
 }
 
 void HybridizationSolver::_do_set_operator(const std::shared_ptr<mfem::Operator>& op)
@@ -64,10 +63,40 @@ void HybridizationSolver::Mult(
         "HybridizationSolver::Mult(...):\n"
         "The HybridizationSolver cannot be used in iterative mode.");
 
-    mfem::BlockVector rhs_view(rhs.GetData(), Offsets_);
-    mfem::BlockVector sol_view(sol.GetData(), Offsets_);
+    const int hdiv_form = sequence_->GetNumForms()-2;
+    auto& hdiv_dofTrueDof = sequence_->GetDofHandler(hdiv_form)->GetDofTrueDof();
 
-   auto& mult_dofTrueDof = hybridization_->GetDofMultiplier().GetDofTrueDof();
+    mfem::Vector non_true_rhs;
+    mfem::Vector non_true_sol;
+    mfem::BlockVector rhs_view;
+    mfem::BlockVector sol_view;
+    mfem::BlockVector true_rhs_view;
+    mfem::BlockVector true_sol_view;
+
+    if (act_on_trueDofs_)
+    {
+       true_rhs_view.Update(rhs.GetData(), TrueOffsets_);
+       true_sol_view.Update(sol.GetData(), TrueOffsets_);
+
+       non_true_rhs.SetSize(Offsets_.Last());
+       non_true_sol.SetSize(Offsets_.Last());
+       non_true_sol = 0.0;
+       rhs_view.Update(non_true_rhs.GetData(), Offsets_);
+       sol_view.Update(non_true_sol.GetData(), Offsets_);
+
+       SerialCSRMatrix hdiv_assign;
+       hdiv_dofTrueDof.get_entity_trueEntity()->GetDiag(hdiv_assign);
+
+       hdiv_assign.Mult(true_rhs_view.GetBlock(0), rhs_view.GetBlock(0));
+       rhs_view.GetBlock(1) = true_rhs_view.GetBlock(1);
+    }
+    else
+    {
+        rhs_view.Update(rhs.GetData(), Offsets_);
+        sol_view.Update(sol.GetData(), Offsets_);
+    }
+
+    auto& mult_dofTrueDof = hybridization_->GetDofMultiplier().GetDofTrueDof();
 
     // Transform RHS to the hybridized form and essential data
     mfem::Vector HybridRHS;
@@ -102,6 +131,13 @@ void HybridizationSolver::Mult(
     mult_dofTrueDof.Distribute(pHybridSol_, HybridSol);
     // Transform back to the non-hybridized form
     hybridization_->RecoverOriginalSolution(HybridSol,sol_view);
+
+    if (act_on_trueDofs_)
+    {
+       hdiv_dofTrueDof.IgnoreNonLocal(sol_view.GetBlock(0),
+                                      true_sol_view.GetBlock(0));
+       true_sol_view.GetBlock(1) = sol_view.GetBlock(1);
+    }
 }
 
 void HybridizationSolver::MultTranspose(
@@ -113,9 +149,38 @@ void HybridizationSolver::MultTranspose(
         "HybridizationSolver::Mult(...):\n"
         "The HybridizationSolver cannot be used in iterative mode.");
 
-    mfem::BlockVector rhs_view(rhs.GetData(), Offsets_);
-    mfem::BlockVector sol_view(sol.GetData(), Offsets_);
+    const int hdiv_form = sequence_->GetNumForms()-2;
+    auto& hdiv_dofTrueDof = sequence_->GetDofHandler(hdiv_form)->GetDofTrueDof();
 
+    mfem::Vector non_true_rhs;
+    mfem::Vector non_true_sol;
+    mfem::BlockVector rhs_view;
+    mfem::BlockVector sol_view;
+    mfem::BlockVector true_rhs_view;
+    mfem::BlockVector true_sol_view;
+
+    if (act_on_trueDofs_)
+    {
+       true_rhs_view.Update(rhs.GetData(), TrueOffsets_);
+       true_sol_view.Update(sol.GetData(), TrueOffsets_);
+
+       non_true_rhs.SetSize(Offsets_.Last());
+       non_true_sol.SetSize(Offsets_.Last());
+       non_true_sol = 0.0;
+       rhs_view.Update(non_true_rhs.GetData(), Offsets_);
+       sol_view.Update(non_true_sol.GetData(), Offsets_);
+
+       SerialCSRMatrix hdiv_assign;
+       hdiv_dofTrueDof.get_entity_trueEntity()->GetDiag(hdiv_assign);
+
+       hdiv_assign.Mult(true_rhs_view.GetBlock(0), rhs_view.GetBlock(0));
+       rhs_view.GetBlock(1) = true_rhs_view.GetBlock(1);
+    }
+    else
+    {
+        rhs_view.Update(rhs.GetData(), Offsets_);
+        sol_view.Update(sol.GetData(), Offsets_);
+    }
     auto& mult_dofTrueDof = hybridization_->GetDofMultiplier().GetDofTrueDof();
 
     // Transform RHS to the hybridized form and essential data
@@ -151,6 +216,13 @@ void HybridizationSolver::MultTranspose(
     mult_dofTrueDof.Distribute(pHybridSol_, HybridSol);
     // Transform back to the non-hybridized form
     hybridization_->RecoverOriginalSolution(HybridSol,sol_view);
+
+    if (act_on_trueDofs_)
+    {
+       hdiv_dofTrueDof.IgnoreNonLocal(sol_view.GetBlock(0),
+                                      true_sol_view.GetBlock(0));
+       true_sol_view.GetBlock(1) = sol_view.GetBlock(1);
+    }
 }
 
 

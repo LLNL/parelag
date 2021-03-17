@@ -135,7 +135,8 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
 
         std::unique_ptr<mfem::Solver> hybrid_solve =
                 make_unique<HybridizationSolver>(std::move(hybridization),
-                                                 std::move(solver), sequence,
+                                                 std::move(solver),
+                                                 std::move(sequence_ptr),
                                                  std::move(D_Scale),
                                                  act_on_trueDofs);
 
