@@ -1049,8 +1049,8 @@ void SplitMatrixHorizontally(const DenseMatrix &A, int middle_row,
 }
 
 std::unique_ptr<mfem::HypreParMatrix>
-Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B)
+Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B, bool own_starts)
 {
-   return std::unique_ptr<mfem::HypreParMatrix>(mfem::ParMult(&A, &B));
+   return std::unique_ptr<mfem::HypreParMatrix>(mfem::ParMult(&A, &B, own_starts));
 }
 }//namespace parelag

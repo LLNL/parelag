@@ -140,6 +140,7 @@ void SplitMatrixHorizontally(
     mfem::DenseMatrix &top, mfem::DenseMatrix &bottom);
 
 std::unique_ptr<mfem::HypreParMatrix>
-Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B);
+Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B,
+     bool own_starts = true);
 }//namespace parelag
 #endif /* MATRIXUTILS_HPP_ */

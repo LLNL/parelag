@@ -1148,6 +1148,12 @@ DeRhamSequence::ComputeTrueM(int jform, Vector & elemMatrixScaling)
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTrueP(int jform) const
 {
+    PARELAG_ASSERT((trueP_.size() && trueP_[jform]) || P_[jform]);
+    if (trueP_.size() && trueP_[jform])
+    {
+        return ToUnique(mfem::Add(1.0, *trueP_[jform], 0.0, *trueP_[jform]));
+    }
+
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
@@ -1214,6 +1220,12 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTruePi(int jform)
 {
+    PARELAG_ASSERT((truePi_.size() && truePi_[jform]) || Pi_[jform]);
+    if (truePi_.size() && truePi_[jform])
+    {
+        return ToUnique(mfem::Add(1.0, *truePi_[jform], 0.0, *truePi_[jform]));
+    }
+
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 

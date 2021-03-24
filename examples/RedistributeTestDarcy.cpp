@@ -110,7 +110,7 @@ int main (int argc, char *argv[])
 
     if (print_progress_report)
         std::cout << "\n-- Hello!\n"
-                  << "-- Welcome to RedistributeTopo!\n\n";
+                  << "-- Welcome to RedistributeTestDarcy!\n\n";
 
     std::ostringstream mesh_msg;
     if (!myid)
