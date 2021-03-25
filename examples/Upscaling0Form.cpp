@@ -114,10 +114,14 @@ int main (int argc, char *argv[])
     const int nDimensions = pmesh->Dimension();
     const int nLevels = par_ref_levels+1;
     std::vector<int> level_nElements(nLevels);
+    if (myid == 0)
+        std::cout << "NE: " << pmesh->GetNE() << " NF: " << pmesh->GetNumFaces() << " (BDR: " <<  pmesh->GetNBE() << ")" << std::endl;
     for (int l = 0; l < par_ref_levels; l++)
     {
         level_nElements[par_ref_levels-l] = pmesh->GetNE();
         pmesh->UniformRefinement();
+        if (myid == 0)
+            std::cout << "NE: " << pmesh->GetNE() << " NF: " << pmesh->GetNumFaces() << " (BDR: " <<  pmesh->GetNBE() << ")" << std::endl;
     }
     level_nElements[0] = pmesh->GetNE();
 
@@ -149,6 +153,9 @@ int main (int argc, char *argv[])
     constexpr auto AT_elem = AgglomeratedTopology::ELEMENT;
     for (int ilevel = 0; ilevel < nLevels-1; ++ilevel)
     {
+        if (myid == 0)
+            std::cout << "Elements level " << ilevel << ": "
+                      << topology[ilevel]->GetNumberLocalEntities(AT_elem) << std::endl;
         Array<int> partitioning(
             topology[ilevel]->GetNumberLocalEntities(AT_elem));
         chronoInterior.Clear();
@@ -164,9 +171,14 @@ int main (int argc, char *argv[])
     }
     chrono.Stop();
     if (myid == 0)
+        std::cout << "Elements level " << nLevels-1 << ": "
+                  << topology[nLevels-1]->GetNumberLocalEntities(AT_elem) << std::endl;
         std::cout<<"Timing ELEM_AGG: Mesh Agglomeration done in "
                  << chrono.RealTime() << " seconds.\n";
 
+    if (do_visualize && nDimensions <= 3)
+        for (int ilevel = 0; ilevel < nLevels-1; ++ilevel)
+            ShowTopologyAgglomeratedElements(topology[ilevel].get(), pmesh.get());
 
     chronoInterior.Clear();
     chronoInterior.Start();

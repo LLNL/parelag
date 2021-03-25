@@ -16,6 +16,7 @@ list(APPEND EXAMPLE_SRCS
   ElectricPotential_bfly.cpp
   EmbeddedMeshPartitionerDemo.cpp
   HdivL2SampleGenerator.cpp
+  HdivL2ExtensionVisualize.cpp
   LogicalPartitionerDemo.cpp
   Upscaling0Form.cpp
   Upscaling0FormMFEM.cpp

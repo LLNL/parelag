@@ -261,7 +261,7 @@ hypre_ParCSRMatrixMatvecT( double           alpha,
    /*-----------------------------------------------------------------------
     *-----------------------------------------------------------------------*/
 
-    comm_handle = hypre_CTAlloc(hypre_ParCSRCommHandle*,num_vectors);
+    comm_handle = parelag_hypre_CTAlloc(hypre_ParCSRCommHandle*,num_vectors);
 
     if ( num_vectors==1 )
     {
@@ -284,9 +284,9 @@ hypre_ParCSRMatrixMatvecT( double           alpha,
    }
 
    num_sends = hypre_ParCSRCommPkgNumSends(comm_pkg);
-   y_buf_data = hypre_CTAlloc( double*, num_vectors );
+   y_buf_data = parelag_hypre_CTAlloc( double*, num_vectors );
    for ( jv=0; jv<num_vectors; ++jv )
-      y_buf_data[jv] = hypre_CTAlloc(double, hypre_ParCSRCommPkgSendMapStart
+      y_buf_data[jv] = parelag_hypre_CTAlloc(double, hypre_ParCSRCommPkgSendMapStart
                                      (comm_pkg, num_sends));
    y_tmp_data = hypre_VectorData(y_tmp);
    y_local_data = hypre_VectorData(y_local);
@@ -309,7 +309,7 @@ hypre_ParCSRMatrixMatvecT( double           alpha,
       hypre_ParCSRCommHandleDestroy(comm_handle[jv]);
       comm_handle[jv] = NULL;
    }
-   hypre_TFree(comm_handle);
+   parelag_hypre_TFree(comm_handle);
 
    if ( num_vectors==1 )
    {
@@ -338,8 +338,8 @@ hypre_ParCSRMatrixMatvecT( double           alpha,
 
    hypre_SeqVectorDestroy(y_tmp);
    y_tmp = NULL;
-   for ( jv=0; jv<num_vectors; ++jv ) hypre_TFree(y_buf_data[jv]);
-   hypre_TFree(y_buf_data);
+   for ( jv=0; jv<num_vectors; ++jv ) parelag_hypre_TFree(y_buf_data[jv]);
+   parelag_hypre_TFree(y_buf_data);
 
    return ierr;
 }

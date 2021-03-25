@@ -150,7 +150,6 @@ int main (int argc, char *argv[])
 
     StopWatch chrono;
 
-    MFEMRefinedMeshPartitioner partitioner(nDimensions);
     std::vector<shared_ptr<AgglomeratedTopology>> topology(nLevels);
 
     StopWatch chronoInterior;
