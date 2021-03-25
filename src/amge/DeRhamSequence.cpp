@@ -2056,17 +2056,23 @@ void DeRhamSequence::ComputeCoarseTracesWithTargets(int jform)
                          col_end - col_start);
 
 #ifdef ELAG_DEBUG
-            PARELAG_TEST_FOR_EXCEPTION(
-                rows.Max() >= P_[jform]->Size(),
-                std::runtime_error,
-                "DeRhamSequence::ComputeCoarseTraces(): "
-                "rows.Max() >= P_[jform]->Size()");
+            if (rows.Size() > 0)
+            {
+                PARELAG_TEST_FOR_EXCEPTION(
+                    rows.Max() >= P_[jform]->Size(),
+                    std::runtime_error,
+                    "DeRhamSequence::ComputeCoarseTraces(): "
+                    "rows.Max() >= P_[jform]->Size()");
+            }
 
-            PARELAG_TEST_FOR_EXCEPTION(
-                cols.Max() >= P_[jform]->Width(),
-                std::runtime_error,
-                "DeRhamSequence::ComputeCoarseTraces(): "
-                "cols.Max() >= P_[jform]->Width()");
+            if (cols.Size() > 0)
+            {
+                PARELAG_TEST_FOR_EXCEPTION(
+                    cols.Max() >= P_[jform]->Width(),
+                    std::runtime_error,
+                    "DeRhamSequence::ComputeCoarseTraces(): "
+                    "cols.Max() >= P_[jform]->Width()");
+            }
 
             PARELAG_ASSERT(my_p.GetElementalMatrix(iAE).Height() == rows.Size());
             PARELAG_ASSERT(my_p.GetElementalMatrix(iAE).Width() == cols.Size());
