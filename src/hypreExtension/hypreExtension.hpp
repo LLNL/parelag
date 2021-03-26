@@ -14,7 +14,7 @@
 #ifndef HYPREEXTENSION_H_
 #define HYPREEXTENSION_H_
 
-#include <config/config.hpp>
+#include <config/_config.hpp>
 
 #include "seq_mv.h"
 #include "_hypre_parcsr_mv.h"
