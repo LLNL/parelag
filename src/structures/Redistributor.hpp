@@ -36,6 +36,9 @@ namespace parelag
 
 unique_ptr<ParallelCSRMatrix> Move(matred::ParMatrix& A);
 
+void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax);
+
+/// A helper to redistribute AgglomeratedTopology, DofHandler, DeRhamSequence
 class Redistributor
 {
     using ParMatrix = matred::ParMatrix;
@@ -45,6 +48,13 @@ class Redistributor
    std::vector<unique_ptr<ParallelCSRMatrix> > redEntity_trueEntity;
    std::vector<unique_ptr<ParallelCSRMatrix> > redTrueDof_trueDof;
    std::vector<unique_ptr<ParallelCSRMatrix> > redDof_trueDof;
+
+   shared_ptr<AgglomeratedTopology> redist_topo;
+
+   std::shared_ptr<AgglomeratedTopology> Redistribute(
+         const AgglomeratedTopology& topo);
+
+   std::unique_ptr<DofHandler> Redistribute(const DofHandler& dof);
 
    unique_ptr<ParallelCSRMatrix> BuildRedEntToTrueEnt(
          const ParallelCSRMatrix& elem_trueEntity) const;
@@ -58,8 +68,14 @@ class Redistributor
 
    unique_ptr<ParallelCSRMatrix>
    BuildRepeatedDofToTrueDof(const DofHandler& dof, int codim);
-
 public:
+
+   /// Constructor for Redistributor
+   /// A redistributed topology will be constructed and stored in the class
+   /// @param topo topology in the original data distribution
+   /// @param elem_redist_procs an array of size number of local elements.
+   /// elem_redist_procs[i] indicates which processor the i-th local element
+   /// will be redistributed to. Other entities are redistributed accordingly.
    Redistributor(const AgglomeratedTopology& topo,
                  const std::vector<int>& elem_redist_procs);
 
@@ -73,24 +89,10 @@ public:
       return *(redTrueDof_trueDof[jform]);
    }
 
-   const ParallelCSRMatrix& RedistributedDofToTrueDof(int jform) const
-   {
-      return *(redDof_trueDof[jform]);
-   }
+   AgglomeratedTopology& GetRedistributedTopology() { return *redist_topo; }
 
-   std::shared_ptr<AgglomeratedTopology> Redistribute(
-         const AgglomeratedTopology& topo);
-
-   std::unique_ptr<DofHandler> Redistribute(
-         const DofHandler& dof,
-         const std::shared_ptr<AgglomeratedTopology>& redist_topo);
-
-   std::shared_ptr<DeRhamSequenceAlg> Redistribute(
-         const DeRhamSequence& sequence,
-         const std::shared_ptr<AgglomeratedTopology>& redist_topo);
+   std::shared_ptr<DeRhamSequenceAlg> Redistribute(const DeRhamSequence& seq);
 };
-
-void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax);
 
 } // namespace parelag
 

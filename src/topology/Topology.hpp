@@ -374,25 +374,8 @@ public:
         bool checkTopology,
         bool preserveMaterialInterfaces);
 
-    /// Redistribute topological entities to a different set of processors and
-    /// then coarsen the redistributed entities locally on the new processors.
-    /// This is called typically when the original partition does not have room
-    /// to coarsen further (e.g., there is only one element locally in some
-    /// processors).
-    /// @param elem_redist_procs an array of size number of local elements.
-    /// elem_redist_procs[i] indicates which processor the i-th local element
-    /// will be redistributed to. Other entities are redistributed accordingly.
-    /// @param num_partitions number of local agglomerates in the coarsened
-    /// topology after the redistribution.
-    std::shared_ptr<AgglomeratedTopology> RedistributeAndCoarsen(
-        const std::vector<int>& elem_redist_procs,
-        const MetisGraphPartitioner& partitioner,
-        int num_partitions, bool check_topology,
-        bool preserve_material_interfaces);
-
     std::shared_ptr<AgglomeratedTopology> Coarsen(
-          const Redistributor& redistributor,
-          std::shared_ptr<AgglomeratedTopology>& redist_topo,
+          Redistributor& redistributor,
           const MetisGraphPartitioner& partitioner,
           int num_partitions, bool check_topology,
           bool preserve_material_interfaces);

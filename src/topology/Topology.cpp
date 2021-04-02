@@ -826,35 +826,22 @@ AgglomeratedTopology::CoarsenLocalPartitioning(
 }
 
 std::shared_ptr<AgglomeratedTopology>
-AgglomeratedTopology::RedistributeAndCoarsen(
-    const std::vector<int>& elem_redist_procs,
-    const MetisGraphPartitioner& partitioner,
-    int num_partitions, bool check_topology,
-    bool preserve_material_interfaces)
-{
-   Redistributor redistributor(*this, elem_redist_procs);
-   auto redist_topo = redistributor.Redistribute(*this);
-   return Coarsen(redistributor, redist_topo, partitioner, num_partitions,
-                  check_topology, preserve_material_interfaces);
-}
-
-std::shared_ptr<AgglomeratedTopology>
-AgglomeratedTopology::Coarsen(const Redistributor& redistributor,
-                              std::shared_ptr<AgglomeratedTopology>& redist_topo,
+AgglomeratedTopology::Coarsen(Redistributor& redistributor,
                               const MetisGraphPartitioner& partitioner,
                               int num_partitions, bool check_topology,
                               bool preserve_material_interfaces)
 {
    // Coarsen redist_topo
-   Array<int> partitioning(redist_topo->GetNumberLocalEntities(ELEMENT));
-   if (redist_topo->GetNumberLocalEntities(ELEMENT) > 0)
+   auto& redist_topo = redistributor.GetRedistributedTopology();
+   Array<int> partitioning(redist_topo.GetNumberLocalEntities(ELEMENT));
+   if (redist_topo.GetNumberLocalEntities(ELEMENT) > 0)
    {
-      partitioner.doPartition(*redist_topo->LocalElementElementTable(),
+      partitioner.doPartition(*redist_topo.LocalElementElementTable(),
                               num_partitions, partitioning);
    }
 
    const int coarsefaces_algo = this->Dimensions() == 3 ? 2 : 0;
-   auto coarse_redist_topo = redist_topo->CoarsenLocalPartitioning(
+   auto coarse_redist_topo = redist_topo.CoarsenLocalPartitioning(
             partitioning, check_topology, preserve_material_interfaces, coarsefaces_algo);
 
    coarse_redist_topo->BuildConnectivity();
@@ -865,15 +852,15 @@ AgglomeratedTopology::Coarsen(const Redistributor& redistributor,
    for (int i = 0; i < nCodim_+1; ++i)
    {
       auto& redAE_redTAE = coarse_redist_topo->EntityTrueEntity(i);
-      auto& redE_redTE = redist_topo->EntityTrueEntity(i);
-      auto redTAE_redTE = Assemble(redAE_redTAE, redist_topo->AEntityEntity(i), redE_redTE);
+      auto& redE_redTE = redist_topo.EntityTrueEntity(i);
+      auto redTAE_redTE = Assemble(redAE_redTAE, redist_topo.AEntityEntity(i), redE_redTE);
       ATrueEntity_trueEntity[i].reset(
                ParMult(redTAE_redTE.get(), &redistributor.TrueEntityRedistribution(i), true));
    }
 
    coarse_redist_topo->FinerTopology_ = shared_from_this();
    CoarserTopology_ = coarse_redist_topo;
-   redist_topo->CoarserTopology_ = coarse_redist_topo;
+   redist_topo.CoarserTopology_ = coarse_redist_topo;
 
    return coarse_redist_topo;
 }

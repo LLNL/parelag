@@ -316,6 +316,10 @@ int main (int argc, char *argv[])
     MFEMRefinedMeshPartitioner mfem_partitioner(nDimensions);
     for (int i = 0; i < nLevels-1; ++i)
     {
+        StopWatch chronoInterior;
+        chronoInterior.Clear();
+        chronoInterior.Start();
+
         Array<int> partitioning(topology[i]->GetB(0).NumRows());
         mfem_partitioner.Partition(topology[i]->GetB(0).NumRows(),
                                    level_nElements[i+1], partitioning);
@@ -323,10 +327,11 @@ int main (int argc, char *argv[])
         topology[i+1] = topology[i]->CoarsenLocalPartitioning(
                     partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
 //        ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get(), nullptr);
-    }
 
-    if (print_progress_report)
-        std::cout << "-- Successfully agglomerated topology before redistribution.\n";
+        if (myid == 0 && reportTiming)
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
+                      << chronoInterior.RealTime() << " seconds.\n";
+    }
 
     const int feorder = 0;
     const int upscalingOrder = 0;
@@ -356,9 +361,6 @@ int main (int argc, char *argv[])
                 elem_t, uform, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
     DRSequence_FE->SetUpscalingTargets(nDimensions, upscalingOrder, jFormStart);
 
-    StopWatch chrono;
-    chrono.Clear();
-    chrono.Start();
     constexpr double tolSVD = 1e-9;
     for (int i(0); i < nLevels-1; ++i)
     {
@@ -369,17 +371,12 @@ int main (int argc, char *argv[])
         sequence[i+1] = sequence[i]->Coarsen();
         chronoInterior.Stop();
         if (myid == 0 && reportTiming)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Coarsening done in "
+            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": DeRhamSequence coarsened in "
                       << chronoInterior.RealTime() << " seconds.\n";
     }
-    chrono.Stop();
 
-    if (myid == 0 && reportTiming)
-        std::cout << "Timing ELEM_AGG: Coarsening before redistribution done in " << chrono.RealTime()
-                  << " seconds.\n";
-
-    chrono.Clear();
-    chrono.Start();
+    if (print_progress_report)
+        std::cout << "-- Successfully coarsened before redistribution.\n";
 
     int num_redist_procs = 4;
     const int coarsening_factor = std::pow(2, nDimensions);
@@ -398,19 +395,13 @@ int main (int argc, char *argv[])
               GenerateProcPartition(topology[i]->TrueB(0), num_redist_procs);
 
         Redistributor redistributor(*topology[i], redistributed_procs);
-        auto redist_topo = redistributor.Redistribute(*topology[i]);
-
-        chronoInterior.Stop();
-        if (myid == 0 && reportTiming)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology redistributed in "
-                      << chronoInterior.RealTime() << " seconds.\n";
 
         chronoInterior.Clear();
         chronoInterior.Start();
         const int num_global_elem = topology[i]->GetNumberGlobalTrueEntities(elem_t);
         const int num_parts = num_global_elem / coarsening_factor / num_redist_procs;
         topology[i+1] = topology[i]->Coarsen(
-                    redistributor, redist_topo, metis_partitioner, num_parts, 0, 0);
+                    redistributor, metis_partitioner, num_parts, 0, 0);
         chronoInterior.Stop();
         if (myid == 0 && reportTiming)
             std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
@@ -420,15 +411,7 @@ int main (int argc, char *argv[])
 
         chronoInterior.Clear();
         chronoInterior.Start();
-        auto redist_seq = redistributor.Redistribute(*sequence[i], redist_topo);
-        chronoInterior.Stop();
-        if (myid == 0 && reportTiming)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": DeRhamSequence redistributed"
-                      << " in " << chronoInterior.RealTime() << " seconds.\n";
-
-        chronoInterior.Clear();
-        chronoInterior.Start();
-        sequence[i+1] = sequence[i]->Coarsen(redistributor, redist_seq);
+        sequence[i+1] = sequence[i]->Coarsen(redistributor);
         chronoInterior.Stop();
         if (myid == 0 && reportTiming)
             std::cout << "Timing ELEM_AGG_LEVEL" << i << ": DeRhamSequence coarsened in "
@@ -436,10 +419,6 @@ int main (int argc, char *argv[])
 
         num_redist_procs /= 2;
     }
-
-    if (myid == 0 && reportTiming)
-        std::cout << "Timing ELEM_AGG: Coarsening after redistribution done in " << chrono.RealTime()
-                  << " seconds.\n";
 
     if (print_progress_report)
     {

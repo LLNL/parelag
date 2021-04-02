@@ -695,10 +695,10 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
     return coarser_sequence;
 }
 
-std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen(
-      const Redistributor& redistributor,
-      std::shared_ptr<DeRhamSequence> redist_sequence)
+std::shared_ptr<DeRhamSequence>
+DeRhamSequence::Coarsen(Redistributor& redistributor)
 {
+   auto redist_sequence = redistributor.Redistribute(*this);
    auto coarser_sequence = redist_sequence->Coarsen();
 
    // Update the weak_ptrs

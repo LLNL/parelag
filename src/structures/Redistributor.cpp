@@ -50,6 +50,8 @@ Redistributor::Redistributor(
 
    auto elem_trueEntity = const_cast<AgglomeratedTopology&>(topo).TrueB(0);
    redEntity_trueEntity[1] = BuildRedEntToTrueEnt(elem_trueEntity);
+
+   redist_topo = Redistribute(topo);
 }
 
 unique_ptr<ParallelCSRMatrix>
@@ -189,9 +191,7 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
    return out;
 }
 
-std::unique_ptr<DofHandler> Redistributor::Redistribute(
-      const DofHandler& dof,
-      const std::shared_ptr<AgglomeratedTopology>& redist_topo)
+std::unique_ptr<DofHandler> Redistributor::Redistribute(const DofHandler& dof)
 {
     auto& nonconst_dof = const_cast<DofHandler&>(dof);
     auto dof_alg = dynamic_cast<DofHandlerALG*>(&nonconst_dof);
@@ -240,10 +240,8 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(
     return out;
 }
 
-
-std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
-      const DeRhamSequence& sequence,
-      const std::shared_ptr<AgglomeratedTopology>& redist_topo)
+std::shared_ptr<DeRhamSequenceAlg>
+Redistributor::Redistribute(const DeRhamSequence& sequence)
 {
    const int dim = redist_topo->Dimensions();
    const int num_forms = sequence.GetNumberOfForms();
@@ -259,15 +257,14 @@ std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
 
       auto& dof_handler = *sequence.Dof_[jform];
 
-      redist_seq->Dof_[jform] = Redistribute(dof_handler, redist_topo);
-      auto& redD_tD = RedistributedDofToTrueDof(jform);
+      redist_seq->Dof_[jform] = Redistribute(dof_handler);
+      auto& redD_tD = redDof_trueDof[jform];
 
       if (jform != (num_forms - 1))
       {
          auto trueD = sequence.ComputeTrueD(jform);
-         auto redD1_tD1 = RedistributedDofToTrueDof(jform+1);
-         unique_ptr<ParallelCSRMatrix> tD_redD(redD_tD.Transpose());
-         auto redD = RAP(redD1_tD1, *trueD, *tD_redD);
+         unique_ptr<ParallelCSRMatrix> tD_redD(redD_tD->Transpose());
+         auto redD = RAP(*redDof_trueDof[jform+1], *trueD, *tD_redD);
 
          SerialCSRMatrix redD_diag;
          redD->GetDiag(redD_diag);
@@ -285,7 +282,7 @@ std::shared_ptr<DeRhamSequenceAlg> Redistributor::Redistribute(
       const int redist_size = redist_seq->Dof_[jform]->GetNDofs();
       redist_seq->Targets_[jform].reset(
                new MultiVector(trueTargets.NumberOfVectors(), redist_size));
-      Mult(redD_tD, trueTargets, *(redist_seq->Targets_[jform]));
+      Mult(*redD_tD, trueTargets, *(redist_seq->Targets_[jform]));
    }
 
    for (int codim = 0; codim < num_forms; ++codim)

@@ -236,9 +236,7 @@ public:
     /// User is responsible for deleting the created object.
     std::shared_ptr<DeRhamSequence> Coarsen();
 
-    std::shared_ptr<DeRhamSequence> Coarsen(
-          const Redistributor& redistributor,
-          std::shared_ptr<DeRhamSequence> redist_sequence);
+    std::shared_ptr<DeRhamSequence> Coarsen(Redistributor& redistributor);
 
     /// Fills in dofAgg.
     void AgglomerateDofs();
