@@ -205,7 +205,6 @@ int main (int argc, char *argv[])
     if (nDimensions == 3)
         pmesh->ReorientTetMesh();
 
-
     {
         size_t my_num_elmts = pmesh->GetNE(), global_num_elmts;
         MPI_Reduce(&my_num_elmts,&global_num_elmts,1,GetMPIType<size_t>(0),
@@ -232,10 +231,7 @@ int main (int argc, char *argv[])
     std::vector<shared_ptr<AgglomeratedTopology>> topology(nLevels+num_redist_coarsen_levels);
     std::vector<shared_ptr<DeRhamSequence>> sequence(topology.size());
 
-    {
-        topology[0] = make_shared<AgglomeratedTopology>(pmesh, 1);
-//        ShowTopologyAgglomeratedElements(topology[0].get(), pmesh.get(), nullptr);
-    }
+    topology[0] = make_shared<AgglomeratedTopology>(pmesh, 1);
 
     MFEMRefinedMeshPartitioner mfem_partitioner(nDimensions);
     for (int i = 0; i < nLevels-1; ++i)
@@ -250,7 +246,11 @@ int main (int argc, char *argv[])
 
         topology[i+1] = topology[i]->CoarsenLocalPartitioning(
                     partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
-//        ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get(), nullptr);
+
+        if (visualize)
+        {
+            ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get());
+        }
 
         if (myid == 0 && reportTiming)
             std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
@@ -325,7 +325,10 @@ int main (int argc, char *argv[])
             std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
                       << chronoInterior.RealTime() << " seconds.\n";
 
-        // ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get(), nullptr);
+        if (visualize)
+        {
+            ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get());
+        }
 
         chronoInterior.Clear();
         chronoInterior.Start();
