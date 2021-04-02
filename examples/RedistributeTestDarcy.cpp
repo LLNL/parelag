@@ -34,82 +34,6 @@ using std::unique_ptr;
 using std::shared_ptr;
 using std::make_shared;
 
-// From the parallel proc-to-proc connectivity table,
-// get a copy of the global matrix as a serial matrix locally (via permutation),
-// and then call METIS to "partition processors" in each processor locally
-std::vector<int> GenerateProcPartition(ParallelCSRMatrix& elem_face,
-                                       int num_redist_procs)
-{
-    MPI_Comm comm = elem_face.GetComm();
-    int myid;
-    MPI_Comm_rank(comm, &myid);
-
-    mfem::Array<int> proc_starts, perm_rowstarts;
-    int num_procs_loc = elem_face.NumRows() > 0 ? 1 : 0;
-    ParPartialSums_AssumedPartitionCheck(comm, num_procs_loc, proc_starts);
-
-    int num_procs = proc_starts.Last();
-    ParPartialSums_AssumedPartitionCheck(comm, num_procs, perm_rowstarts);
-
-    SerialCSRMatrix proc_elem(num_procs_loc, elem_face.NumRows());
-    if (num_procs_loc == 1)
-    {
-       for (int j = 0 ; j < proc_elem.NumCols(); ++j)
-       {
-           proc_elem.Set(0, j, 1.0);
-       }
-    }
-    proc_elem.Finalize();
-
-    unique_ptr<ParallelCSRMatrix> proc_face(
-             elem_face.LeftDiagMult(proc_elem, proc_starts));
-    unique_ptr<ParallelCSRMatrix> face_proc(proc_face->Transpose());
-    auto proc_proc = Mult(*proc_face, *face_proc, false);
-
-    mfem::Array<HYPRE_Int> proc_colmap(num_procs-num_procs_loc);
-
-    SerialCSRMatrix perm_diag(num_procs, num_procs_loc);
-    SerialCSRMatrix perm_offd(num_procs, num_procs-num_procs_loc);
-    int offd_proc_count = 0;
-    for (int i = 0 ; i < num_procs; ++i)
-    {
-       if (i == myid)
-       {
-          perm_diag.Set(i, 0, 1.0);
-       }
-       else
-       {
-          perm_offd.Set(i, offd_proc_count, 1.0);
-          proc_colmap[offd_proc_count++] = i;
-       }
-    }
-    perm_diag.Finalize();
-    perm_offd.Finalize();
-
-    int num_perm_rows = perm_rowstarts.Last();
-    ParallelCSRMatrix permute(comm, num_perm_rows, num_procs, perm_rowstarts,
-                              proc_starts, &perm_diag, &perm_offd, proc_colmap);
-
-    unique_ptr<ParallelCSRMatrix> permuteT(permute.Transpose());
-    auto permProc_permProc = parelag::RAP(permute, *proc_proc, *permuteT);
-
-    SerialCSRMatrix globProc_globProc;
-    permProc_permProc->GetDiag(globProc_globProc);
-
-    std::vector<int> out(elem_face.NumRows());
-    if (elem_face.NumRows() > 0)
-    {
-        mfem::Array<int> partition;
-        MetisGraphPartitioner metis_partitioner;
-        auto flag = num_redist_procs < 8 ? MetisGraphPartitioner::RECURSIVE : MetisGraphPartitioner::KWAY;
-        metis_partitioner.setFlags(flag);
-        metis_partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
-
-        PARELAG_ASSERT(myid < partition.Size());
-        std::fill_n(out.begin(), elem_face.NumRows(), partition[myid]);
-    }
-    return out;
-}
 
 int main (int argc, char *argv[])
 {
@@ -388,13 +312,7 @@ int main (int argc, char *argv[])
         chronoInterior.Clear();
         chronoInterior.Start();
 
-//        std::vector<int> redistributed_procs(topology[i]->GetB(0).NumRows());
-//        std::fill_n(redistributed_procs.begin(), redistributed_procs.size(), myid % num_redist_procs);
-
-        auto redistributed_procs =
-              GenerateProcPartition(topology[i]->TrueB(0), num_redist_procs);
-
-        Redistributor redistributor(*topology[i], redistributed_procs);
+        Redistributor redistributor(*topology[i], num_redist_procs);
 
         chronoInterior.Clear();
         chronoInterior.Start();

@@ -400,7 +400,7 @@ AgglomeratedTopology * AgglomeratedTopology::FinestTopology()
     return topo;
 }
 
-AgglomeratedTopology::par_table_t & AgglomeratedTopology::TrueB(int i)
+AgglomeratedTopology::par_table_t & AgglomeratedTopology::TrueB(int i) const
 {
     if(workspace.trueB_[i] == nullptr)
         workspace.trueB_[i] = IgnoreNonLocalRange(

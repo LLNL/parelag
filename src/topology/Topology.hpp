@@ -240,7 +240,7 @@ public:
     }
 
     /// Return the parallel version of B[codim]
-    par_table_t & TrueB(int codim);
+    par_table_t & TrueB(int codim) const;
 
     /// Return the weight vector for the TrueEntity
     std::unique_ptr<array_t> TrueWeight(int codim) const;
@@ -543,7 +543,7 @@ protected:
     /// Used during coarsening.  After the coarse topology is created,
     /// one can safely eliminate these tables.
     // FIXME (trb 04/13/2016): I don't know that this is necessary...
-    struct ExtraTopologyTables
+    mutable struct ExtraTopologyTables
     {
         using par_table_t = AgglomeratedTopology::par_table_t;
 
