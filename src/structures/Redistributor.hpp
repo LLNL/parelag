@@ -56,10 +56,6 @@ class Redistributor
          const ParallelCSRMatrix& redEntity_redTrueEntity,
          const ParallelCSRMatrix& redEntity_trueEntity) const;
 
-   void RedistributeRepeatedDofs(const DofHandler& dof,
-                                 DofHandler& redist_dof);
-
-
    unique_ptr<ParallelCSRMatrix>
    BuildRepeatedDofToTrueDof(const DofHandler& dof, int codim);
 
