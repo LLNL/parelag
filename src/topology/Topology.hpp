@@ -530,11 +530,11 @@ protected:
     std::vector<int> Partition_;
 
     /// AgglomeratedEntity to entity table.
-    /// This table is filled only if globalAgglomeration == 0.
+    /// This table is filled only if globalAgglomeration == false.
     std::vector<std::unique_ptr<TopologyTable>> AEntity_entity;
 
     /// AgglomeratedTrueEntity to trueEntity table.
-    /// This table is filled only if globalAgglomeration == 1.
+    /// This table is filled only if globalAgglomeration == true.
     std::vector<std::unique_ptr<par_table_t>> ATrueEntity_trueEntity;
 
     /// \class ExtraTopologyTables
@@ -566,10 +566,6 @@ protected:
         // parelag; likewise with owns_trueBt, so they are gone now.
     }  workspace;
     ///@}
-
-    /// These are probably temporary (we may remove them once the algo is clear)
-    std::vector<std::unique_ptr<par_table_t>> redTrueEntity_TrueEntity;
-    std::vector<std::unique_ptr<par_table_t>> redEntity_redTrueEntity;
 
 private:
 
