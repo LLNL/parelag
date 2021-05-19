@@ -44,6 +44,10 @@ public:
      */
     Timer(Watch& watch) : Watch_(watch) { Watch_.Start(); }
 
+    /** \brief Stops the watch.
+     */
+    void Stop() { Watch_.Stop(); }
+
     /** \brief Destructor.
      *
      *  Stops the watch.

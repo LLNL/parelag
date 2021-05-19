@@ -273,7 +273,7 @@ public:
     /// Constructor.
     DeRhamSequence3D_FE(const std::shared_ptr<AgglomeratedTopology>& topo,
                         mfem::ParMesh * mesh,
-                        int order, bool assemble=true);
+                        int order, bool assemble=true, bool assemble_mass=true);
 
     /// Destructor
     virtual ~DeRhamSequence3D_FE();
@@ -294,7 +294,7 @@ public:
     /// Constructor
     DeRhamSequence2D_Hdiv_FE(const std::shared_ptr<AgglomeratedTopology>& topo,
                              mfem::ParMesh * mesh,
-                             int order, bool assemble=true);
+                             int order, bool assemble=true, bool assemble_mass=true);
 
     /// Destructor
     virtual ~DeRhamSequence2D_Hdiv_FE();

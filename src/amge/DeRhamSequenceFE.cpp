@@ -616,7 +616,7 @@ void DeRhamSequenceFE::Update()
 
 /// FIXME (trb 12/15/15): Shouldn't the topo have the mesh already?
 DeRhamSequence3D_FE::DeRhamSequence3D_FE(
-    const std::shared_ptr<AgglomeratedTopology>& topo,ParMesh * mesh,int order,bool assemble)
+    const std::shared_ptr<AgglomeratedTopology>& topo,ParMesh * mesh,int order,bool assemble,bool assemble_mass)
     : DeRhamSequenceFE(topo, 4)
 {
     Mesh_ = mesh;
@@ -659,7 +659,8 @@ DeRhamSequence3D_FE::DeRhamSequence3D_FE(
     if (assemble)
     {
         buildDof();
-        assembleLocalMass();
+        if (assemble_mass)
+            assembleLocalMass();
         assembleDerivative();
     }
 
@@ -706,7 +707,7 @@ void DeRhamSequence3D_FE::computePVTraces(
 }
 
 DeRhamSequence2D_Hdiv_FE::DeRhamSequence2D_Hdiv_FE(
-    const std::shared_ptr<AgglomeratedTopology>& topo, ParMesh * mesh, int order, bool assemble)
+    const std::shared_ptr<AgglomeratedTopology>& topo, ParMesh * mesh, int order, bool assemble, bool assemble_mass)
     : DeRhamSequenceFE(topo, 3)
 {
     Mesh_ = mesh;
@@ -739,7 +740,8 @@ DeRhamSequence2D_Hdiv_FE::DeRhamSequence2D_Hdiv_FE(
     if (assemble)
     {
         buildDof();
-        assembleLocalMass();
+        if (assemble_mass)
+            assembleLocalMass();
         assembleDerivative();
     }
 
