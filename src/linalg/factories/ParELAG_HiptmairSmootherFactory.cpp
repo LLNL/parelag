@@ -18,6 +18,7 @@
 #include "linalg/solver_core/ParELAG_SolverLibrary.hpp"
 #include "linalg/solver_ops/ParELAG_HiptmairSmoother.hpp"
 #include "utilities/MemoryUtils.hpp"
+#include "utilities/ParELAG_TimeManager.hpp"
 
 namespace parelag
 {
@@ -85,6 +86,7 @@ HiptmairSmootherFactory::_do_build_solver(
     // Not found. Instead, get the D operator from the DeRhamSequence
     if (!d_op)
     {
+        Timer d_timer = TimeManager::AddTimer("Hiptmair: Build D");
         auto& sequence = state.GetDeRhamSequence();
         auto form = state.GetForms().front();
         PARELAG_ASSERT(form > 0);
@@ -105,14 +107,19 @@ HiptmairSmootherFactory::_do_build_solver(
     PARELAG_ASSERT(d_op);
 
     // Create the primary smoother from "op" and the primary state
+    Timer pri_timer = TimeManager::AddTimer("Hiptmair: Build primary smoother");
     auto PrimarySmoo = std::shared_ptr<mfem::Solver>{
         PrimaryFact_->BuildSolver(op,*primary_state)};
     PrimarySmoo->iterative_mode = true;
+    pri_timer.Stop();
 
     // Get/Create the Auxiliary operator
+    Timer aux_op_timer = TimeManager::AddTimer("Hiptmair: Build auxiliary "
+                                               "operator");
     auto aux_op = my_state->GetOperator("Auxiliary A");
     if (aux_op == nullptr)
         aux_op = _do_compute_aux_operator(*op,*d_op);
+    aux_op_timer.Stop();
 
     // Make sure we have a valid pointer. We should, since
     // ComputeAuxOperator throws (std::runtime_error) if it cannot
@@ -120,9 +127,12 @@ HiptmairSmootherFactory::_do_build_solver(
     PARELAG_ASSERT(aux_op);
 
     // Create the auxiliary smoother
+    Timer aux_timer = TimeManager::AddTimer("Hiptmair: Build auxiliary "
+                                            "smoother");
     auto AuxiliarySmoo = std::shared_ptr<mfem::Solver>{
         AuxiliaryFact_->BuildSolver(aux_op,*aux_state)};
     AuxiliarySmoo->iterative_mode = false;
+    aux_timer.Stop();
 
     // Now I should be able to create the hybrid smoother
     return make_unique<HiptmairSmoother>(
