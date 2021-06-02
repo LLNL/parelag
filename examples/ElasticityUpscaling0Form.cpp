@@ -432,7 +432,7 @@ int main (int argc, char *argv[])
     double tdiff;
 
     Array<SparseMatrix *> allP(nLevels-1);
-    Array<unique_ptr<SparseMatrix>> allPb(nLevels-1);
+    std::vector<unique_ptr<SparseMatrix>> allPb(nLevels-1);
     Array<SparseMatrix *> allD(nLevels);
 
     for (int i = 0; i < nLevels - 1; ++i)
@@ -457,7 +457,7 @@ int main (int argc, char *argv[])
 
     std::vector<unique_ptr<SparseMatrix>> Ml(nLevels);
     std::vector<unique_ptr<SparseMatrix>> Mlb(nLevels);
-    Array<unique_ptr<SparseMatrix>> Alb(nLevels);
+    std::vector<unique_ptr<SparseMatrix>> Alb(nLevels);
 
     for (int k(0); k < nLevels; ++k)
     {
