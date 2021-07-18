@@ -49,6 +49,7 @@ int main (int argc, char *argv[])
     int feorder = 0;
     int upscalingOrder = 0;
     bool do_visualize = true;
+    bool hex = false;
     OptionsParser args(argc, argv);
     args.AddOption(&meshfile_c, "-m", "--mesh",
                    "MFEM mesh file to load.");
@@ -60,6 +61,8 @@ int main (int argc, char *argv[])
                    "Polynomial order of fine finite element space.");
     args.AddOption(&upscalingOrder, "-uo", "--upscalingorder",
                    "Target polynomial order of coarse space.");
+    args.AddOption(&hex, "-hex", "--hexahedra", "-tet", "--tetrahedra",
+                   "Use hexahedra instead of tetrahedra, if mesh is generated.");
     args.AddOption(&do_visualize, "-v", "--do-visualize", "-nv", "--no-visualize",
                    "Do interactive GLVis visualization.");
     args.Parse();
@@ -107,8 +110,10 @@ int main (int argc, char *argv[])
         }
         // This guy just gets used as a stepping-stone to the ParMesh;
         // once we get there, it is destroyed.
-        auto mesh = gen_mesh? make_unique<Mesh>(8, 2, 2, Element::TETRAHEDRON,
-                                                true, 4.0, 1.0, 1.0) :
+        auto mesh = gen_mesh? (hex ? make_unique<Mesh>(8, 2, 2, Element::HEXAHEDRON,
+                                                       true, 4.0, 1.0, 1.0) :
+                                     make_unique<Mesh>(8, 2, 2, Element::TETRAHEDRON,
+                                                       true, 4.0, 1.0, 1.0)) :
                               make_unique<Mesh>(imesh, 1, 1);
         imesh.close();
 
@@ -181,6 +186,7 @@ int main (int argc, char *argv[])
 
 //    MetisGraphPartitioner partitioner;
 //    partitioner.setFlags(MetisGraphPartitioner::KWAY);
+////    partitioner.setFlags(MetisGraphPartitioner::RECURSIVE);
 //    partitioner.setOption(METIS_OPTION_SEED, 0);
 //    partitioner.setOption(METIS_OPTION_CONTIG, 1);
 
@@ -230,10 +236,12 @@ int main (int argc, char *argv[])
     }
     chrono.Stop();
     if (myid == 0)
+    {
         std::cout << "Elements level " << nLevels-1 << ": "
                   << topology[nLevels-1]->GetNumberLocalEntities(AT_elem) << std::endl;
         std::cout<<"Timing ELEM_AGG: Mesh Agglomeration done in "
                  << chrono.RealTime() << " seconds.\n";
+    }
 
     if (do_visualize && nDimensions <= 3)
         for (int ilevel = 1; ilevel < nLevels; ++ilevel)
