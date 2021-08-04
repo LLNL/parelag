@@ -18,6 +18,7 @@ list(APPEND EXAMPLE_SRCS
   HdivL2SampleGenerator.cpp
   HdivL2ExtensionVisualize.cpp
   LogicalPartitionerDemo.cpp
+  ElasticityUpscaling0Form.cpp
   Upscaling0Form.cpp
   Upscaling0FormMFEM.cpp
   Upscaling0FormMFEMonly.cpp

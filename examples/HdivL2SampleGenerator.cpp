@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
     for(int l = 0; l < nLevels - 1; ++l)
     {
         Array<int> partitioning(topology[l]->GetNumberLocalEntities(AT_elem));
-        partitioner.doPartition(*(topology[0]->LocalElementElementTable()),
+        partitioner.doPartition(*(topology[l]->LocalElementElementTable()),
                                 level_nElements[l + 1], partitioning);
         topology[l + 1] = topology[l]->CoarsenLocalPartitioning(partitioning,
                                                                 false, false);
