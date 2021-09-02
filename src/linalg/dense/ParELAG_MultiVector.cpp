@@ -593,8 +593,6 @@ void MatrixTTimesMultiVector(
     MatrixTTimesMultiVector(1.0, M, x, y);
 }
 
-
-
 void MatrixTTimesMultiVector(double scaling, const SparseMatrix & M,
                              const MultiVector & x, MultiVector & y)
 {
@@ -805,5 +803,22 @@ void Mult(BlockMatrix & A, const MultiVector & x, MultiVector & y)
         y.GetVectorView(i,yview);
         A.Mult(xview, yview);
     }
+}
+
+void Mult(const mfem::HypreParMatrix & A, const MultiVector & x, MultiVector & y)
+{
+   elag_assert(x.NumberOfVectors() == y.NumberOfVectors());
+   elag_assert(A.Height() == y.Size());
+   elag_assert(A.Width() == x.Size());
+
+   const int nv = x.NumberOfVectors();
+
+   Vector xview, yview;
+   for(int i(0); i < nv; ++i)
+   {
+       const_cast<MultiVector &>(x).GetVectorView(i,xview);
+       y.GetVectorView(i,yview);
+       A.Mult(xview, yview);
+   }
 }
 }//namespace parelag

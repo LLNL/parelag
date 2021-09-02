@@ -17,8 +17,6 @@
 #include <metis.h>
 #include <mfem.hpp>
 
-#include "topology/Topology.hpp"
-
 namespace parelag
 {
 /** @brief Given a connectivity table and a partitioning vector find the number
@@ -123,7 +121,7 @@ public:
      */
     void doPartition(const mfem::Table & table,
                      int & num_partitions,
-                     mfem::Array<int> & partitioning);
+                     mfem::Array<int> & partitioning) const;
 
     //! Partition a graph with weighted edges in num_partitions
     /*!
@@ -138,7 +136,7 @@ public:
      */
     void doPartition(const mfem::SparseMatrix & wtable,
                      int & num_partitions,
-                     mfem::Array<int> & partitioning);
+                     mfem::Array<int> & partitioning) const;
 
     //! Partition a graph with weighted edges and weighted vertices in num_partitions
     /*!
@@ -156,18 +154,18 @@ public:
     void doPartition(const mfem::SparseMatrix & wtable,
                      const mfem::Array<int> & vertex_weight,
                      int & num_partitions,
-                     mfem::Array<int> & partitioning);
+                     mfem::Array<int> & partitioning) const;
 
     //! Partition a graph with weighted edges and weighted vertices in num_partitions (double version)
     void doPartition(const mfem::SparseMatrix & wtable,
                      const mfem::Vector & vertex_weight,
                      int & num_partitions,
-                     mfem::Array<int> & partitioning);
+                     mfem::Array<int> & partitioning) const;
 
     void doRecursivePartition(const mfem::SparseMatrix & wtable,
                               const mfem::Array<int> & vertex_weight,
                               mfem::Array<int> & num_partitions,
-                              mfem::Array< mfem::Array<int> *> & partitioning);
+                              mfem::Array< mfem::Array<int> *> & partitioning) const;
 
 private:
 
@@ -176,62 +174,12 @@ private:
                     const mfem::Array<int> & edge_weight,
                     const mfem::Array<int> & vertex_weight,
                     int & num_partitions,
-                    mfem::Array<int> & partitioning);
+                    mfem::Array<int> & partitioning) const;
 
     int * options;
     int flags;
     real_t unbalance_toll;
 
-};
-
-struct MetisMaterialId
-{
-    int metis_partition;
-    int materialId;
-};
-
-inline bool operator==(const MetisMaterialId & lhs,
-                       const MetisMaterialId & rhs)
-{
-    return lhs.metis_partition ==
-        rhs.metis_partition && lhs.materialId == rhs.materialId;
-}
-
-class CoarsenMetisMaterialId
-{
-public:
-    CoarsenMetisMaterialId(
-        MetisGraphPartitioner & partitioner,
-        AgglomeratedTopology & topo,
-        int & num_partitions,
-        mfem::Array<MetisMaterialId> & info)
-    {
-        partitioner.doPartition(*(topo.LocalElementElementTable()),
-                                topo.Weight(0),num_partitions,partitioning);
-        info.SetSize(partitioning.Size());
-        for (int i(0); i < partitioning.Size(); ++i)
-            info[i].metis_partition = partitioning[i];
-    }
-
-    void FillFinestMetisMaterialId(const mfem::ParMesh & pmesh,
-                                   mfem::Array<MetisMaterialId> & info)
-    {
-        elag_assert(partitioning.Size() == pmesh.GetNE());
-        info.SetSize(pmesh.GetNE());
-        for (int i(0); i < pmesh.GetNE(); ++i)
-            info[i].materialId = pmesh.GetElement(i)->GetAttribute();
-    }
-
-    mfem::Array<int> & GetMetisPartitioning() { return partitioning; }
-
-    inline void operator()(const MetisMaterialId & fine,
-                           MetisMaterialId & coarse) const
-    {
-        coarse.metis_partition = fine.metis_partition;
-        coarse.materialId = fine.materialId;
-    }
-private:
-    mfem::Array<int> partitioning;
 };
 
 }//namespace parelag

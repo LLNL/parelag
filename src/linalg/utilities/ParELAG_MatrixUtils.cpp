@@ -26,6 +26,7 @@ using mfem::Array;
 using mfem::BlockMatrix;
 using mfem::DenseMatrix;
 using mfem::SparseMatrix;
+using mfem::HypreParMatrix;
 using mfem::Vector;
 using std::unique_ptr;
 
@@ -930,6 +931,10 @@ template unique_ptr<SparseMatrix> RAP(const SparseMatrix&,
 template unique_ptr<BlockMatrix> RAP(const BlockMatrix&,
                                      const BlockMatrix&,
                                      const BlockMatrix&);
+// Instantiate for HypreParMatrix
+template unique_ptr<HypreParMatrix> RAP(const HypreParMatrix&,
+                                        const HypreParMatrix&,
+                                        const HypreParMatrix&);
 
 // Definition here in the CPP to prevent extraneous compilations
 template <class MatrixType>
@@ -1041,5 +1046,11 @@ void SplitMatrixHorizontally(const DenseMatrix &A, int middle_row,
     bottom.Transpose();
     At.UseExternalData(data, ncols, nrows);
     delete [] data;
+}
+
+std::unique_ptr<mfem::HypreParMatrix>
+Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B, bool own_starts)
+{
+   return std::unique_ptr<mfem::HypreParMatrix>(mfem::ParMult(&A, &B, own_starts));
 }
 }//namespace parelag

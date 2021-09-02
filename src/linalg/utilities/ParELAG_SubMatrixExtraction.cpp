@@ -577,10 +577,13 @@ void GetRows(const SparseMatrix & A,
     const int nrow_A = A.Size();
     const int ncol_A = A.Width();
 
-    PARELAG_TEST_FOR_EXCEPTION(
-        rows.Max() >= nrow_A,
-        std::logic_error,
-        "GetRows(): Row index exceeds matrix size.");
+    if (rows.Size() > 0)
+    {
+        PARELAG_TEST_FOR_EXCEPTION(
+            rows.Max() >= nrow_A,
+            std::logic_error,
+            "GetRows(): Row index exceeds matrix size.");
+    }
 
     PARELAG_TEST_FOR_EXCEPTION(
         colEnd > ncol_A,

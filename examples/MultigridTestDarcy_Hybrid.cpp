@@ -601,8 +601,8 @@ int main (int argc, char *argv[])
     {
         mfem::Vector tmp(A->Height());
         mfem::BlockVector psol(true_block_offsets);
-	    hdiv_dofTrueDof.IgnoreNonLocal(sol.GetBlock(0), psol.GetBlock(0));
-	    l2_dofTrueDof.IgnoreNonLocal(sol.GetBlock(1), psol.GetBlock(1));
+        hdiv_dofTrueDof.IgnoreNonLocal(sol.GetBlock(0), psol.GetBlock(0));
+        l2_dofTrueDof.IgnoreNonLocal(sol.GetBlock(1), psol.GetBlock(1));
         A->Mult(psol,tmp);
         prhs -= tmp;
         double local_norm = prhs.Norml2() * prhs.Norml2();

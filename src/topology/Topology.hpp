@@ -144,6 +144,26 @@ public:
         return *(AEntity_entity[codim]);
     }
 
+    /// Get the (agglomerated entity)_(entity) table
+    par_table_t & ATrueEntityTrueEntity(int codim)
+    {
+        elag_assert(0 <= codim && nCodim_ >= codim);
+        elag_assert(ATrueEntity_trueEntity.size() > 0);
+        elag_assert(ATrueEntity_trueEntity[codim]);
+
+        return *(ATrueEntity_trueEntity[codim]);
+    }
+
+    /// Get the (agglomerated entity)_(entity) table (const version)
+    const par_table_t & ATrueEntityTrueEntity(int codim) const
+    {
+        elag_assert(0 <= codim && nCodim_ >= codim);
+        elag_assert(ATrueEntity_trueEntity.size() > 0);
+        elag_assert(ATrueEntity_trueEntity[codim]);
+
+        return *(ATrueEntity_trueEntity[codim]);
+    }
+
     /// Get a reference to the partitioning
     mfem::Array<int>& Partitioning() noexcept
     {
@@ -215,10 +235,10 @@ public:
     }
 
     /// Return the parallel version of B[codim]
-    par_table_t & TrueB(int codim);
+    par_table_t & TrueB(int codim) const;
 
     /// Return the weight vector for the TrueEntity
-    std::unique_ptr<array_t> TrueWeight(int codim);
+    std::unique_ptr<array_t> TrueWeight(int codim) const;
 
     /// Return a reference to the array of element attributes
     mfem::Array<int> & ElementAttribute() noexcept { return element_attribute; }
@@ -378,6 +398,8 @@ public:
         return CoarserTopology_.lock();
     }
 
+    bool PerformGlobalAgglomeration() const { return globalAgglomeration; }
+
 protected:
 
     std::weak_ptr<AgglomeratedTopology> FinerTopology_;
@@ -482,7 +504,7 @@ protected:
     ///@{
     ///
     /// If globalAgglomeration == true, then agglomerates may span across
-    /// processors. --> NOT SUPPORTED
+    /// processors. --> NOT SUPPORTED (TODO: trying to support it)
     ///
     /// If globalAgglomeration == false, then agglomerates will be local to
     /// the processor. --> ONLY REAL OPTION
@@ -495,11 +517,11 @@ protected:
     std::vector<int> Partition_;
 
     /// AgglomeratedEntity to entity table.
-    /// This table is filled only if globalAgglomeration == 0.
+    /// This table is filled only if globalAgglomeration == false.
     std::vector<std::unique_ptr<TopologyTable>> AEntity_entity;
 
     /// AgglomeratedTrueEntity to trueEntity table.
-    /// This table is filled only if globalAgglomeration == 1.
+    /// This table is filled only if globalAgglomeration == true.
     std::vector<std::unique_ptr<par_table_t>> ATrueEntity_trueEntity;
 
     /// \class ExtraTopologyTables
@@ -508,7 +530,7 @@ protected:
     /// Used during coarsening.  After the coarse topology is created,
     /// one can safely eliminate these tables.
     // FIXME (trb 04/13/2016): I don't know that this is necessary...
-    struct ExtraTopologyTables
+    mutable struct ExtraTopologyTables
     {
         using par_table_t = AgglomeratedTopology::par_table_t;
 

@@ -1126,6 +1126,19 @@ unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTrueP(int jform) const
         coarser_sequence->Dof_[jform]->GetDofTrueDof());
 }
 
+const ParallelCSRMatrix& DeRhamSequence::GetTrueP(int jform) const
+{
+   if (trueP_.size() == 0)
+   {
+      trueP_.resize(nForms_);
+   }
+   if (!trueP_[jform])
+   {
+      trueP_[jform] = ComputeTrueP(jform);
+   }
+   return *trueP_[jform];
+}
+
 unique_ptr<ParallelCSRMatrix>
 DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
 {
@@ -1149,6 +1162,19 @@ unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTruePi(int jform)
         coarser_sequence->Dof_[jform]->GetDofTrueDof(),
         myPi,
         Dof_[jform]->GetDofTrueDof());
+}
+
+const ParallelCSRMatrix& DeRhamSequence::GetTruePi(int jform)
+{
+   if (truePi_.size() == 0)
+   {
+      truePi_.resize(nForms_);
+   }
+   if (!truePi_[jform])
+   {
+      truePi_[jform] = ComputeTruePi(jform);
+   }
+   return *truePi_[jform];
 }
 
 unique_ptr<ParallelCSRMatrix>
@@ -1957,17 +1983,23 @@ void DeRhamSequence::ComputeCoarseTracesWithTargets(int jform)
                          col_end - col_start);
 
 #ifdef ELAG_DEBUG
-            PARELAG_TEST_FOR_EXCEPTION(
-                rows.Max() >= P_[jform]->Size(),
-                std::runtime_error,
-                "DeRhamSequence::ComputeCoarseTraces(): "
-                "rows.Max() >= P_[jform]->Size()");
+            if (rows.Size() > 0)
+            {
+                PARELAG_TEST_FOR_EXCEPTION(
+                    rows.Max() >= P_[jform]->Size(),
+                    std::runtime_error,
+                    "DeRhamSequence::ComputeCoarseTraces(): "
+                    "rows.Max() >= P_[jform]->Size()");
+            }
 
-            PARELAG_TEST_FOR_EXCEPTION(
-                cols.Max() >= P_[jform]->Width(),
-                std::runtime_error,
-                "DeRhamSequence::ComputeCoarseTraces(): "
-                "cols.Max() >= P_[jform]->Width()");
+            if (cols.Size() > 0)
+            {
+                PARELAG_TEST_FOR_EXCEPTION(
+                    cols.Max() >= P_[jform]->Width(),
+                    std::runtime_error,
+                    "DeRhamSequence::ComputeCoarseTraces(): "
+                    "cols.Max() >= P_[jform]->Width()");
+            }
 
             PARELAG_ASSERT(my_p.GetElementalMatrix(iAE).Height() == rows.Size());
             PARELAG_ASSERT(my_p.GetElementalMatrix(iAE).Width() == cols.Size());
@@ -3270,6 +3302,16 @@ void DeRhamSequenceAlg::show(int jform, MultiVector & v)
     MultiVector vFine(v.NumberOfVectors(), finer_sequence->GetP(jform)->Size() );
     MatrixTimesMultiVector(*(finer_sequence->GetP(jform) ), v, vFine);
     finer_sequence->show(jform, vFine);
+}
+
+void DeRhamSequenceAlg::ShowTrueData(int jform, MultiVector & true_v)
+{
+   auto finer_sequence = FinerSequence_.lock();
+   PARELAG_ASSERT(finer_sequence);
+
+   MultiVector vFine(true_v.NumberOfVectors(), finer_sequence->GetNumTrueDofs(jform));
+   Mult(finer_sequence->GetTrueP(jform), true_v, vFine);
+   finer_sequence->ShowTrueData(jform, vFine);
 }
 
 void DeRhamSequenceAlg::ExportGLVis(int jform, Vector & v, std::ostream & os)

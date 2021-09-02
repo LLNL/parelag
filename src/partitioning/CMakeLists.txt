@@ -22,6 +22,7 @@ list(APPEND HDRS
   MFEMRefinedMeshPartitioner.hpp
   MetisGraphPartitioner.hpp
   GeometricBoxPartitioner.hpp
+  CoarsenMetisMaterialId.hpp
   elag_partitioning.hpp
   )
 

@@ -138,5 +138,9 @@ void BlockDiag2by2(
 void SplitMatrixHorizontally(
     const mfem::DenseMatrix &A, int middle_row,
     mfem::DenseMatrix &top, mfem::DenseMatrix &bottom);
+
+std::unique_ptr<mfem::HypreParMatrix>
+Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B,
+     bool own_starts = true);
 }//namespace parelag
 #endif /* MATRIXUTILS_HPP_ */

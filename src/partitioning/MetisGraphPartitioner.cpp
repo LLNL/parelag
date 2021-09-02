@@ -12,6 +12,7 @@
 */
 
 #include "MetisGraphPartitioner.hpp"
+#include "utilities/elagError.hpp"
 
 namespace parelag
 {
@@ -32,7 +33,7 @@ MetisGraphPartitioner::~MetisGraphPartitioner()
 
 void MetisGraphPartitioner::doPartition(const Table & table,
                                         int & num_partitions,
-                                        Array<int> & partitioning)
+                                        Array<int> & partitioning) const
 {
     PARELAG_TEST_FOR_EXCEPTION(
         table.Size() != table.Width(),
@@ -54,7 +55,7 @@ void MetisGraphPartitioner::doPartition(const Table & table,
 
 void MetisGraphPartitioner::doPartition(const SparseMatrix & wtable,
                                         int & num_partitions,
-                                        Array<int> & partitioning)
+                                        Array<int> & partitioning) const
 {
     PARELAG_TEST_FOR_EXCEPTION(
         wtable.Size() != wtable.Width(),
@@ -96,7 +97,7 @@ void MetisGraphPartitioner::doPartition(const SparseMatrix & wtable,
 void MetisGraphPartitioner::doPartition(const SparseMatrix & wtable,
                                         const Array<int> & vertex_weight,
                                         int & num_partitions,
-                                        Array<int> & partitioning)
+                                        Array<int> & partitioning) const
 {
     PARELAG_TEST_FOR_EXCEPTION(
         wtable.Size() != wtable.Width(),
@@ -130,7 +131,7 @@ void MetisGraphPartitioner::doPartition(const SparseMatrix & wtable,
 void MetisGraphPartitioner::doPartition(const SparseMatrix & wtable,
                                         const Vector & vertex_weight,
                                         int & num_partitions,
-                                        Array<int> & partitioning)
+                                        Array<int> & partitioning) const
 {
     PARELAG_TEST_FOR_EXCEPTION(
         wtable.Size() != wtable.Width(),
@@ -169,7 +170,7 @@ void MetisGraphPartitioner::doRecursivePartition(
     const SparseMatrix & wtable,
     const Array<int> & vertex_weight,
     Array<int> & num_elements,
-    Array<Array<int> *> & partitioning)
+    Array<Array<int> *> & partitioning) const
 {
     PARELAG_TEST_FOR_EXCEPTION(
         wtable.Size() != wtable.Width(),
@@ -275,7 +276,7 @@ int MetisGraphPartitioner::doPartition(const Array<int> & i,
                                        const Array<int> & edge_weight,
                                        const Array<int> & vertex_weight,
                                        int & num_partitions,
-                                       Array<int> & partitioning)
+                                       Array<int> & partitioning) const
 {
     int num_vertexes = i.Size()-1;
     int num_edges = j.Size();
@@ -350,7 +351,7 @@ int MetisGraphPartitioner::doPartition(const Array<int> & i,
                                            edge_weight_ptr,
                                            &num_partitions,
                                            (real_t *) NULL,
-                                           &unbalance_toll,
+                                           const_cast<float*>(&unbalance_toll),
                                            options,
                                            &edgecut,
                                            partitioning);
@@ -372,7 +373,7 @@ int MetisGraphPartitioner::doPartition(const Array<int> & i,
                                       edge_weight_ptr,
                                       &num_partitions,
                                       (real_t *) NULL,
-                                      &unbalance_toll,
+                                      const_cast<float*>(&unbalance_toll),
                                       options,
                                       &edgecut,
                                       partitioning);
@@ -394,7 +395,7 @@ int MetisGraphPartitioner::doPartition(const Array<int> & i,
                                       edge_weight_ptr,
                                       &num_partitions,
                                       (real_t *) NULL,
-                                      &unbalance_toll,
+                                      const_cast<float*>(&unbalance_toll),
                                       options,
                                       &edgecut,
                                       partitioning);
@@ -536,9 +537,6 @@ int CheckPartitioning(const Table & table,
     else
         return 1;
 }
-
-
-
 
 void build_table_from_partitioning(const int * const partitioning,
                                    int num_vertexes,
