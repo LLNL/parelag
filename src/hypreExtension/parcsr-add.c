@@ -17,8 +17,6 @@
 #include "_hypre_parcsr_ls.h"
 #include "hypreExtension.hpp"
 
-#include "hypreExtension.hpp"
-
 /*--------------------------------------------------------------------------
  * hypre_ParCSRMatrixAdd
  *

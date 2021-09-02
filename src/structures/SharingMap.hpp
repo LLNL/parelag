@@ -75,7 +75,7 @@ public:
                mfem::Array<int> & trueEntityStart,
                std::unique_ptr<ParallelCSRMatrix> entity_trueEntity);
 
-    /// entity_trueEntity is assumed to own starts array
+    /// entity_trueEntity is assumed to own starts arrays
     void SetUp(std::unique_ptr<ParallelCSRMatrix> entity_trueEntity);
 
     /// Set up a SharingMap when entity and trueEntity coincide. In
@@ -308,7 +308,6 @@ private:
     HypreTraits<hypre_ParVector>::unique_ptr_t xTrue_;
     HypreTraits<hypre_ParVector>::unique_ptr_t x_;
     //@}
-    bool hypre_style_delete; // CSL(1/20/2021): not used anymore?
 };
 
 #ifdef ParELAG_ENABLE_PETSC
