@@ -149,7 +149,7 @@ public:
         return *(AEntity_entity[codim]);
     }
 
-    /// Get the (agglomerated entity)_(entity) table (const version)
+    /// Get the (agglomerated entity)_(entity) table
     par_table_t & ATrueEntityTrueEntity(int codim)
     {
         elag_assert(0 <= codim && nCodim_ >= codim);
