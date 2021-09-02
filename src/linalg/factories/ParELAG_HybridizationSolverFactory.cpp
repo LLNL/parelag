@@ -38,9 +38,9 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
 
     if (hybrid_strategy == "Darcy")
     {
-    	auto& sequence = state.GetDeRhamSequence();
-    	auto sequence_ptr = state.GetDeRhamSequencePtr();
-    	auto forms = state.GetForms();
+        auto& sequence = state.GetDeRhamSequence();
+        auto sequence_ptr = state.GetDeRhamSequencePtr();
+        auto forms = state.GetForms();
 
         // Whether the element H(div) dofs have same orientation on shared facet
         bool IsSameOrient = state.GetExtraParameter("IsSameOrient",false);
@@ -52,15 +52,15 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         // If not provided, the scale is treated as 1.0
         auto elemMatrixScaling = state.GetVector("elemMatrixScaling");
 
-    	auto label_ess = state.GetBoundaryLabels(0);
-    	mfem::Array<int> ess_HdivDofs;
+        auto label_ess = state.GetBoundaryLabels(0);
+        mfem::Array<int> ess_HdivDofs;
         if (label_ess.size() > 0)
-    	{
-    		mfem::Array<int> ess_attr(label_ess.data(),label_ess.size());
-    		ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
-    		sequence.GetDofHandler(forms[0])->MarkDofsOnSelectedBndr(
-    				ess_attr, ess_HdivDofs);
-    	}
+        {
+            mfem::Array<int> ess_attr(label_ess.data(),label_ess.size());
+            ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
+            sequence.GetDofHandler(forms[0])->MarkDofsOnSelectedBndr(
+                 ess_attr, ess_HdivDofs);
+        }
         else
         {
             ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
