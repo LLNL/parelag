@@ -772,7 +772,6 @@ public:
                                           mfem::VectorCoefficient & c,
                                           mfem::Vector & v) override;
 
-//    friend class Redistributor;
 protected:
     void computePVTraces(AgglomeratedTopology::Entity icodim,
                          mfem::Vector & PVinAgg) override;

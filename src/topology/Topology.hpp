@@ -27,7 +27,6 @@
 #include "topology/TopologyTable.hpp"
 #include "utilities/elagError.hpp"
 #include "partitioning/MetisGraphPartitioner.hpp"
-//#include "structures/Redistributor.hpp"
 
 namespace parelag
 {

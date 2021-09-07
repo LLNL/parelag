@@ -29,9 +29,6 @@
 
 #include <cmath>
 
-// TODO: add preprocess flag
-#include "matred.hpp"
-
 namespace parelag
 {
 using namespace mfem;
