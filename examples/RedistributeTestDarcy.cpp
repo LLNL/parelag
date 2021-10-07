@@ -247,11 +247,6 @@ int main (int argc, char *argv[])
         topology[i+1] = topology[i]->CoarsenLocalPartitioning(
                     partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
 
-        if (visualize)
-        {
-            ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get());
-        }
-
         if (myid == 0 && reportTiming)
             std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
                       << chronoInterior.RealTime() << " seconds.\n";
@@ -316,19 +311,14 @@ int main (int argc, char *argv[])
 
         chronoInterior.Clear();
         chronoInterior.Start();
-        const int num_global_elem = topology[i]->GetNumberGlobalTrueEntities(elem_t);
-        const int num_parts = num_global_elem / coarsening_factor / num_redist_procs;
+//        const int num_global_elem = topology[i]->GetNumberGlobalTrueEntities(elem_t);
+//        const int num_parts = num_global_elem / coarsening_factor / num_redist_procs;
         topology[i+1] = topology[i]->Coarsen(
-                    redistributor, metis_partitioner, num_parts, 0, 0);
+                    redistributor, metis_partitioner, coarsening_factor, 0, 0);
         chronoInterior.Stop();
         if (myid == 0 && reportTiming)
             std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
                       << chronoInterior.RealTime() << " seconds.\n";
-
-        if (visualize)
-        {
-            ShowTopologyAgglomeratedElements(topology[i+1].get(), pmesh.get());
-        }
 
         chronoInterior.Clear();
         chronoInterior.Start();

@@ -828,14 +828,16 @@ AgglomeratedTopology::CoarsenLocalPartitioning(
 std::shared_ptr<AgglomeratedTopology>
 AgglomeratedTopology::Coarsen(Redistributor& redistributor,
                               const MetisGraphPartitioner& partitioner,
-                              int num_partitions, bool check_topology,
+                              int coarsening_factor, bool check_topology,
                               bool preserve_material_interfaces)
 {
    // Coarsen redist_topo
    auto& redist_topo = redistributor.GetRedistributedTopology();
-   Array<int> partitioning(redist_topo.GetNumberLocalEntities(ELEMENT));
-   if (redist_topo.GetNumberLocalEntities(ELEMENT) > 0)
+   const int num_local_redist_elems = redist_topo.GetNumberLocalEntities(ELEMENT);
+   Array<int> partitioning(num_local_redist_elems);
+   if (num_local_redist_elems > 0)
    {
+      int num_partitions = num_local_redist_elems / coarsening_factor;
       partitioner.doPartition(*redist_topo.LocalElementElementTable(),
                               num_partitions, partitioning);
    }

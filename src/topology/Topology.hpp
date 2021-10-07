@@ -374,10 +374,12 @@ public:
         bool checkTopology,
         bool preserveMaterialInterfaces);
 
+    /// Coarsen the redistributed topology locally. Construct inter-level
+    /// entity relations using the information given by redistributor.
     std::shared_ptr<AgglomeratedTopology> Coarsen(
           Redistributor& redistributor,
           const MetisGraphPartitioner& partitioner,
-          int num_partitions, bool check_topology,
+          int coarsening_factor, bool check_topology,
           bool preserve_material_interfaces);
 
     /// Split agglomerates that are deemed "bad" into agglomerates
