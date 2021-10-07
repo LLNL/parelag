@@ -27,7 +27,6 @@
 #include "topology/TopologyTable.hpp"
 #include "utilities/elagError.hpp"
 #include "partitioning/MetisGraphPartitioner.hpp"
-//#include "structures/Redistributor.hpp"
 
 namespace parelag
 {
@@ -149,7 +148,7 @@ public:
         return *(AEntity_entity[codim]);
     }
 
-    /// Get the (agglomerated entity)_(entity) table (const version)
+    /// Get the (agglomerated entity)_(entity) table
     par_table_t & ATrueEntityTrueEntity(int codim)
     {
         elag_assert(0 <= codim && nCodim_ >= codim);

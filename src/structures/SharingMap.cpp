@@ -321,7 +321,6 @@ void SharingMap::SetUp(ParFiniteElementSpace * fes, int useDofSign)
     // FIXME SEE BELOW
     fes->Dof_TrueDof_Matrix()->SetOwnerFlags(-1,-1,-1);
     hypre_ParCSRMatrix * mat = fes->Dof_TrueDof_Matrix()->StealData();
-    hypre_style_delete = true;
 
     elag_trace("Get the dofTrueDof matrix from fes - done");
     if(useDofSign)

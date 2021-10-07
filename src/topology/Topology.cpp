@@ -882,7 +882,7 @@ AgglomeratedTopology::UniformRefinement(
 
     {
         using FES_Ptr = unique_ptr<FiniteElementSpace>;
-        using FES_Vector = std::vector<FES_Ptr>;AgglomeratedTopology
+        using FES_Vector = std::vector<FES_Ptr>;
 
         const auto nSpaces = fecs.Size();
 
