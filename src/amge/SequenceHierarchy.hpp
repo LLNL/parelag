@@ -15,6 +15,7 @@
 #define SEQUENCE_HPP_
 
 #include <amge/DeRhamSequence.hpp>
+#include <utilities/ParELAG_SimpleXMLParameterListReader.hpp>
 
 namespace parelag {
 
@@ -50,25 +51,14 @@ public:
     /// less than this threshold on a particular level, the coarsening process
     /// will be terminiated even if num_levels has not been reached.
     SequenceHierarchy(const std::shared_ptr<mfem::ParMesh>& mesh,
-                      int num_levels,
                       const std::vector<int>& num_elements,
-                      int elem_coarsening_factor,
-                      int proc_coarsening_factor=2,
-                      int num_local_elems_threshold=5,
-                      int num_global_elems_threshold=5,
+                      ParameterList parameters,
                       bool verbose=false);
 
     SequenceHierarchy(const std::shared_ptr<mfem::ParMesh>& mesh,
-                      int num_levels,
-                      int elem_coarsening_factor,
-                      int proc_coarsening_factor=2,
-                      int num_local_elems_threshold=5,
-                      int num_global_elems_threshold=5,
+                      ParameterList parameters,
                       bool verbose=false)
-        : SequenceHierarchy(mesh, num_levels, std::vector<int>(0),
-                            elem_coarsening_factor, proc_coarsening_factor,
-                            num_local_elems_threshold,
-                            num_global_elems_threshold, verbose)
+        : SequenceHierarchy(mesh, std::vector<int>(0), parameters, verbose)
     { }
 
     const std::vector<shared_ptr<DeRhamSequence>>& GetDeRhamSequences() const { return seq_; }

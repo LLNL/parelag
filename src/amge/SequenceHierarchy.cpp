@@ -30,26 +30,32 @@ void PrintCoarseningTime(int level, double time)
 }
 
 SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
-                                     int num_levels,
                                      const std::vector<int>& num_elements,
-                                     int elem_coarsening_factor,
-                                     int proc_coarsening_factor,
-                                     int num_local_elems_threshold,
-                                     int num_global_elems_threshold,
+                                     ParameterList parameters,
                                      bool verbose)
-    : topo_(num_levels), seq_(num_levels), comm_(mesh->GetComm()), verbose_(verbose)
+    : comm_(mesh->GetComm()), verbose_(verbose)
 {
     PARELAG_ASSERT(mesh->GetNE() == num_elements[0]);
 
+    const int num_levels = parameters.Get("Hierarchy levels", 2);
+    const int elem_coarsening_factor = parameters.Get("Hierarchy coarsening factor", 8);
+    const int proc_coarsening_factor = parameters.Get("Processor coarsening factor", 2);
+    const int num_local_elems_threshold = parameters.Get("Local elements threshold", 80);
+    const int num_global_elems_threshold = parameters.Get("Global elements threshold", 10);
+
+    const int feorder = parameters.Get("Finite element order", 0);
+    const int upscalingOrder = parameters.Get("Upscaling order", 0);
+
     const int dim = mesh->Dimension();
-    const int feorder = 0;
-    const int upscalingOrder = 0;
-    const int jFormStart = dim-1;
+    const int jFormStart = dim-1; // TODO: read from ParameterList
     const int uform = dim - 1;
     const int pform = dim;
 
     ConstantCoefficient coeffL2(1.);
     ConstantCoefficient coeffHdiv(1.);
+
+    topo_.resize(num_levels);
+    seq_.resize(num_levels);
 
     if (verbose)
     {
@@ -61,11 +67,13 @@ SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
 
     if (dim == 3)
     {
-        seq_[0] = make_shared<DeRhamSequence3D_FE>(topo_[0], mesh.get(), feorder);
+        seq_[0] = make_shared<DeRhamSequence3D_FE>(
+                    topo_[0], mesh.get(), feorder, true, false);
     }
     else
     {
-        seq_[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(topo_[0], mesh.get(), feorder);
+        seq_[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(
+                    topo_[0], mesh.get(), feorder, true, false);
     }
 
     seq_[0]->SetjformStart(jFormStart);

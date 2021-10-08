@@ -102,13 +102,6 @@ int main (int argc, char *argv[])
     // the solve to be performed. 0 is the finest grid.
     const int start_level = prob_list.Get("Solve level",0);
 
-    // The order of the finite elements
-    const int feorder = prob_list.Get("Finite element order", 0);
-
-    // The order of the polynomials to include in the space
-    const int upscalingOrder = prob_list.Get("Upscaling order", 0);
-
-
     ParameterList& output_list = master_list->Sublist("Output control");
     const bool print_time = output_list.Get("Print timings",true);
     const bool show_progress = output_list.Get("Show progress",true);
@@ -196,14 +189,14 @@ int main (int argc, char *argv[])
 
     const int nDimensions = pmesh->Dimension();
 
-    const int nLevels = par_ref_levels+1;
-    std::vector<int> level_nElements(nLevels);
+    const int nGeometricLevels = par_ref_levels+1;
+    std::vector<int> num_elements(nGeometricLevels);
     for (int l = 0; l < par_ref_levels; l++)
     {
-        level_nElements[par_ref_levels-l] = pmesh->GetNE();
+        num_elements[par_ref_levels-l] = pmesh->GetNE();
         pmesh->UniformRefinement();
     }
-    level_nElements[0] = pmesh->GetNE();
+    num_elements[0] = pmesh->GetNE();
 
     if (print_progress_report)
         std::cout << "-- Refined mesh in parallel " << par_ref_levels
@@ -228,17 +221,7 @@ int main (int argc, char *argv[])
     if (!myid)
         std::cout << mesh_msg.str();
 
-    const int num_redist_coarsen_levels = 3;
-
-    int num_levels = nLevels + num_redist_coarsen_levels;
-    const int elem_coarsening_factor = std::pow(2, nDimensions);
-    int proc_coarsening_factor = 2;
-    int num_local_elems_threshold = 50;
-    int num_global_elems_threshold = 10;
-
-    SequenceHierarchy hierarchy(pmesh, num_levels, level_nElements, elem_coarsening_factor,
-                                proc_coarsening_factor, num_local_elems_threshold,
-                                num_global_elems_threshold, print_progress_report);
+    SequenceHierarchy hierarchy(pmesh, num_elements, prob_list, print_progress_report);
     auto sequence = hierarchy.GetDeRhamSequences();
 
     {
