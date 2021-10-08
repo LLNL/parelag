@@ -102,6 +102,13 @@ int main (int argc, char *argv[])
     // the solve to be performed. 0 is the finest grid.
     const int start_level = prob_list.Get("Solve level",0);
 
+    // The order of the finite elements
+    const int feorder = prob_list.Get("Finite element order", 0);
+
+    // The order of the polynomials to include in the space
+    const int upscalingOrder = prob_list.Get("Upscaling order", 0);
+
+
     ParameterList& output_list = master_list->Sublist("Output control");
     const bool print_time = output_list.Get("Print timings",true);
     const bool show_progress = output_list.Get("Show progress",true);
@@ -190,7 +197,7 @@ int main (int argc, char *argv[])
     const int nDimensions = pmesh->Dimension();
 
     const int nLevels = par_ref_levels+1;
-    Array<int> level_nElements(nLevels);
+    std::vector<int> level_nElements(nLevels);
     for (int l = 0; l < par_ref_levels; l++)
     {
         level_nElements[par_ref_levels-l] = pmesh->GetNE();
@@ -222,126 +229,22 @@ int main (int argc, char *argv[])
         std::cout << mesh_msg.str();
 
     const int num_redist_coarsen_levels = 3;
-    auto elem_t = AgglomeratedTopology::ELEMENT;
 
-    if (print_progress_report)
-        std::cout << "-- Agglomerating topology to " << nLevels+num_redist_coarsen_levels
-                  << " levels...\n";
+    int num_levels = nLevels + num_redist_coarsen_levels;
+    const int elem_coarsening_factor = std::pow(2, nDimensions);
+    int proc_coarsening_factor = 2;
+    int num_local_elems_threshold = 50;
+    int num_global_elems_threshold = 10;
 
-    std::vector<shared_ptr<AgglomeratedTopology>> topology(nLevels+num_redist_coarsen_levels);
-    std::vector<shared_ptr<DeRhamSequence>> sequence(topology.size());
-
-    topology[0] = make_shared<AgglomeratedTopology>(pmesh, 1);
-
-    MFEMRefinedMeshPartitioner mfem_partitioner(nDimensions);
-    for (int i = 0; i < nLevels-1; ++i)
-    {
-        StopWatch chronoInterior;
-        chronoInterior.Clear();
-        chronoInterior.Start();
-
-        Array<int> partitioning(topology[i]->GetB(0).NumRows());
-        mfem_partitioner.Partition(topology[i]->GetB(0).NumRows(),
-                                   level_nElements[i+1], partitioning);
-
-        topology[i+1] = topology[i]->CoarsenLocalPartitioning(
-                    partitioning, 0, 0, nDimensions == 2 ? 0 : 2);
-
-        if (myid == 0 && reportTiming)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
-                      << chronoInterior.RealTime() << " seconds.\n";
-    }
-
-    const int feorder = 0;
-    const int upscalingOrder = 0;
-    const int jFormStart = nDimensions-1;
-    const int uform = nDimensions - 1;
-    const int pform = nDimensions;
-
-    if (nDimensions == 3)
-    {
-        sequence[0] = make_shared<DeRhamSequence3D_FE>(topology[0], pmesh.get(), feorder);
-    }
-    else
-    {
-        sequence[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(topology[0], pmesh.get(), feorder);
-    }
-
-    ConstantCoefficient coeffL2(1.);
-    ConstantCoefficient coeffHdiv(1.);
-
-    sequence[0]->SetjformStart(jFormStart);
-
-    DeRhamSequenceFE * DRSequence_FE = sequence[0]->FemSequence();
-    PARELAG_ASSERT(DRSequence_FE);
-    DRSequence_FE->ReplaceMassIntegrator(
-                elem_t, pform, make_unique<MassIntegrator>(coeffL2), false);
-    DRSequence_FE->ReplaceMassIntegrator(
-                elem_t, uform, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
-    DRSequence_FE->SetUpscalingTargets(nDimensions, upscalingOrder, jFormStart);
-
-    constexpr double tolSVD = 1e-9;
-    for (int i(0); i < nLevels-1; ++i)
-    {
-        sequence[i]->SetSVDTol( tolSVD );
-        StopWatch chronoInterior;
-        chronoInterior.Clear();
-        chronoInterior.Start();
-        sequence[i+1] = sequence[i]->Coarsen();
-        chronoInterior.Stop();
-        if (myid == 0 && reportTiming)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": DeRhamSequence coarsened in "
-                      << chronoInterior.RealTime() << " seconds.\n";
-    }
-
-    if (print_progress_report)
-        std::cout << "-- Successfully coarsened before redistribution.\n";
-
-    int num_redist_procs = 4;
-    const int coarsening_factor = std::pow(2, nDimensions);
-    MetisGraphPartitioner metis_partitioner;
-    metis_partitioner.setFlags(MetisGraphPartitioner::RECURSIVE);
-    for (int i = nLevels-1; i < topology.size()-1; ++i)
-    {
-        StopWatch chronoInterior;
-        chronoInterior.Clear();
-        chronoInterior.Start();
-
-        Redistributor redistributor(*topology[i], num_redist_procs);
-
-        chronoInterior.Clear();
-        chronoInterior.Start();
-//        const int num_global_elem = topology[i]->GetNumberGlobalTrueEntities(elem_t);
-//        const int num_parts = num_global_elem / coarsening_factor / num_redist_procs;
-        topology[i+1] = topology[i]->Coarsen(
-                    redistributor, metis_partitioner, coarsening_factor, 0, 0);
-        chronoInterior.Stop();
-        if (myid == 0 && reportTiming)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": Topology coarsened in "
-                      << chronoInterior.RealTime() << " seconds.\n";
-
-        chronoInterior.Clear();
-        chronoInterior.Start();
-        sequence[i+1] = sequence[i]->Coarsen(redistributor);
-        chronoInterior.Stop();
-        if (myid == 0 && reportTiming)
-            std::cout << "Timing ELEM_AGG_LEVEL" << i << ": DeRhamSequence coarsened in "
-                      << chronoInterior.RealTime() << " seconds.\n";
-
-        num_redist_procs /= 2;
-    }
-
-    if (print_progress_report)
-    {
-        std::cout << "\n";
-        for (int i = 0; i < topology.size()-1; ++i)
-        {
-            std::cout << "-- Number of agglomerates on level " << i+1 << " is "
-                      << topology[i+1]->GetNumberGlobalTrueEntities(elem_t) <<".\n";
-        }
-    }
+    SequenceHierarchy hierarchy(pmesh, num_levels, level_nElements, elem_coarsening_factor,
+                                proc_coarsening_factor, num_local_elems_threshold,
+                                num_global_elems_threshold, print_progress_report);
+    auto sequence = hierarchy.GetDeRhamSequences();
 
     {
+        const int uform = nDimensions - 1;
+        const int pform = nDimensions;
+        auto DRSequence_FE = sequence[0]->FemSequence();
         FiniteElementSpace * ufespace = DRSequence_FE->GetFeSpace(uform);
         FiniteElementSpace * pfespace = DRSequence_FE->GetFeSpace(pform);
 

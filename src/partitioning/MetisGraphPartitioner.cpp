@@ -31,6 +31,20 @@ MetisGraphPartitioner::~MetisGraphPartitioner()
     delete[] options;
 }
 
+void MetisGraphPartitioner::setParELAGDefaultFlags(int num_partitions)
+{
+    const int flag = num_partitions < 8 ? RECURSIVE : KWAY;
+    setFlags(flag);
+}
+
+void MetisGraphPartitioner::setParELAGDefaultMetisOptions()
+{
+    setOption(METIS_OPTION_SEED, 0);// Fix the seed
+    setOption(METIS_OPTION_CONTIG, 1);// Contiguous partitions
+    setOption(METIS_OPTION_MINCONN, 1);
+    setUnbalanceToll(1.05);
+}
+
 void MetisGraphPartitioner::doPartition(const Table & table,
                                         int & num_partitions,
                                         Array<int> & partitioning) const

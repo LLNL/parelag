@@ -827,7 +827,7 @@ AgglomeratedTopology::CoarsenLocalPartitioning(
 
 std::shared_ptr<AgglomeratedTopology>
 AgglomeratedTopology::Coarsen(Redistributor& redistributor,
-                              const MetisGraphPartitioner& partitioner,
+                              MetisGraphPartitioner& partitioner,
                               int coarsening_factor, bool check_topology,
                               bool preserve_material_interfaces)
 {
@@ -838,8 +838,9 @@ AgglomeratedTopology::Coarsen(Redistributor& redistributor,
    if (num_local_redist_elems > 0)
    {
       int num_partitions = num_local_redist_elems / coarsening_factor;
-      partitioner.doPartition(*redist_topo.LocalElementElementTable(),
-                              num_partitions, partitioning);
+      auto elem_elem = redist_topo.LocalElementElementTable();
+      partitioner.setParELAGDefaultFlags(num_partitions);
+      partitioner.doPartition(*elem_elem, num_partitions, partitioning);
    }
 
    const int coarsefaces_algo = this->Dimensions() == 3 ? 2 : 0;

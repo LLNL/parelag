@@ -377,7 +377,7 @@ public:
     /// entity relations using the information given by redistributor.
     std::shared_ptr<AgglomeratedTopology> Coarsen(
           Redistributor& redistributor,
-          const MetisGraphPartitioner& partitioner,
+          MetisGraphPartitioner& partitioner,
           int coarsening_factor, bool check_topology,
           bool preserve_material_interfaces);
 

@@ -117,10 +117,10 @@ std::vector<int> RedistributeElements(
     if (elem_face.NumRows() > 0)
     {
         mfem::Array<int> partition;
-        MetisGraphPartitioner metis_partitioner;
-        auto flag = num_redist_procs < 8 ? MetisGraphPartitioner::RECURSIVE : MetisGraphPartitioner::KWAY;
-        metis_partitioner.setFlags(flag);
-        metis_partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
+        MetisGraphPartitioner partitioner;
+        partitioner.setParELAGDefaultMetisOptions();
+        partitioner.setParELAGDefaultFlags(num_redist_procs);
+        partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
 
         PARELAG_ASSERT(myid < partition.Size());
         std::fill_n(out.begin(), elem_face.NumRows(), partition[myid]);
@@ -230,6 +230,7 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
    redEntity_trueEntity[0] = Mult(*redElem_redTrueElem, *redTrueEntity_trueEntity[0]);
 
    auto redE_redTE = BuildRedEntToRedTrueEnt(*redEntity_trueEntity[1]);
+
    redTrueEntity_trueEntity[1] =
          BuildRedTrueEntToTrueEnt(*redE_redTE, *redEntity_trueEntity[1]);
    out->entityTrueEntity[1]->SetUp(std::move(redE_redTE));
@@ -242,6 +243,7 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
    SerialCSRMatrix redB_diag;
    redB->GetDiag(redB_diag);
    SerialCSRMatrix redB_diag_copy(redB_diag);
+
    out->B_[0] = make_unique<TopologyTable>(redB_diag_copy);
 
    auto e_tE = topo.EntityTrueEntity(1).get_entity_trueEntity();
