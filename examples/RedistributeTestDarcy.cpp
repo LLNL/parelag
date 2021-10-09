@@ -221,8 +221,14 @@ int main (int argc, char *argv[])
     if (!myid)
         std::cout << mesh_msg.str();
 
-    SequenceHierarchy hierarchy(pmesh, num_elements, prob_list, print_progress_report);
-    auto sequence = hierarchy.GetDeRhamSequences();
+    ConstantCoefficient coeffL2(1.);
+    ConstantCoefficient coeffHdiv(1.);
+
+    SequenceHierarchy hierarchy(pmesh, prob_list, print_progress_report);
+    hierarchy.SetCoefficient(nDimensions, coeffL2, false);
+    hierarchy.SetCoefficient(nDimensions-1, coeffHdiv, true);
+    hierarchy.Coarsen(num_elements);
+    auto& sequence = hierarchy.GetDeRhamSequences();
 
     {
         const int uform = nDimensions - 1;

@@ -20,8 +20,6 @@
 
 namespace parelag
 {
-using namespace mfem;
-using std::make_shared;
 
 void PrintCoarseningTime(int level, double time)
 {
@@ -29,61 +27,53 @@ void PrintCoarseningTime(int level, double time)
               << "coarsened in " << time << " seconds.\n";
 }
 
-SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
-                                     const std::vector<int>& num_elements,
-                                     ParameterList parameters,
-                                     bool verbose)
-    : comm_(mesh->GetComm()), verbose_(verbose)
+SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList params, bool verbose)
+    : comm_(mesh->GetComm()), mesh_(mesh), params_(move(params)), verbose_(verbose)
 {
-    PARELAG_ASSERT(mesh->GetNE() == num_elements[0]);
-
-    const int num_levels = parameters.Get("Hierarchy levels", 2);
-    const int elem_coarsening_factor = parameters.Get("Hierarchy coarsening factor", 8);
-    const int proc_coarsening_factor = parameters.Get("Processor coarsening factor", 2);
-    const int num_local_elems_threshold = parameters.Get("Local elements threshold", 80);
-    const int num_global_elems_threshold = parameters.Get("Global elements threshold", 10);
-
-    const int feorder = parameters.Get("Finite element order", 0);
-    const int upscalingOrder = parameters.Get("Upscaling order", 0);
-
-    const int dim = mesh->Dimension();
-    const int jFormStart = dim-1; // TODO: read from ParameterList
-    const int uform = dim - 1;
-    const int pform = dim;
-
-    ConstantCoefficient coeffL2(1.);
-    ConstantCoefficient coeffHdiv(1.);
+    auto num_levels = params_.Get("Hierarchy levels", 2);
+    auto fe_order = params_.Get("Finite element order", 0);
+    const int start_form = mesh_->Dimension()-1; // TODO: read from ParameterList
 
     topo_.resize(num_levels);
     seq_.resize(num_levels);
 
-    if (verbose)
+    topo_[0] = make_shared<AgglomeratedTopology>(mesh, 1);
+
+    if (mesh_->Dimension() == 3)
+    {
+        seq_[0] = make_shared<DeRhamSequence3D_FE>(
+                    topo_[0], mesh.get(), fe_order, true, false);
+    }
+    else
+    {
+        seq_[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(
+                    topo_[0], mesh.get(), fe_order, true, false);
+    }
+    seq_[0]->SetjformStart(start_form);
+}
+
+void SequenceHierarchy::Coarsen(const vector<int>& num_elements)
+{
+    PARELAG_ASSERT(mesh_->GetNE() == num_elements[0]);
+
+    auto num_levels = params_.Get("Hierarchy levels", 2);
+    auto elem_coarsening_factor = params_.Get("Hierarchy coarsening factor", 8);
+    auto proc_coarsening_factor = params_.Get("Processor coarsening factor", 2);
+    auto num_local_elems_threshold = params_.Get("Local elements threshold", 80);
+    auto num_global_elems_threshold = params_.Get("Global elements threshold", 10);
+    auto upscale_order = params_.Get("Upscaling order", 0);
+    auto SVD_tol = params_.Get("SVD tolerance", 1e-6);
+
+    const int dim = mesh_->Dimension();
+    const int start_form = dim-1; // TODO: read from ParameterList
+
+    if (verbose_)
     {
         std::cout << "SequenceHierarchy: building a hierarchy of DeRhamSequence"
                   << " of at most " << num_levels << " levels ...\n";
     }
 
-    topo_[0] = make_shared<AgglomeratedTopology>(mesh, 1);
-
-    if (dim == 3)
-    {
-        seq_[0] = make_shared<DeRhamSequence3D_FE>(
-                    topo_[0], mesh.get(), feorder, true, false);
-    }
-    else
-    {
-        seq_[0] = make_shared<DeRhamSequence2D_Hdiv_FE>(
-                    topo_[0], mesh.get(), feorder, true, false);
-    }
-
-    seq_[0]->SetjformStart(jFormStart);
-
-    DeRhamSequenceFE * DRSequence_FE = seq_[0]->FemSequence();
-    DRSequence_FE->ReplaceMassIntegrator(
-                elem_t_, pform, make_unique<MassIntegrator>(coeffL2), false);
-    DRSequence_FE->ReplaceMassIntegrator(
-                elem_t_, uform, make_unique<VectorFEMassIntegrator>(coeffHdiv), true);
-    DRSequence_FE->SetUpscalingTargets(dim, upscalingOrder, jFormStart);
+    seq_[0]->FemSequence()->SetUpscalingTargets(dim, upscale_order, start_form);
 
     // first num_elements.size()-1 levels of topo_ are constructed geometrically
     GeometricPartitionings(num_elements, dim);
@@ -103,7 +93,7 @@ SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
         int num_global_elems = topo_[l]->GetNumberGlobalTrueEntities(elem_t_);
         if (num_global_elems < num_global_elems_threshold)
         {
-            if (verbose)
+            if (verbose_)
             {
                 std::cout << "SequenceHierarchy: global number of elements ("
                           << num_global_elems << ") on level " << l << " is "
@@ -115,7 +105,7 @@ SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
             break;
         }
 
-        seq_[l]->SetSVDTol(1e-6);
+        seq_[l]->SetSVDTol(SVD_tol);
 
         const int num_local_elems = topo_[l]->GetNumberLocalEntities(elem_t_);
         const int min_num_local_elems =
@@ -124,7 +114,7 @@ SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
         if (min_num_local_elems < num_local_elems_threshold)
         {
             num_redist_procs /= proc_coarsening_factor;
-            if (verbose)
+            if (verbose_)
             {
                 std::cout << "SequenceHierarchy: minimal nonzero number of "
                           << "local elements (" << min_num_local_elems << ") on"
@@ -153,11 +143,10 @@ SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
             seq_[l+1] = seq_[l]->Coarsen();
         }
 
-        if (verbose) { PrintCoarseningTime(l, chrono.RealTime()); }
+        if (verbose_) { PrintCoarseningTime(l, chrono.RealTime()); }
     }
 
-
-    if (verbose)
+    if (verbose_)
     {
         std::cout << "SequenceHierarchy:\n";
         for (int i = 0; i < topo_.size(); ++i)
@@ -169,8 +158,7 @@ SequenceHierarchy::SequenceHierarchy(const std::shared_ptr<ParMesh>& mesh,
     }
 }
 
-void SequenceHierarchy::GeometricPartitionings(
-        const std::vector<int>& num_elems, int dim)
+void SequenceHierarchy::GeometricPartitionings(const vector<int>& num_elems, int dim)
 {
     MFEMRefinedMeshPartitioner partitioner(dim);
     StopWatch chrono;
@@ -182,8 +170,7 @@ void SequenceHierarchy::GeometricPartitionings(
 
         Array<int> partition(topo_[l]->GetNumberLocalEntities(elem_t_));
         partitioner.Partition(num_elems[l], num_elems[l+1], partition);
-        topo_[l+1] = topo_[l]->CoarsenLocalPartitioning(partition, 0, 0,
-                                                        dim == 3 ? 2 : 0);
+        topo_[l+1] = topo_[l]->CoarsenLocalPartitioning(partition, 0, 0, dim == 3 ? 2 : 0);
         seq_[l+1] = seq_[l]->Coarsen();
 
         if (verbose_) { PrintCoarseningTime(l, chrono.RealTime()); }

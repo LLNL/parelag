@@ -11,35 +11,30 @@
   Software Foundation) version 2.1 dated February 1999.
 */
 
-#ifndef SEQUENCE_HPP_
-#define SEQUENCE_HPP_
+#ifndef SEQUENCE_HIERARCHY_HPP_
+#define SEQUENCE_HIERARCHY_HPP_
 
-#include <amge/DeRhamSequence.hpp>
+#include <amge/DeRhamSequenceFE.hpp>
 #include <utilities/ParELAG_SimpleXMLParameterListReader.hpp>
 
 namespace parelag {
 
-using std::shared_ptr;
-using std::unique_ptr;
-
-//enum PartitionType { MFEMRefined, METIS };
-
-//struct MFEM_refine_info
-//{
-//    std::vector<int> num_elements;
-//};
+using namespace std;
+using namespace mfem;
 
 class SequenceHierarchy
 {
-    std::vector<shared_ptr<AgglomeratedTopology>> topo_;
-    std::vector<shared_ptr<DeRhamSequence>> seq_;
+    vector<shared_ptr<AgglomeratedTopology>> topo_;
+    vector<shared_ptr<DeRhamSequence>> seq_;
 
     MPI_Comm comm_;
+    std::shared_ptr<mfem::ParMesh> mesh_;
+    ParameterList params_;
     bool verbose_;
 
     const AgglomeratedTopology::Entity elem_t_ = AgglomeratedTopology::ELEMENT;
 
-    void GeometricPartitionings(const std::vector<int> &num_elems, int dim);
+    void GeometricPartitionings(const vector<int>& num_elems, int dim);
 
     int MinNonzeroNumLocalElements(int level, int zero_replace);
 public:
@@ -50,23 +45,32 @@ public:
     /// @param num_global_elems_threshold if the number of glocal elements is
     /// less than this threshold on a particular level, the coarsening process
     /// will be terminiated even if num_levels has not been reached.
-    SequenceHierarchy(const std::shared_ptr<mfem::ParMesh>& mesh,
-                      const std::vector<int>& num_elements,
-                      ParameterList parameters,
-                      bool verbose=false);
+    SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList params, bool verbose=false);
 
-    SequenceHierarchy(const std::shared_ptr<mfem::ParMesh>& mesh,
-                      ParameterList parameters,
-                      bool verbose=false)
-        : SequenceHierarchy(mesh, std::vector<int>(0), parameters, verbose)
-    { }
+    void Coarsen(const vector<int>& num_elements);
 
-    const std::vector<shared_ptr<DeRhamSequence>>& GetDeRhamSequences() const { return seq_; }
+    void Coarsen() { Coarsen(vector<int>(0)); }
 
+    const vector<shared_ptr<DeRhamSequence>>& GetDeRhamSequences() const { return seq_; }
+
+    template<typename T>
+    void SetCoefficient(int form, T& coef, bool recompute_mass)
+    {
+        unique_ptr<BilinearFormIntegrator> integ;
+        if (form == 0 || form == mesh_->Dimension())
+        {
+            integ.reset(new MassIntegrator(coef));
+        }
+        else
+        {
+            integ.reset(new VectorFEMassIntegrator(coef));
+        }
+
+        DeRhamSequenceFE * seq = seq_[0]->FemSequence();
+        seq->ReplaceMassIntegrator(elem_t_, form, move(integ), recompute_mass);
+    }
 };
-
-
 
 }
 
-#endif /* SEQUENCE_HPP_ */
+#endif /* SEQUENCE_HIERARCHY_HPP_ */
