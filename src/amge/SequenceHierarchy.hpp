@@ -22,6 +22,16 @@ namespace parelag {
 using namespace std;
 using namespace mfem;
 
+/** \class SequenceHierarchy
+ *  \brief A wrapper for the construction of a hierarchy of DeRhamSequences.
+ *
+ *  Based on the given parameters, this class helps you to construct a hierarchy
+ *  of DeRhamSequences by first performing geometric coarsening (based on mfem
+ *  refinements), and then algebraic coarsening (based on METIS).
+ *
+ *  If a particular level has too few elements in some processors, the level
+ *  will be redistributed to a subset of processors before further coarsening.
+ */
 class SequenceHierarchy
 {
     vector<shared_ptr<AgglomeratedTopology>> topo_;
@@ -39,20 +49,71 @@ class SequenceHierarchy
     int MinNonzeroNumLocalElements(int level, int zero_replace);
 public:
 
-    /// @param num_local_elems_threshold if the number of local elements is less
-    /// than this threshold on a particular level, the level will first be
-    /// redistributed and then coarsened.
-    /// @param num_global_elems_threshold if the number of glocal elements is
-    /// less than this threshold on a particular level, the coarsening process
-    /// will be terminiated even if num_levels has not been reached.
+    /** \brief Constructor.
+     *
+     *  Set up the fine level DeRhamSequence of the hierarchy. The coarse levels
+     *  will be constructed by coarsening the fine level recursively.
+     *
+     *  \param mesh The mesh where the fine level DeRhamSequence is defined on.
+     *
+     *  \param params A list of parameters that dictates the coarsening process.
+     *         In particular, the following parameters can be supplied:
+     *         * Hierarchy levels (default is 2):
+     *              Desired number of levels of DeRhamSequences to be built.
+     *
+     *         * Finite element order (default is 0):
+     *              Order of finite element spaces in the fine-level sequence.
+     *
+     *         * Upscaling order (default is 0):
+     *              Polynomial order for global interpolation targets in the
+     *              coarse-level sequences.
+     *
+     *         * Hierarchy coarsening factor (default is 8):
+     *              Average number of elements in agglomerates.
+     *
+     *         * Processor coarsening factor (default is 2):
+     *              Intended number of processors to be grouped together
+     *              whenever redistribution is triggered.
+     *
+     *         * Local elements threshold (default is 80):
+     *              If the number of local elements is less than this threshold
+     *              on a particular level, the level will first be redistributed
+     *              and then coarsened.
+     *
+     *         * Global elements threshold (default is 10):
+     *              If the number of global elements is less than this threshold
+     *              on a particular level, the coarsening process will be
+     *              terminiated earlier.
+     *
+     *         * SVD tolerance (default is 1e-6):
+     *              Cutoff value for (relative singular values) for selecting
+     *              singular vectors in the coarsening steps. The smaller the
+     *              tolerance, the more singular vectors will be selected.
+     *
+     *  \param verbose Whether to print the progress of coarsening.
+     */
     SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList params, bool verbose=false);
 
-    void Coarsen(const vector<int>& num_elements);
+    SequenceHierarchy(const SequenceHierarchy&) = delete;
+    SequenceHierarchy& operator=(const SequenceHierarchy&) = delete;
 
-    void Coarsen() { Coarsen(vector<int>(0)); }
+    /// Construct the hierarchy via recursive coarsening.
+    /// \param num_elements contains the number of elements in the first few
+    /// finer levels (including the finest). These numbers are obtained from
+    /// mfem (parallel) refinements. num_elements[0] is number of elements on
+    /// the finest level. Geometric coarsening will be performed until all the
+    /// numbers in num_elements have been used. Further coarsenings are algebraic.
+    void Build(const vector<int>& num_elements);
+
+    /// Construct the hierarchy without geometric coarsening.
+    void Build() { Build(vector<int>(0)); }
 
     const vector<shared_ptr<DeRhamSequence>>& GetDeRhamSequences() const { return seq_; }
 
+    /// A portal to DeRhamSequenceFE::ReplaceMassIntegrator.
+    /// This is for setting coefficients for mass matrices in the fine sequence.
+    /// Use recompute_mass to control when to general the element mass matrices.
+    /// Typically you want to generate them after all the coefficients are set.
     template<typename T>
     void SetCoefficient(int form, T& coef, bool recompute_mass)
     {
@@ -66,7 +127,7 @@ public:
             integ.reset(new VectorFEMassIntegrator(coef));
         }
 
-        DeRhamSequenceFE * seq = seq_[0]->FemSequence();
+        DeRhamSequenceFE* seq = seq_[0]->FemSequence();
         seq->ReplaceMassIntegrator(elem_t_, form, move(integ), recompute_mass);
     }
 };

@@ -21,10 +21,13 @@
 namespace parelag
 {
 
-void PrintCoarseningTime(int level, double time)
+enum partition_type { MFEMRefined, METIS };
+
+void PrintCoarseningTime(int level, double time, partition_type type)
 {
+    string msg = type == METIS ? "(using METIS)" : "(using MFEM refinement info)";
     std::cout << "SequenceHierarchy: level-" << level << " DeRhamSequence "
-              << "coarsened in " << time << " seconds.\n";
+              << "coarsened " << msg << " in " << time << " seconds.\n";
 }
 
 SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList params, bool verbose)
@@ -52,7 +55,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
     seq_[0]->SetjformStart(start_form);
 }
 
-void SequenceHierarchy::Coarsen(const vector<int>& num_elements)
+void SequenceHierarchy::Build(const vector<int>& num_elements)
 {
     PARELAG_ASSERT(mesh_->GetNE() == num_elements[0]);
 
@@ -78,8 +81,9 @@ void SequenceHierarchy::Coarsen(const vector<int>& num_elements)
     // first num_elements.size()-1 levels of topo_ are constructed geometrically
     GeometricPartitionings(num_elements, dim);
 
-    int num_redist_procs;
-    MPI_Comm_size(comm_, &num_redist_procs);
+    int num_nonempty_procs;
+    MPI_Comm_size(comm_, &num_nonempty_procs);
+    int num_redist_procs = num_nonempty_procs;
 
     StopWatch chrono;
     MetisGraphPartitioner partitioner;
@@ -113,7 +117,11 @@ void SequenceHierarchy::Coarsen(const vector<int>& num_elements)
 
         if (min_num_local_elems < num_local_elems_threshold)
         {
-            num_redist_procs /= proc_coarsening_factor;
+            num_redist_procs = max(num_nonempty_procs/proc_coarsening_factor, 1);
+        }
+
+        if (num_redist_procs < num_nonempty_procs)
+        {
             if (verbose_)
             {
                 std::cout << "SequenceHierarchy: minimal nonzero number of "
@@ -127,6 +135,7 @@ void SequenceHierarchy::Coarsen(const vector<int>& num_elements)
             topo_[l+1] = topo_[l]->Coarsen(redistributor, partitioner,
                                            elem_coarsening_factor, 0, 0);
             seq_[l+1] = seq_[l]->Coarsen(redistributor);
+            num_nonempty_procs = num_redist_procs;
         }
         else
         {
@@ -143,7 +152,7 @@ void SequenceHierarchy::Coarsen(const vector<int>& num_elements)
             seq_[l+1] = seq_[l]->Coarsen();
         }
 
-        if (verbose_) { PrintCoarseningTime(l, chrono.RealTime()); }
+        if (verbose_) { PrintCoarseningTime(l, chrono.RealTime(), METIS); }
     }
 
     if (verbose_)
@@ -173,7 +182,7 @@ void SequenceHierarchy::GeometricPartitionings(const vector<int>& num_elems, int
         topo_[l+1] = topo_[l]->CoarsenLocalPartitioning(partition, 0, 0, dim == 3 ? 2 : 0);
         seq_[l+1] = seq_[l]->Coarsen();
 
-        if (verbose_) { PrintCoarseningTime(l, chrono.RealTime()); }
+        if (verbose_) { PrintCoarseningTime(l, chrono.RealTime(), MFEMRefined); }
     }
 }
 
