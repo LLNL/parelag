@@ -42,7 +42,7 @@ void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int
 // get a copy of the global matrix as a serial matrix locally (via permutation),
 // and then call METIS to "partition processors" in each processor locally
 std::vector<int> RedistributeElements(
-      ParallelCSRMatrix& elem_face, int num_redist_procs);
+      ParallelCSRMatrix& elem_face, int& num_redist_procs);
 
 /// A helper to redistribute AgglomeratedTopology, DofHandler, DeRhamSequence
 class Redistributor
@@ -86,7 +86,7 @@ public:
                  const std::vector<int>& elem_redist_procs);
 
    /// @param num_redist_procs number of processors to be redistributed to
-   Redistributor(const AgglomeratedTopology& topo, int num_redist_procs);
+   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs);
 
    void Init(const AgglomeratedTopology& topo,
              const std::vector<int>& elem_redist_procs);

@@ -221,18 +221,21 @@ int main (int argc, char *argv[])
     if (!myid)
         std::cout << mesh_msg.str();
 
+    const int uform = nDimensions - 1;
+    const int pform = nDimensions;
+
     ConstantCoefficient coeffL2(1.);
     ConstantCoefficient coeffHdiv(1.);
 
     SequenceHierarchy hierarchy(pmesh, prob_list, print_progress_report);
-    hierarchy.SetCoefficient(nDimensions, coeffL2, false);
-    hierarchy.SetCoefficient(nDimensions-1, coeffHdiv, true);
+    hierarchy.SetCoefficient(pform, coeffL2, false);
+    hierarchy.SetCoefficient(uform, coeffHdiv, true);
     hierarchy.Build(num_elements);
     auto& sequence = hierarchy.GetDeRhamSequences();
 
     {
-        const int uform = nDimensions - 1;
-        const int pform = nDimensions;
+        PARELAG_ASSERT(start_level < sequence.size());
+
         auto DRSequence_FE = sequence[0]->FemSequence();
         FiniteElementSpace * ufespace = DRSequence_FE->GetFeSpace(uform);
         FiniteElementSpace * pfespace = DRSequence_FE->GetFeSpace(pform);

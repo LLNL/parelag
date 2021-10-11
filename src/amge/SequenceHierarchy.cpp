@@ -79,7 +79,7 @@ void SequenceHierarchy::Build(const vector<int>& num_elements)
     seq_[0]->FemSequence()->SetUpscalingTargets(dim, upscale_order, start_form);
 
     // first num_elements.size()-1 levels of topo_ are constructed geometrically
-    GeometricPartitionings(num_elements, dim);
+    GeometricCoarsenings(num_elements, dim);
 
     int num_nonempty_procs;
     MPI_Comm_size(comm_, &num_nonempty_procs);
@@ -122,6 +122,8 @@ void SequenceHierarchy::Build(const vector<int>& num_elements)
 
         if (num_redist_procs < num_nonempty_procs)
         {
+            Redistributor redistributor(*topo_[l], num_redist_procs);
+
             if (verbose_)
             {
                 std::cout << "SequenceHierarchy: minimal nonzero number of "
@@ -131,7 +133,6 @@ void SequenceHierarchy::Build(const vector<int>& num_elements)
                           << " level to " << num_redist_procs << " processors\n";
             }
 
-            Redistributor redistributor(*topo_[l], num_redist_procs);
             topo_[l+1] = topo_[l]->Coarsen(redistributor, partitioner,
                                            elem_coarsening_factor, 0, 0);
             seq_[l+1] = seq_[l]->Coarsen(redistributor);
@@ -167,12 +168,15 @@ void SequenceHierarchy::Build(const vector<int>& num_elements)
     }
 }
 
-void SequenceHierarchy::GeometricPartitionings(const vector<int>& num_elems, int dim)
+void SequenceHierarchy::GeometricCoarsenings(const vector<int>& num_elems, int dim)
 {
+    const long unsigned int num_levels = params_.Get("Hierarchy levels", 2);
+    const int num_geo_levels = min(num_levels, num_elems.size());
+
     MFEMRefinedMeshPartitioner partitioner(dim);
     StopWatch chrono;
 
-    for (unsigned int l = 0; l < num_elems.size()-1; ++l)
+    for (unsigned int l = 0; l < num_geo_levels-1; ++l)
     {
         chrono.Clear();
         chrono.Start();

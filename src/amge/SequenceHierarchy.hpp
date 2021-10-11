@@ -44,7 +44,7 @@ class SequenceHierarchy
 
     const AgglomeratedTopology::Entity elem_t_ = AgglomeratedTopology::ELEMENT;
 
-    void GeometricPartitionings(const vector<int>& num_elems, int dim);
+    void GeometricCoarsenings(const vector<int>& num_elems, int dim);
 
     int MinNonzeroNumLocalElements(int level, int zero_replace);
 public:

@@ -55,7 +55,7 @@ void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int
 }
 
 std::vector<int> RedistributeElements(
-      ParallelCSRMatrix& elem_face, int num_redist_procs)
+      ParallelCSRMatrix& elem_face, int& num_redist_procs)
 {
     MPI_Comm comm = elem_face.GetComm();
     int myid;
@@ -119,7 +119,7 @@ std::vector<int> RedistributeElements(
         mfem::Array<int> partition;
         MetisGraphPartitioner partitioner;
         partitioner.setParELAGDefaultMetisOptions();
-        partitioner.setParELAGDefaultFlags(num_redist_procs);
+        partitioner.setParELAGDefaultFlags(globProc_globProc.NumRows()/num_redist_procs);
         partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
 
         PARELAG_ASSERT(myid < partition.Size());
@@ -138,7 +138,7 @@ Redistributor::Redistributor(
    Init(topo, elem_redist_procs);
 }
 
-Redistributor::Redistributor(const AgglomeratedTopology& topo, int num_redist_procs)
+Redistributor::Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs)
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
      redEntity_trueEntity(topo.Codimensions()+1),
      redTrueDof_trueDof(topo.Dimensions()+1),

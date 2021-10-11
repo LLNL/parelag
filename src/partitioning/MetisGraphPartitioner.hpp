@@ -101,7 +101,7 @@ public:
     void setFlags(int _flags){flags = _flags;}
 
     //! Set flags based on the desired number of partitions
-    void setParELAGDefaultFlags(int num_partitions);
+    void setParELAGDefaultFlags(int coarsening_factor);
 
     //! Set not default options for metis
     void setOption(const int i, const int val){options[i] = val;}

@@ -31,9 +31,9 @@ MetisGraphPartitioner::~MetisGraphPartitioner()
     delete[] options;
 }
 
-void MetisGraphPartitioner::setParELAGDefaultFlags(int num_partitions)
+void MetisGraphPartitioner::setParELAGDefaultFlags(int coarsening_factor)
 {
-    const int flag = num_partitions < 8 ? RECURSIVE : KWAY;
+    const int flag = coarsening_factor <= 8 ? RECURSIVE : KWAY;
     setFlags(flag);
 }
 
