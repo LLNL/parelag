@@ -42,9 +42,11 @@ class SequenceHierarchy
     ParameterList params_;
     bool verbose_;
 
+    bool mass_is_assembled_;
+
     const AgglomeratedTopology::Entity elem_t_ = AgglomeratedTopology::ELEMENT;
 
-    void GeometricCoarsenings(const vector<int>& num_elems, int dim);
+    void GeometricCoarsenings(const Array<int>& num_elems, int dim);
 
     int MinNonzeroNumLocalElements(int level, int zero_replace);
 public:
@@ -103,7 +105,12 @@ public:
     /// mfem (parallel) refinements. num_elements[0] is number of elements on
     /// the finest level. Geometric coarsening will be performed until all the
     /// numbers in num_elements have been used. Further coarsenings are algebraic.
-    void Build(const vector<int>& num_elements);
+    void Build(const Array<int>& num_elements);
+    void Build(vector<int> num_elements)
+    {
+        Array<int> num_elems(num_elements.data(), num_elements.size());
+        Build(num_elems);
+    }
 
     /// Construct the hierarchy without geometric coarsening.
     void Build() { Build(vector<int>(0)); }
@@ -127,9 +134,12 @@ public:
             integ.reset(new VectorFEMassIntegrator(coef));
         }
 
-        DeRhamSequenceFE* seq = seq_[0]->FemSequence();
-        seq->ReplaceMassIntegrator(elem_t_, form, move(integ), recompute_mass);
+        ReplaceMassIntegrator(form, move(integ), recompute_mass);
     }
+
+    void ReplaceMassIntegrator(int form,
+                               unique_ptr<BilinearFormIntegrator> integ,
+                               bool recompute_mass);
 };
 
 }

@@ -31,7 +31,8 @@ void PrintCoarseningTime(int level, double time, partition_type type)
 }
 
 SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList params, bool verbose)
-    : comm_(mesh->GetComm()), mesh_(mesh), params_(move(params)), verbose_(verbose)
+    : comm_(mesh->GetComm()), mesh_(mesh), params_(move(params)),
+      verbose_(verbose), mass_is_assembled_(false)
 {
     auto num_levels = params_.Get("Hierarchy levels", 2);
     auto fe_order = params_.Get("Finite element order", 0);
@@ -55,7 +56,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
     seq_[0]->SetjformStart(start_form);
 }
 
-void SequenceHierarchy::Build(const vector<int>& num_elements)
+void SequenceHierarchy::Build(const Array<int>& num_elements)
 {
     PARELAG_ASSERT(mesh_->GetNE() == num_elements[0]);
 
@@ -76,6 +77,10 @@ void SequenceHierarchy::Build(const vector<int>& num_elements)
                   << " of at most " << num_levels << " levels ...\n";
     }
 
+    if (mass_is_assembled_ == false)
+    {
+        ReplaceMassIntegrator(dim, make_unique<MassIntegrator>(), true);
+    }
     seq_[0]->FemSequence()->SetUpscalingTargets(dim, upscale_order, start_form);
 
     // first num_elements.size()-1 levels of topo_ are constructed geometrically
@@ -89,7 +94,7 @@ void SequenceHierarchy::Build(const vector<int>& num_elements)
     MetisGraphPartitioner partitioner;
     partitioner.setParELAGDefaultMetisOptions();
 
-    for (unsigned int l = num_elements.size()-1; l < num_levels-1; ++l)
+    for (int l = num_elements.Size()-1; l < num_levels-1; ++l)
     {
         chrono.Clear();
         chrono.Start();
@@ -168,15 +173,25 @@ void SequenceHierarchy::Build(const vector<int>& num_elements)
     }
 }
 
-void SequenceHierarchy::GeometricCoarsenings(const vector<int>& num_elems, int dim)
+void SequenceHierarchy::ReplaceMassIntegrator(
+        int form,
+        unique_ptr<BilinearFormIntegrator> integ,
+        bool recompute_mass)
 {
-    const long unsigned int num_levels = params_.Get("Hierarchy levels", 2);
-    const int num_geo_levels = min(num_levels, num_elems.size());
+    mass_is_assembled_ = recompute_mass;
+    DeRhamSequenceFE* seq = seq_[0]->FemSequence();
+    seq->ReplaceMassIntegrator(elem_t_, form, move(integ), recompute_mass);
+}
+
+void SequenceHierarchy::GeometricCoarsenings(const Array<int>& num_elems, int dim)
+{
+    const int num_levels = params_.Get("Hierarchy levels", 2);
+    const int num_geo_levels = min(num_levels, num_elems.Size());
 
     MFEMRefinedMeshPartitioner partitioner(dim);
     StopWatch chrono;
 
-    for (unsigned int l = 0; l < num_geo_levels-1; ++l)
+    for (int l = 0; l < num_geo_levels-1; ++l)
     {
         chrono.Clear();
         chrono.Start();

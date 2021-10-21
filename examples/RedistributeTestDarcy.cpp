@@ -230,7 +230,7 @@ int main (int argc, char *argv[])
     SequenceHierarchy hierarchy(pmesh, prob_list, print_progress_report);
     hierarchy.SetCoefficient(pform, coeffL2, false);
     hierarchy.SetCoefficient(uform, coeffHdiv, true);
-    hierarchy.Build(num_elements);
+    hierarchy.Build(move(num_elements));
     auto& sequence = hierarchy.GetDeRhamSequences();
 
     {
