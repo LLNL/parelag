@@ -140,6 +140,10 @@ public:
     int Assemble(const mfem::Vector & data, mfem::Vector & trueData) const;
     //@}
 
+    /// Disassemble a "true" vector by keeping shared data only to owner.
+    /// This can be regarded as the reverse action of IgnoreNonLocal.
+    int DisAssemble(const mfem::Vector & trueData, mfem::Vector & data) const;
+
     /// out = A * entity_TrueEntity_entity * B.
     std::unique_ptr<ParallelCSRMatrix> ParMatmultAB(
         const SerialCSRMatrix & A,

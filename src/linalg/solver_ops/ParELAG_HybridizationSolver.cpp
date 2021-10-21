@@ -84,10 +84,8 @@ void HybridizationSolver::Mult(
        rhs_view.Update(non_true_rhs.GetData(), Offsets_);
        sol_view.Update(non_true_sol.GetData(), Offsets_);
 
-       SerialCSRMatrix hdiv_assign;
-       hdiv_dofTrueDof.get_entity_trueEntity()->GetDiag(hdiv_assign);
-
-       hdiv_assign.Mult(true_rhs_view.GetBlock(0), rhs_view.GetBlock(0));
+       hdiv_dofTrueDof.DisAssemble(true_rhs_view.GetBlock(0),
+                                   rhs_view.GetBlock(0));
        rhs_view.GetBlock(1) = true_rhs_view.GetBlock(1);
     }
     else
@@ -170,10 +168,8 @@ void HybridizationSolver::MultTranspose(
        rhs_view.Update(non_true_rhs.GetData(), Offsets_);
        sol_view.Update(non_true_sol.GetData(), Offsets_);
 
-       SerialCSRMatrix hdiv_assign;
-       hdiv_dofTrueDof.get_entity_trueEntity()->GetDiag(hdiv_assign);
-
-       hdiv_assign.Mult(true_rhs_view.GetBlock(0), rhs_view.GetBlock(0));
+       hdiv_dofTrueDof.DisAssemble(true_rhs_view.GetBlock(0),
+                                   rhs_view.GetBlock(0));
        rhs_view.GetBlock(1) = true_rhs_view.GetBlock(1);
     }
     else

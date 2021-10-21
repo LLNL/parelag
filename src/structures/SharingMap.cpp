@@ -765,6 +765,24 @@ int SharingMap::Assemble(const Vector & data, Vector & trueData) const
     return ierr;
 }
 
+int SharingMap::DisAssemble(const Vector & trueData, Vector & data) const
+{
+    hypre_VectorData(hypre_ParVectorLocalVector(xTrue_)) = trueData.GetData();
+    hypre_VectorData(hypre_ParVectorLocalVector(x_))     = data.GetData();
+
+    hypre_ParCSRMatrix * h_e_tE = *entity_trueEntity;
+    hypre_CSRMatrix * diag = hypre_ParCSRMatrixDiag(h_e_tE);
+
+    int ierr = hypre_CSRMatrixMatvec(
+        1.,diag,hypre_ParVectorLocalVector(xTrue_),
+        0.,hypre_ParVectorLocalVector(x_));
+
+    hypre_VectorData( hypre_ParVectorLocalVector(xTrue_) ) = nullptr;
+    hypre_VectorData( hypre_ParVectorLocalVector(x_) )     = nullptr;
+
+    return ierr;
+}
+
 unique_ptr<ParallelCSRMatrix> SharingMap::ParMatmultAB(
     const SerialCSRMatrix & A, const SerialCSRMatrix & B,
     const Array<int> & row_starts_A,
