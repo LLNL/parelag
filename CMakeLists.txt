@@ -151,6 +151,10 @@ option(${PROJECT_NAME}_ENABLE_PETSC
   "Should Petsc content be enabled?"
   OFF)
 
+option(${PROJECT_NAME}_ENABLE_MATRED
+  "Should MATRED content be enabled?"
+  OFF)
+
 # On massively distributed systems on which it may be best/required to
 # use static executables, this option should be enabled to "force"
 # compilers to link everything as statically as possible.
