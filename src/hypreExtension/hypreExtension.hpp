@@ -81,7 +81,7 @@ void hypre_ParCSRDataTransformationSign(hypre_ParCSRMatrix * mat);
 HYPRE_Int hypre_ParCSRMatrixCompare(hypre_ParCSRMatrix * A, hypre_ParCSRMatrix * B, double tol, int verbose);
 
 
-int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
+int parelag_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
                           hypre_ParCSRMatrix *B,
                           hypre_ParCSRMatrix **C_ptr);
 

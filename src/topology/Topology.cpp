@@ -837,7 +837,7 @@ AgglomeratedTopology::Coarsen(Redistributor& redistributor,
    Array<int> partitioning(num_local_redist_elems);
    if (num_local_redist_elems > 0)
    {
-      int num_partitions = num_local_redist_elems / coarsening_factor;
+      int num_partitions = max(num_local_redist_elems / coarsening_factor, 1);
       auto elem_elem = redist_topo.LocalElementElementTable();
       partitioner.setParELAGDefaultFlags(num_partitions);
       partitioner.doPartition(*elem_elem, num_partitions, partitioning);
