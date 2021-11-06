@@ -15,6 +15,7 @@
 #define PARELAG_HYBRIDIZATIONSOLVER_HPP
 
 #include "linalg/solver_core/ParELAG_Solver.hpp"
+#include "linalg/solver_ops/ParELAG_KrylovSolver.hpp"
 #include "utilities/MemoryUtils.hpp"
 #include "amge/HybridHdivL2.hpp"
 
@@ -81,6 +82,12 @@ public:
     {
         PARELAG_ASSERT(hybridization);
         hybridization_ = std::move(hybridization);
+    }
+
+    int GetNumIters() const
+    {
+        auto krylov_solver = dynamic_cast<KrylovSolver*>(Solver_.get());
+        if (krylov_solver) { return krylov_solver->GetNumIters(); }
     }
 
     ///@}
