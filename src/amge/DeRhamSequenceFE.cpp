@@ -399,6 +399,21 @@ void DeRhamSequenceFE::show(int jform, MultiVector & v)
     sock.close();
 }
 
+void DeRhamSequenceFE::ShowTrueData(int jform, MultiVector & true_v)
+{
+   const int nv = true_v.NumberOfVectors();
+   MultiVector v(nv, GetNumDofs(jform));
+   Vector v_view, true_v_view;
+   for(int i(0); i < nv; ++i)
+   {
+       true_v.GetVectorView(i, true_v_view);
+       v.GetVectorView(i,v_view);
+       Dof_[jform]->GetDofTrueDof().Distribute(true_v_view, v_view);
+   }
+
+   show(jform, v);
+}
+
 void DeRhamSequenceFE::ExportGLVis(int jform, Vector & v, std::ostream & os)
 {
     elag_assert(v.Size() == this->GetNumberOfDofs(jform));
@@ -616,7 +631,7 @@ void DeRhamSequenceFE::Update()
 
 /// FIXME (trb 12/15/15): Shouldn't the topo have the mesh already?
 DeRhamSequence3D_FE::DeRhamSequence3D_FE(
-    const std::shared_ptr<AgglomeratedTopology>& topo,ParMesh * mesh,int order,bool assemble)
+    const std::shared_ptr<AgglomeratedTopology>& topo,ParMesh * mesh,int order,bool assemble,bool assemble_mass)
     : DeRhamSequenceFE(topo, 4)
 {
     Mesh_ = mesh;
@@ -659,7 +674,8 @@ DeRhamSequence3D_FE::DeRhamSequence3D_FE(
     if (assemble)
     {
         buildDof();
-        assembleLocalMass();
+        if (assemble_mass)
+            assembleLocalMass();
         assembleDerivative();
     }
 
@@ -706,7 +722,7 @@ void DeRhamSequence3D_FE::computePVTraces(
 }
 
 DeRhamSequence2D_Hdiv_FE::DeRhamSequence2D_Hdiv_FE(
-    const std::shared_ptr<AgglomeratedTopology>& topo, ParMesh * mesh, int order, bool assemble)
+    const std::shared_ptr<AgglomeratedTopology>& topo, ParMesh * mesh, int order, bool assemble, bool assemble_mass)
     : DeRhamSequenceFE(topo, 3)
 {
     Mesh_ = mesh;
@@ -739,7 +755,8 @@ DeRhamSequence2D_Hdiv_FE::DeRhamSequence2D_Hdiv_FE(
     if (assemble)
     {
         buildDof();
-        assembleLocalMass();
+        if (assemble_mass)
+            assembleLocalMass();
         assembleDerivative();
     }
 
@@ -899,8 +916,8 @@ void InterpolatePV_H1Traces(const FiniteElementSpace * fespace,
     AP_Interpolant.SetSize(ndofs);
     AP_Interpolant = 0.0;
 
-    int * j_AP_peak = AP_peak.GetJ();
-    int * end = j_AP_peak+nnz;
+    const int * j_AP_peak = AP_peak.GetJ();
+    const int * end = j_AP_peak+nnz;
 
     double * val = AP_Interpolant.GetData();
     for(; j_AP_peak != end; ++j_AP_peak)

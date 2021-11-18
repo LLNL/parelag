@@ -38,9 +38,9 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
 
     if (hybrid_strategy == "Darcy")
     {
-    	auto& sequence = state.GetDeRhamSequence();
-    	auto sequence_ptr = state.GetDeRhamSequencePtr();
-    	auto forms = state.GetForms();
+        auto& sequence = state.GetDeRhamSequence();
+        auto sequence_ptr = state.GetDeRhamSequencePtr();
+        auto forms = state.GetForms();
 
         // Whether the element H(div) dofs have same orientation on shared facet
         bool IsSameOrient = state.GetExtraParameter("IsSameOrient",false);
@@ -52,15 +52,15 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         // If not provided, the scale is treated as 1.0
         auto elemMatrixScaling = state.GetVector("elemMatrixScaling");
 
-    	auto label_ess = state.GetBoundaryLabels(0);
-    	mfem::Array<int> ess_HdivDofs;
+        auto label_ess = state.GetBoundaryLabels(0);
+        mfem::Array<int> ess_HdivDofs;
         if (label_ess.size() > 0)
-    	{
-    		mfem::Array<int> ess_attr(label_ess.data(),label_ess.size());
-    		ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
-    		sequence.GetDofHandler(forms[0])->MarkDofsOnSelectedBndr(
-    				ess_attr, ess_HdivDofs);
-    	}
+        {
+            mfem::Array<int> ess_attr(label_ess.data(),label_ess.size());
+            ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
+            sequence.GetDofHandler(forms[0])->MarkDofsOnSelectedBndr(
+                 ess_attr, ess_HdivDofs);
+        }
         else
         {
             ess_HdivDofs.SetSize(sequence.GetNumberOfDofs(forms[0]));
@@ -91,8 +91,30 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         auto pHB_mat = Assemble(mult_dofTrueDof, HB_mat_copy, mult_dofTrueDof);
 
         const int rescale_iter = state.GetExtraParameter("RescaleIteration", -20);
-        auto scaling_vector = rescale_iter < 0 ? hybridization->GetRescaling() :
-                              _get_scaling_by_smoothing(*pHB_mat, rescale_iter);
+        const mfem::Vector& precomputed_scale = hybridization->GetRescaling();
+                const bool use_precomputed_scaling = precomputed_scale.Size() && rescale_iter < 0;
+                auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
+                                      _get_scaling_by_smoothing(*pHB_mat, std::abs(rescale_iter));
+
+        // Smoothing renders scaling of essential dofs to be close to 0
+        if (use_precomputed_scaling == false)
+        {
+            auto d_td = mult_dofTrueDof.get_entity_trueEntity();
+            mfem::SparseMatrix diag;
+            d_td->GetDiag(diag);
+
+            for (int i = 0; i < HB_mat_copy.Size(); i++)
+            {
+                if (hybridization->GetEssentialMultiplierDofs()[i])
+                {
+                    if (diag.RowSize(i))
+                    {
+                        PARELAG_ASSERT(diag.RowSize(i) == 1);
+                        scaling_vector(diag.GetRowColumns(i)[0]) = 1.0;
+                    }
+                }
+            }
+        }
 
         int* scale_i = new int[pHB_mat->Height()+1];
         int* scale_j = new int[pHB_mat->Height()];

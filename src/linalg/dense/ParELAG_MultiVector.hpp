@@ -72,10 +72,10 @@ public:
     void GetRangeView(int start, int end, MultiVector & view);
 
     double * GetDataFromVector(int ivect)
-    {return this->data+ivect*LDA_;}
+    {return GetData()+ivect*LDA_;}
 
     const double * GetDataFromVector(int ivect) const
-    {return this->data+ivect*LDA_;}
+    {return GetData()+ivect*LDA_;}
 
     int Size() const { return LocalSize_;}
     int LeadingDimension() const { return LDA_; }
@@ -149,6 +149,9 @@ void add(double a, const MultiVector &x,
 
 //y = A * x;
 void Mult(mfem::BlockMatrix & A, const MultiVector & x, MultiVector & y);
+
+//y = A * x;
+void Mult(const mfem::HypreParMatrix & A, const MultiVector & x, MultiVector & y);
 
 // out = M*x;
 std::unique_ptr<MultiVector> MatrixTimesMultiVector(

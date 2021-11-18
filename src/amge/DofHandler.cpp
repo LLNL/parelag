@@ -37,7 +37,7 @@ DofHandler::DofHandler(
 
 DofHandler::DofHandler(
     MPI_Comm comm,size_t maxCodimensionBaseForDof_,size_t nDim_,
-    std::vector<unique_ptr<SparseMatrix>>&& entity_dof_)
+    std::vector<unique_ptr<const SparseMatrix>>&& entity_dof_)
     : maxCodimensionBaseForDof(maxCodimensionBaseForDof_),
       nDim(nDim_),
       entity_dof(std::move(entity_dof_)),
@@ -51,25 +51,6 @@ DofHandler::DofHandler(
 
 DofHandler::~DofHandler()
 {
-    // FIXME (trb 07/07/16): This should not be this crazy
-    for (size_t i(0); i < maxCodimensionBaseForDof+1; ++i)
-    {
-        if (rDof_dof[i])
-        {
-            delete[] rDof_dof[i]->GetI();
-            rDof_dof[i]->LoseData();
-        }
-    }
-
-    for (size_t i(0); i < maxCodimensionBaseForDof+1; ++i)
-    {
-        if (entity_rdof[i])
-        {
-            delete[] entity_rdof[i]->GetJ();
-            delete[] entity_rdof[i]->GetData();
-            entity_rdof[i]->LoseData();
-        }
-    }
 }
 
 const SparseMatrix & DofHandler::GetEntityDofTable(entity type) const
@@ -89,16 +70,22 @@ const SparseMatrix & DofHandler::GetEntityDofTable(entity type) const
     return *entity_dof[type];
 }
 
-const SparseMatrix & DofHandler::GetEntityRDofTable(entity type)
+const SparseMatrix & DofHandler::GetEntityRDofTable(entity type) const
 {
     if (!entity_rdof[type])
     {
         const int nrows = entity_dof[type]->Size();
         const int ncols = entity_dof[type]->NumNonZeroElems();
         const int nnz   = entity_dof[type]->NumNonZeroElems();
-        int * i = entity_dof[type]->GetI();
+        int * i = new int[nrows+1];
         int * j = new int[nnz];
         double * a = new double[nnz];
+
+        // Copying allows proper management of the memory for the arrays
+        // to remain within the power of the SparseMatrix class in MFEM.
+        // This can be avoided if MFEM decides to separate the ownership of
+        // the I and J arrays.
+        std::copy(entity_dof[type]->GetI(), entity_dof[type]->GetI() + nrows+1, i);
 
         std::fill(a, a+nnz, 1.0);
         Array<int> dofs;
@@ -108,14 +95,14 @@ const SparseMatrix & DofHandler::GetEntityRDofTable(entity type)
             GetrDof(type, irow, dofs);
         }
 
-        entity_rdof[type] = make_unique<SparseMatrix>(i,j,a,nrows,ncols);
+        entity_rdof[type] = make_unique<const SparseMatrix>(i,j,a,nrows,ncols);
         CheckMatrix(*entity_rdof[type]);
     }
 
     return *entity_rdof[type];
 }
 
-const SparseMatrix & DofHandler::GetrDofDofTable(entity type)
+const SparseMatrix & DofHandler::GetrDofDofTable(entity type) const
 {
     if (!rDof_dof[type])
     {
@@ -125,11 +112,25 @@ const SparseMatrix & DofHandler::GetrDofDofTable(entity type)
         for (int kk(0); kk < nnz+1; ++kk)
             i_Rdof_dof[kk] = kk;
 
-        rDof_dof[type] = make_unique<SparseMatrix>(i_Rdof_dof,
-                                                   ent_dof.GetJ(),
-                                                   ent_dof.GetData(),
-                                                   nnz,
-                                                   ent_dof.Width());
+        // Copying allows proper management of the memory for the arrays
+        // to remain within the power of the SparseMatrix class in MFEM.
+        // This can be avoided if MFEM decides to separate the ownership of
+        // the I and J arrays.
+        int * j_Rdof_dof = new int[nnz];
+        std::copy(ent_dof.GetJ(), ent_dof.GetJ() + nnz, j_Rdof_dof);
+
+        // The const_cast here does NOT lead to a de facto loss of constness, since
+        // the obtained SparseMatrix object is const. This is a legitimate use of a
+        // const_cast with the only purpose to simply work with (reasonable) limitations in the
+        // interface of the constructors of SparseMatrix in MFEM. Namely, the constructors
+        // only take int * arguments independently of whether a const or non-const object
+        // is being constructed. Thus, here the const_cast should NOT have any
+        // negative semantic consequences and only deteriorates the syntactic aesthetics.
+        rDof_dof[type] = make_unique<const SparseMatrix>(i_Rdof_dof,
+                                                         j_Rdof_dof,
+                                                         const_cast<double *>(ent_dof.GetData()),
+                                                         nnz,
+                                                         ent_dof.Width(), true, false, false);
         CheckMatrix(*rDof_dof[type]);
     }
     return *rDof_dof[type];
@@ -138,7 +139,7 @@ const SparseMatrix & DofHandler::GetrDofDofTable(entity type)
 void DofHandler::GetrDof(entity type, int ientity, Array<int> & dofs) const
 {
     const SparseMatrix & entityDof = GetEntityDofTable(type);
-    int * I = entityDof.GetI();
+    const int * I = entityDof.GetI();
 
     int start = I[ientity];
     int stop  = I[ientity+1];
@@ -380,7 +381,7 @@ void DofHandlerFE::BuildEntityDofTable(entity entity_type)
         getDofForEntity(static_cast<entity>(entity_type), ientity, j_it + offset, val_it + offset);
     }
 
-    entity_dof[entity_type] = make_unique<SparseMatrix>(
+    entity_dof[entity_type] = make_unique<const SparseMatrix>(
         i,j,val,nEntities,fespace->GetNDofs());
     CheckMatrix(*entity_dof[entity_type]);
 
@@ -820,10 +821,10 @@ int DofHandlerALG::MarkDofsOnSelectedBndr(
     const TopologyTable & fc_bdnr(Topology_->FacetBdrAttribute());
 
     int n_fc = fc_bdnr.Size();
-    int * i_fc_bndr = fc_bdnr.GetI();
-    int * j_fc_bndr = fc_bdnr.GetJ();
-    int * i_facet_dof = entity_dof[AgglomeratedTopology::FACET]->GetI();
-    int * j_facet_dof = entity_dof[AgglomeratedTopology::FACET]->GetJ();
+    const int * i_fc_bndr = fc_bdnr.GetI();
+    const int * j_fc_bndr = fc_bdnr.GetJ();
+    const int * i_facet_dof = entity_dof[AgglomeratedTopology::FACET]->GetI();
+    const int * j_facet_dof = entity_dof[AgglomeratedTopology::FACET]->GetJ();
     int start(0), end(0);
     for (int ifc = 0; ifc < n_fc; ++ifc)
     {
@@ -831,7 +832,7 @@ int DofHandlerALG::MarkDofsOnSelectedBndr(
         elag_assert(((end-start) == 0) || ((end-start)  == 1));
         if ((end-start) == 1 && bndrAttributesMarker[j_fc_bndr[start]])
         {
-            for (int * it = j_facet_dof + i_facet_dof[ifc];
+            for (const int * it = j_facet_dof + i_facet_dof[ifc];
                 it != j_facet_dof + i_facet_dof[ifc+1]; ++it)
             {
                 dofMarker[*it] = 1;

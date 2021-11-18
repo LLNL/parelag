@@ -55,20 +55,20 @@ void ShowTopologyAgglomeratedElements(
     GetElementColoring(colors, 0, *el_el );
 
     AgglomeratedTopology* it = topo;
-    do
+    while((it = it->FinerTopology().get()) != nullptr)
     {
         help.SetSize(it->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT));
         it->AEntityEntity(0).WedgeMultTranspose(partitioning, help);
         Swap(partitioning, help);
-    }  while((it = it->FinerTopology().get()) != nullptr);
+    }
 
     it = topo;
-    do
+    while((it = it->FinerTopology().get()) != nullptr)
     {
         help.SetSize( it->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT) );
         it->AEntityEntity(0).WedgeMultTranspose(colors, help);
         Swap(colors, help);
-    } while( (it = it->FinerTopology().get()) != nullptr );
+    }
 
     auto fec = make_unique<L2_FECollection>(0, mesh->Dimension());
     auto fespace = make_unique<FiniteElementSpace>(mesh, fec.get());

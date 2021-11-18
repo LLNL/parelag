@@ -102,7 +102,7 @@ hypre_ParCSRMatrix * hypre_ParCSRMatrixDeleteZeros2 ( hypre_ParCSRMatrix *A , do
     hypre_CSRMatrixDestroy(offd);
 
 
-    hypre_ParCSRMatrixColMapOffd(out) = hypre_CTAlloc(HYPRE_Int,num_cols_offd);
+    hypre_ParCSRMatrixColMapOffd(out) = parelag_hypre_CTAlloc(HYPRE_Int,num_cols_offd);
     memcpy(hypre_ParCSRMatrixColMapOffd(out), hypre_ParCSRMatrixColMapOffd(A), num_cols_offd*sizeof(HYPRE_Int));
     hypre_ParCSRMatrixSetNumNonzeros(out);
 

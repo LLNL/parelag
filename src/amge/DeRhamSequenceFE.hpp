@@ -125,6 +125,9 @@ public:
     /// interactive visualization of v with GLVis
     virtual void show(int jform, MultiVector & v) override;
 
+    /// same as show, except v is assumed to be "true"
+    virtual void ShowTrueData(int jform, MultiVector & true_v) override;
+
     /// save a meshfile and vector file for visualization with GLVis
     virtual void ExportGLVis(int jform,
                              mfem::Vector & v,
@@ -273,7 +276,7 @@ public:
     /// Constructor.
     DeRhamSequence3D_FE(const std::shared_ptr<AgglomeratedTopology>& topo,
                         mfem::ParMesh * mesh,
-                        int order, bool assemble=true);
+                        int order, bool assemble=true, bool assemble_mass=true);
 
     /// Destructor
     virtual ~DeRhamSequence3D_FE();
@@ -294,7 +297,7 @@ public:
     /// Constructor
     DeRhamSequence2D_Hdiv_FE(const std::shared_ptr<AgglomeratedTopology>& topo,
                              mfem::ParMesh * mesh,
-                             int order, bool assemble=true);
+                             int order, bool assemble=true, bool assemble_mass=true);
 
     /// Destructor
     virtual ~DeRhamSequence2D_Hdiv_FE();

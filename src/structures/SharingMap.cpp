@@ -86,6 +86,54 @@ SharingMap::SharingMap(const SharingMap& map):
 #endif
 }
 
+void SharingMap::SetUp(unique_ptr<ParallelCSRMatrix> entity_trueEntity_)
+{
+    elag_trace_enter_block(
+        "SharingMap::SetUp(entity_trueEntity_)");
+
+    entity_trueEntity = std::move(entity_trueEntity_);
+
+    hypre_ParCSRMatrix * h_e_tE = *entity_trueEntity;
+
+    elag_assert( hypre_ParCSRMatrixOwnsRowStarts(h_e_tE) == 1 );
+    elag_assert( hypre_ParCSRMatrixOwnsColStarts(h_e_tE) == 1 );
+
+    entity_start[0] = entity_trueEntity->RowPart()[0];
+    entity_start[1] = entity_trueEntity->RowPart()[1];
+    entity_start[2] = entity_trueEntity->M();
+    trueEntity_start[0] = entity_trueEntity->ColPart()[0];
+    trueEntity_start[1] = entity_trueEntity->ColPart()[1];
+    trueEntity_start[2] = entity_trueEntity->N();
+
+    if (!hypre_ParCSRMatrixCommPkg(h_e_tE))
+        hypre_MatvecCommPkgCreate(h_e_tE);
+
+    hypre_ParCSRMatrix * tE_e;
+
+    elag_trace("Transpose entity_trueEntity");
+    hypre_ParCSRMatrixTranspose2(h_e_tE, &tE_e);
+    elag_trace("Transpose entity_trueEntity - done!");
+
+    elag_assert( hypre_ParCSRMatrixOwnsRowStarts(tE_e) == 0 );
+    elag_assert( hypre_ParCSRMatrixOwnsColStarts(tE_e) == 0 );
+
+    elag_trace("Compute entity_trueEntity_entity");
+    entity_trueEntity_entity = make_unique<ParallelCSRMatrix>(
+        hypre_ParMatmul(h_e_tE, tE_e) );
+    elag_trace("Compute entity_trueEntity_entity - done!");
+
+    hypre_ParCSRMatrixDestroy(tE_e);
+
+    hypre_ParCSRMatrix * h_e_tE_e = *entity_trueEntity_entity;
+    PARELAG_ASSERT( hypre_ParCSRMatrixOwnsRowStarts(h_e_tE_e) == 0 );
+    PARELAG_ASSERT( hypre_ParCSRMatrixOwnsColStarts(h_e_tE_e) == 0 );
+
+    resetHypreParVectors();
+    storeSharedEntitiesIds();
+    elag_trace_leave_block(
+        "SharingMap::SetUp(entity_trueEntity_)");
+}
+
 void SharingMap::SetUp(Array<int> & entityStart,
                        Array<int> & trueEntityStart,
                        unique_ptr<ParallelCSRMatrix> entity_trueEntity_)
@@ -273,7 +321,6 @@ void SharingMap::SetUp(ParFiniteElementSpace * fes, int useDofSign)
     // FIXME SEE BELOW
     fes->Dof_TrueDof_Matrix()->SetOwnerFlags(-1,-1,-1);
     hypre_ParCSRMatrix * mat = fes->Dof_TrueDof_Matrix()->StealData();
-    hypre_style_delete = true;
 
     elag_trace("Get the dofTrueDof matrix from fes - done");
     if(useDofSign)

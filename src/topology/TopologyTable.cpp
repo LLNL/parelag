@@ -26,14 +26,14 @@ using namespace mfem;
 using std::unique_ptr;
 
 TopologyTable::TopologyTable(SerialCSRMatrix & A_in)
-    : SerialCSRMatrix(nullptr,nullptr,nullptr,0,0)
+    : SerialCSRMatrix()
 {
     elag_assert(A_in.Finalized());
     this->Swap(A_in);
 }
 
 TopologyTable::TopologyTable(std::unique_ptr<SerialCSRMatrix> A_in)
-    : SerialCSRMatrix(nullptr,nullptr,nullptr,0,0)
+    : SerialCSRMatrix()
 {
     elag_assert(A_in->Finalized());
     this->Swap(*A_in);
@@ -122,7 +122,7 @@ unique_ptr<TopologyTable> TopologyTable::GetSubTable(
         ExtractRowAndColumns(*this,rows,cols,marker));
 }
 
-unique_ptr<TopologyTable> TopologyTable::Transpose()
+unique_ptr<TopologyTable> TopologyTable::Transpose() const
 {
     return make_unique<TopologyTable>(ToUnique(mfem::Transpose(*this)));
 }
@@ -142,7 +142,8 @@ unique_ptr<TopologyTable> MultBoolean(
     const TopologyTable & A,
     const TopologyTable & B )
 {
-    int *A_i, *A_j, *B_i, *B_j, *C_i, *C_j;
+    const int *A_i, *A_j, *B_i, *B_j;
+    int *C_i, *C_j;
     int ia, ib, ic, ja, jb, num_nonzeros;
 
     const int nrowsA = A.Size();
@@ -217,7 +218,10 @@ unique_ptr<TopologyTable> MultBoolean(
 unique_ptr<TopologyTable>
 TransposeOrientation(const Array<int> & j,int nrowsOut)
 {
-    elag_assert(j.Max() < nrowsOut );
+    if (j.Size() > 0)
+    {
+        elag_assert(j.Max() < nrowsOut );
+    }
 
     int * const i_out = new int[nrowsOut+2];
     std::fill(i_out, i_out + nrowsOut+2, 0);

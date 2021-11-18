@@ -44,8 +44,8 @@ public:
     /// Constructor that assumes unique owership of user-provided
     /// entity_dof tables. (Be sure to std::move the vector in)
     DofHandler(
-        MPI_Comm comm,size_t maxCodimensionBaseForDof,size_t nDim,
-        std::vector<std::unique_ptr<mfem::SparseMatrix>>&& entity_dof_);
+        MPI_Comm comm, size_t maxCodimensionBaseForDof, size_t nDim,
+        std::vector<std::unique_ptr<const mfem::SparseMatrix>>&& entity_dof_);
 
     virtual ~DofHandler();
 
@@ -82,11 +82,11 @@ public:
     /// more entities. This routine takes entity_dof and breaks apart the shared
     /// dofs, so that in the returned entity_rdof matrix, every column has
     /// exactly one nonzero.
-    const mfem::SparseMatrix & GetEntityRDofTable(entity type);
+    const mfem::SparseMatrix & GetEntityRDofTable(entity type) const;
 
     // NOTE this routine assumes that rdof relative to the same entity
     // are contiguous.
-    const mfem::SparseMatrix & GetrDofDofTable(entity type);
+    const mfem::SparseMatrix & GetrDofDofTable(entity type) const;
 
     // NOTE this routine returns an array of rdof that is contiguous.
     virtual void GetrDof(entity type, int ientity,
@@ -167,9 +167,9 @@ protected:
     size_t maxCodimensionBaseForDof;
     size_t nDim;
 
-    std::vector<std::unique_ptr<mfem::SparseMatrix>> entity_dof;
-    std::vector<std::unique_ptr<mfem::SparseMatrix>> rDof_dof;
-    std::vector<std::unique_ptr<mfem::SparseMatrix>> entity_rdof;
+    std::vector<std::unique_ptr<const mfem::SparseMatrix>> entity_dof;
+    mutable std::vector<std::unique_ptr<const mfem::SparseMatrix>> rDof_dof;
+    mutable std::vector<std::unique_ptr<const mfem::SparseMatrix>> entity_rdof;
 
     SharingMap dofTrueDof;
 };
@@ -279,7 +279,6 @@ public:
 
     virtual ~DofHandlerALG() override;
 
-
     virtual int GetNumberInteriorDofs(entity type) override;
 
     int GetNumberInteriorDofs(entity type, int entity_id);
@@ -361,7 +360,7 @@ public:
 
     DofHandlerSCRATCH(
         MPI_Comm comm,size_t maxCodimensionBaseForDof,size_t nDim,
-        std::vector<std::unique_ptr<mfem::SparseMatrix>>&& entity_dof_):
+        std::vector<std::unique_ptr<const mfem::SparseMatrix>>&& entity_dof_):
         DofHandler(comm, maxCodimensionBaseForDof, nDim, std::move(entity_dof_))
     {
     }

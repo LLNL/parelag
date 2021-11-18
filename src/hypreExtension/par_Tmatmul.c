@@ -61,10 +61,10 @@ hypre_ParCSRMatrixTranspose2(hypre_ParCSRMatrix  *A,
     hypre_ParCSRMatrixTranspose(A,At,1);
 
     if(hypre_ParCSRMatrixOwnsRowStarts(*At))
-        hypre_TFree(hypre_ParCSRMatrixRowStarts(*At));
+        parelag_hypre_TFree(hypre_ParCSRMatrixRowStarts(*At));
 
     if(hypre_ParCSRMatrixOwnsColStarts(*At))
-        hypre_TFree(hypre_ParCSRMatrixColStarts(*At));
+        parelag_hypre_TFree(hypre_ParCSRMatrixColStarts(*At));
 
     hypre_ParCSRMatrixRowStarts(*At) = hypre_ParCSRMatrixColStarts(A);
     hypre_ParCSRMatrixColStarts(*At) = hypre_ParCSRMatrixRowStarts(A);

@@ -24,8 +24,8 @@ hypre_ParCSRMatrixNorml1(hypre_ParCSRMatrix * A)
     HYPRE_Int nnz_diag = hypre_CSRMatrixNumNonzeros(diag);
     HYPRE_Int nnz_offd = hypre_CSRMatrixNumNonzeros(offd);
 
-    double * abs_data_diag = hypre_CTAlloc(double, nnz_diag);
-    double * abs_data_offd = hypre_CTAlloc(double, nnz_offd);
+    double * abs_data_diag = parelag_hypre_CTAlloc(double, nnz_diag);
+    double * abs_data_offd = parelag_hypre_CTAlloc(double, nnz_offd);
     double * orig_data_diag = hypre_CSRMatrixData(diag);
     double * orig_data_offd = hypre_CSRMatrixData(offd);
     hypre_CSRMatrixData(diag) = abs_data_diag;
@@ -61,8 +61,8 @@ hypre_ParCSRMatrixNorml1(hypre_ParCSRMatrix * A)
 
     hypre_CSRMatrixData(diag) = orig_data_diag;
     hypre_CSRMatrixData(offd) = orig_data_offd;
-    hypre_TFree(abs_data_diag);
-    hypre_TFree(abs_data_offd);
+    parelag_hypre_TFree(abs_data_diag);
+    parelag_hypre_TFree(abs_data_offd);
     hypre_ParVectorDestroy(x);
     hypre_ParVectorDestroy(y);
 
@@ -81,8 +81,8 @@ hypre_ParCSRMatrixNormlinf(hypre_ParCSRMatrix * A)
     HYPRE_Int nnz_diag = hypre_CSRMatrixNumNonzeros(diag);
     HYPRE_Int nnz_offd = hypre_CSRMatrixNumNonzeros(offd);
 
-    double * abs_data_diag = hypre_CTAlloc(double, nnz_diag);
-    double * abs_data_offd = hypre_CTAlloc(double, nnz_offd);
+    double * abs_data_diag = parelag_hypre_CTAlloc(double, nnz_diag);
+    double * abs_data_offd = parelag_hypre_CTAlloc(double, nnz_offd);
     double * orig_data_diag = hypre_CSRMatrixData(diag);
     double * orig_data_offd = hypre_CSRMatrixData(offd);
     hypre_CSRMatrixData(diag) = abs_data_diag;
@@ -118,8 +118,8 @@ hypre_ParCSRMatrixNormlinf(hypre_ParCSRMatrix * A)
 
     hypre_CSRMatrixData(diag) = orig_data_diag;
     hypre_CSRMatrixData(offd) = orig_data_offd;
-    hypre_TFree(abs_data_diag);
-    hypre_TFree(abs_data_offd);
+    parelag_hypre_TFree(abs_data_diag);
+    parelag_hypre_TFree(abs_data_offd);
     hypre_ParVectorDestroy(x);
     hypre_ParVectorDestroy(y);
 

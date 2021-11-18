@@ -41,8 +41,8 @@ hypre_CSRMatrix *hypre_CSRMatrixSubtract ( hypre_CSRMatrix *A , hypre_CSRMatrix 
        }
 
 
-       marker = hypre_CTAlloc(HYPRE_Int, ncols_A);
-       C_i = hypre_CTAlloc(HYPRE_Int, nrows_A+1);
+       marker = parelag_hypre_CTAlloc(HYPRE_Int, ncols_A);
+       C_i = parelag_hypre_CTAlloc(HYPRE_Int, nrows_A+1);
 
        for (ia = 0; ia < ncols_A; ia++)
         marker[ia] = -1;
@@ -106,7 +106,7 @@ hypre_CSRMatrix *hypre_CSRMatrixSubtract ( hypre_CSRMatrix *A , hypre_CSRMatrix 
         }
        }
 
-       hypre_TFree(marker);
+       parelag_hypre_TFree(marker);
        return C;
 }
 

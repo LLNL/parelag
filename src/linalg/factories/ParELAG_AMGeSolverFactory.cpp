@@ -127,8 +127,12 @@ AMGeSolverFactory::_do_build_solver(
             post_state->SetDeRhamSequence(sequence);
 
             // Set the smoothing operators
+            Timer smoother_timer =
+                TimeManager::AddTimer(std::string("Build smoother: level ").
+                                      append(std::to_string(LevelID)));
             auto pre = PreSmootherFact_->BuildSolver(A_ptr,*pre_state);
             auto post = PostSmootherFact_->BuildSolver(A_ptr,*post_state);
+            smoother_timer.Stop();
             pre->iterative_mode = true;
             post->iterative_mode = true;
 
@@ -150,6 +154,9 @@ AMGeSolverFactory::_do_build_solver(
             coarse_state->MergeState(state);
             coarse_state->SetDeRhamSequence(sequence);
 
+            Timer solver_timer =
+                TimeManager::AddTimer(std::string("Build coarse solver: "
+                                      "level ").append(std::to_string(LevelID)));
             lev.Set<Op_Ptr>("CoarseSolver",
                             CoarseSolverFact_->BuildSolver(
                                 A_ptr,*coarse_state));

@@ -15,7 +15,6 @@
 #include <numeric>
 
 #include <mfem.hpp>
-#include <general/sort_pairs.hpp>
 
 #include "DOFAgglomeration.hpp"
 

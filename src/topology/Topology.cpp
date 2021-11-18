@@ -399,7 +399,7 @@ AgglomeratedTopology * AgglomeratedTopology::FinestTopology()
     return topo;
 }
 
-AgglomeratedTopology::par_table_t & AgglomeratedTopology::TrueB(int i)
+AgglomeratedTopology::par_table_t & AgglomeratedTopology::TrueB(int i) const
 {
     if(workspace.trueB_[i] == nullptr)
         workspace.trueB_[i] = IgnoreNonLocalRange(
@@ -408,7 +408,7 @@ AgglomeratedTopology::par_table_t & AgglomeratedTopology::TrueB(int i)
     return *(workspace.trueB_[i]);
 }
 
-unique_ptr<array_t> AgglomeratedTopology::TrueWeight(int i)
+unique_ptr<array_t> AgglomeratedTopology::TrueWeight(int i) const
 {
     auto truew = make_unique<array_t>(
         entityTrueEntity[i]->GetTrueLocalSize());
@@ -416,7 +416,6 @@ unique_ptr<array_t> AgglomeratedTopology::TrueWeight(int i)
 
     return truew;
 }
-
 
 //This function will check the topology of codimension icodim and fix the AEntity_entity table (and its transpose fc_AF) if needed.
 void AgglomeratedTopology::CheckHFacetsTopology(int icodim, std::unique_ptr<TopologyTable> & fc_AF)
@@ -676,8 +675,6 @@ std::unique_ptr<TopologyTable> AgglomeratedTopology::ComputeCoarseFacets(
 
     // finally,
     auto AF_face = make_unique<TopologyTable>(ia_AF_face, ja_AF_face, data_AF_face, nAF, nfacets);
-
-    //AF_face->Print();
 
     return AF_face;
 }
@@ -1600,6 +1597,5 @@ int augment_ja_data_AF_f_inner(int * ia_AF_face, int * ja_AF_face, double * data
 
     return 0;
 }
-
 
 }//namespace parelag

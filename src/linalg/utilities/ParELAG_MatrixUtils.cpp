@@ -26,6 +26,7 @@ using mfem::Array;
 using mfem::BlockMatrix;
 using mfem::DenseMatrix;
 using mfem::SparseMatrix;
+using mfem::HypreParMatrix;
 using mfem::Vector;
 using std::unique_ptr;
 
@@ -392,7 +393,7 @@ void signumTransformation(SparseMatrix & A)
             *it = (*it > 0) ? 1.:-1.;
 }
 
-void CheckMatrix(SparseMatrix & A)
+void CheckMatrix(const SparseMatrix & A)
 {
     const int nCols = A.Width();
 
@@ -406,7 +407,7 @@ void CheckMatrix(SparseMatrix & A)
             std::range_error,
             "CheckMatrix(): Invalid column index detected!");
 
-    Vector v(A.GetData(), nnz);
+    const Vector v(const_cast<double *>(A.GetData()), nnz);
     PARELAG_TEST_FOR_EXCEPTION(
         v.CheckFinite(),
         std::range_error,
@@ -781,8 +782,8 @@ void Mult(const SparseMatrix & A, const DenseMatrix & B, DenseMatrix & out)
 std::unique_ptr<SparseMatrix> MultAbs (const SparseMatrix &A, const SparseMatrix &B)
 {
    int nrowsA, ncolsA, nrowsB, ncolsB;
-   int *A_i, *A_j, *B_i, *B_j;
-   double *A_data, *B_data;
+   const int *A_i, *A_j, *B_i, *B_j;
+   const double *A_data, *B_data;
    int ia, ib, ic, ja, jb, num_nonzeros;
    int row_start, counter;
    double a_entry, b_entry;
@@ -930,6 +931,10 @@ template unique_ptr<SparseMatrix> RAP(const SparseMatrix&,
 template unique_ptr<BlockMatrix> RAP(const BlockMatrix&,
                                      const BlockMatrix&,
                                      const BlockMatrix&);
+// Instantiate for HypreParMatrix
+template unique_ptr<HypreParMatrix> RAP(const HypreParMatrix&,
+                                        const HypreParMatrix&,
+                                        const HypreParMatrix&);
 
 // Definition here in the CPP to prevent extraneous compilations
 template <class MatrixType>
@@ -967,8 +972,10 @@ void Weightedl1Smoother(const SparseMatrix& A, Vector& diagonal_matrix)
 
     for (int i=0; i < n; ++i)
     {
-        int *row, beg;
-        double *a, diag;
+        const int *row;
+        int beg;
+        const double *a;
+        double diag;
 
         sum = 0.;
         diag = A(i, i);
@@ -1039,5 +1046,11 @@ void SplitMatrixHorizontally(const DenseMatrix &A, int middle_row,
     bottom.Transpose();
     At.UseExternalData(data, ncols, nrows);
     delete [] data;
+}
+
+std::unique_ptr<mfem::HypreParMatrix>
+Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B, bool own_starts)
+{
+   return std::unique_ptr<mfem::HypreParMatrix>(mfem::ParMult(&A, &B, own_starts));
 }
 }//namespace parelag
