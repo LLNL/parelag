@@ -92,9 +92,9 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
 
         const int rescale_iter = state.GetExtraParameter("RescaleIteration", -20);
         const mfem::Vector& precomputed_scale = hybridization->GetRescaling();
-                const bool use_precomputed_scaling = precomputed_scale.Size() && rescale_iter < 0;
-                auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
-                                      _get_scaling_by_smoothing(*pHB_mat, std::abs(rescale_iter));
+        const bool use_precomputed_scaling = precomputed_scale.Size() && rescale_iter < 0;
+        auto scaling_vector = use_precomputed_scaling ? hybridization->GetRescaling() :
+                              _get_scaling_by_smoothing(*pHB_mat, std::abs(rescale_iter));
 
         // Smoothing renders scaling of essential dofs to be close to 0
         if (use_precomputed_scaling == false)
