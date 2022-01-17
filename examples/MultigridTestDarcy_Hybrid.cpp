@@ -557,7 +557,7 @@ int main (int argc, char *argv[])
 
     unique_ptr<mfem::Solver> hybrid_solver;
     {
-    	Timer timer = TimeManager::AddTimer("Build Solver");
+        Timer timer = TimeManager::AddTimer("Build Solver");
     	hybrid_solver = prec_factory->BuildSolver(A,*solver_state);
     	hybrid_solver->iterative_mode=false;
     }

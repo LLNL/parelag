@@ -43,7 +43,7 @@ int parelag_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
 
    A_local = hypre_MergeDiagAndOffd(A);
    B_local = hypre_MergeDiagAndOffd(B);
-   C_local = hypre_CSRMatrixAdd(1.0, A_local, 1.0, B_local);
+   C_local = hypre_CSRMatrixAdd(A_local, B_local);
 
    C = hypre_ParCSRMatrixCreate (comm,
                                  global_num_rows,

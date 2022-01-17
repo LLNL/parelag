@@ -345,12 +345,15 @@ int main (int argc, char *argv[])
         //
 
         // Start with the solver library
-        auto lib = SolverLibrary::CreateLibrary(
-            master_list->Sublist("Preconditioner Library"));
+        ParameterList& prec_list = master_list->Sublist("Preconditioner Library");
+        auto lib = SolverLibrary::CreateLibrary(prec_list);
 
         // Get the factory
         const std::string solver_type = prob_list.Get("Linear solver","Unknown");
         auto prec_factory = lib->GetSolverFactory(solver_type);
+        const int rescale_iter = prec_list.Sublist(solver_type).Sublist(
+                "Solver Parameters").Get<int>("RescaleIteration");
+
         auto solver_state = prec_factory->GetDefaultState();
         solver_state->SetDeRhamSequence(sequence[start_level]);
         solver_state->SetBoundaryLabels(
@@ -360,6 +363,7 @@ int main (int argc, char *argv[])
         // These are for hybridization solver
         solver_state->SetExtraParameter("IsSameOrient",(start_level>0));
         solver_state->SetExtraParameter("ActOnTrueDofs",true);
+        solver_state->SetExtraParameter("RescaleIteration", rescale_iter);
 
         unique_ptr<mfem::Solver> solver;
 

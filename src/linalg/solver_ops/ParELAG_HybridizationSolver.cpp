@@ -221,5 +221,4 @@ void HybridizationSolver::MultTranspose(
     }
 }
 
-
 }// namespace parelag
