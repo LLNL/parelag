@@ -82,18 +82,13 @@ class AuxSpacePrec : public mfem::Solver
 public:
     /// dofs are in true dofs numbering, aux_map: from orginal to aux space
     AuxSpacePrec(ParallelCSRMatrix &op,
-//                 std::vector<std::vector<int> > local_dofs,
                  std::unique_ptr<ParallelCSRMatrix> coarse_map);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const;
     virtual void SetOperator(const Operator &op) { }
 
 private:
-    void Smoothing(const mfem::Vector& x, mfem::Vector& y) const;
-
     ParallelCSRMatrix& op_;
-//    std::vector<std::vector<int> > local_dofs_;
-//    std::vector<mfem::DenseMatrix> local_solvers_;
     std::unique_ptr<ParallelCSRMatrix> aux_map_;
     std::unique_ptr<ParallelCSRMatrix> aux_op_;
     std::unique_ptr<mfem::HypreBoomerAMG> aux_solver_;

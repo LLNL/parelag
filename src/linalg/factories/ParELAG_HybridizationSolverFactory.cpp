@@ -147,7 +147,6 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
         }
         else
         {
-            auto& f_tf = sequence.GetTopology()->EntityTrueEntity(facet);
             auto& d_td = dofhandler->GetDofTrueDof();
 
             mfem::SparseMatrix loc_PV_map(d_td.GetLocalSize(), num_facets);
@@ -159,7 +158,7 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
             }
             loc_PV_map.Finalize();
 
-            auto PV_map = IgnoreNonLocalRange(d_td, loc_PV_map, f_tf);
+            auto PV_map = IgnoreNonLocalRange(d_td, loc_PV_map, facet_truefacet);
             PV_map->ScaleRows(scaling_vector);
 
             auto prec = make_unique<AuxSpacePrec>(*pHB_mat, std::move(PV_map));
@@ -238,28 +237,11 @@ void HybridizationSolverFactory::_do_initialize(const ParameterList&)
 
 AuxSpacePrec::AuxSpacePrec(
         ParallelCSRMatrix& op,
-//        std::vector<std::vector<int> > local_dofs,
         std::unique_ptr<ParallelCSRMatrix> aux_map)
     : Solver(op.NumRows(), false),
       op_(op),
-//      local_dofs_(std::move(local_dofs)),
-//      local_solvers_(local_dofs_.size()),
       aux_map_(std::move(aux_map))
 {
-    // Set up local solvers
-    SerialCSRMatrix op_diag;
-    op.GetDiag(op_diag);
-
-//    mfem::DenseMatrix local_op;
-//    for (int i = 0; i < local_dofs_.size(); ++i)
-//    {
-//        local_op.SetSize(local_dofs_[i].size());
-//        mfem::Array<int> local_dofs_i(local_dofs_[i].data(), local_dofs_[i].size());
-//        op_diag.GetSubMatrix(local_dofs_i, local_dofs_i, local_op);
-//        mfem::DenseMatrixInverse local_solver_i(local_op);
-//        local_solver_i.GetInverseMatrix(local_solvers_[i]);
-//    }
-
     // Set up solver on the auxiliary space
     aux_op_.reset(RAP(&op, aux_map_.get()));
     aux_op_->CopyRowStarts();
@@ -272,7 +254,8 @@ AuxSpacePrec::AuxSpacePrec(
 
 void AuxSpacePrec::Mult(const mfem::Vector& x, mfem::Vector& y) const
 {
-    Smoothing(x, y);
+    y = 0.0;
+    smoother_->Mult(x, y);
 
     mfem::Vector residual(x), correction(y.Size());
     op_.Mult(-1.0, y, 1.0, residual);
@@ -287,24 +270,9 @@ void AuxSpacePrec::Mult(const mfem::Vector& x, mfem::Vector& y) const
     op_.Mult(-1.0, correction, 1.0, residual);
     y += correction;
 
-    Smoothing(residual, correction);
+    correction = 0.0;
+    smoother_->Mult(residual, correction);
     y += correction;
-}
-
-void AuxSpacePrec::Smoothing(const mfem::Vector& x, mfem::Vector& y) const
-{
-    y = 0.0;
-//    mfem::Vector x_local, y_local;
-//    for (unsigned int i = 0; i < local_dofs_.size(); ++i)
-//    {
-//        auto dof_data = const_cast<int*>(local_dofs_[i].data());
-//        mfem::Array<int> local_dofs_i(dof_data, local_dofs_[i].size());
-//        x.GetSubVector(local_dofs_i, x_local);
-//        y_local.SetSize(x_local.Size());
-//        local_solvers_[i].Mult(x_local, y_local);
-//        y.AddElementVector(local_dofs_i, y_local);
-//    }
-    smoother_->Mult(x, y);
 }
 
 pMultigrid::pMultigrid(
