@@ -417,8 +417,16 @@ int main (int argc, char *argv[])
                        MPI_SUM,0,comm);
 
             if (!myid)
+            {
                 std::cout << "Final residual norm: " << std::sqrt(global_norm)
                           << std::endl;
+                auto hybrid_solver = dynamic_cast<HybridizationSolver*>(solver.get());
+                if (hybrid_solver)
+                {
+                    std::cout << "Number of iterations: " << hybrid_solver->GetNumIters()
+                              << std::endl;
+                }
+            }
         }
 
         if (visualize)

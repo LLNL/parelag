@@ -16,6 +16,7 @@
 
 #include "linalg/solver_core/ParELAG_Solver.hpp"
 #include "linalg/solver_ops/ParELAG_KrylovSolver.hpp"
+#include "linalg/factories/ParELAG_HybridizationSolverFactory.hpp"
 #include "utilities/MemoryUtils.hpp"
 #include "amge/HybridHdivL2.hpp"
 
@@ -88,6 +89,8 @@ public:
     {
         auto krylov_solver = dynamic_cast<KrylovSolver*>(Solver_.get());
         if (krylov_solver) { return krylov_solver->GetNumIters(); }
+        auto pcg_solver = dynamic_cast<PCG*>(Solver_.get());
+        if (pcg_solver) { return pcg_solver->GetNumIters(); }
     }
 
     ///@}

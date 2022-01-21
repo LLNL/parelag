@@ -126,6 +126,7 @@ public:
     }
 
     virtual void SetOperator(const mfem::Operator& op) {}
+    int GetNumIters() const { return cg_.GetNumIterations(); }
 
 private:
     std::unique_ptr<ParallelCSRMatrix> op_;
