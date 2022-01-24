@@ -159,8 +159,9 @@ std::unique_ptr<mfem::Solver> HybridizationSolverFactory::_do_build_block_solver
             auto PV_map = IgnoreNonLocalRange(d_td, loc_PV_map, facet_truefacet);
             PV_map->ScaleRows(scaling_vector);
 
+            auto& solver_params = SolverFact_->GetParameters();;
             auto prec = make_unique<AuxSpacePrec>(*pHB_mat, std::move(PV_map));
-            solver = make_unique<PCG>(std::move(pHB_mat), std::move(prec));
+            solver = make_unique<PCG>(std::move(pHB_mat), std::move(prec), solver_params);
 
             *D_Scale = 1.0;
         }
@@ -388,16 +389,23 @@ void pMultigrid::Mult(const mfem::Vector& x, mfem::Vector& y) const
     y += correction;
 }
 
-PCG::PCG(std::unique_ptr<ParallelCSRMatrix> op, std::unique_ptr<mfem::Solver> prec)
+PCG::PCG(std::unique_ptr<ParallelCSRMatrix> op,
+         std::unique_ptr<mfem::Solver> prec,
+         ParameterList& params)
     : mfem::Solver(op->NumRows(), false),
       op_(std::move(op)),
       prec_(std::move(prec)),
       cg_(op_->GetComm())
 {
-    cg_.SetPrintLevel(1);
-    cg_.SetMaxIter(500);
-    cg_.SetRelTol(1e-6);
-    cg_.SetAbsTol(1e-8);
+    int print_level = params.Get("Print level", 1);
+    int max_iter = params.Get("Maximum iterations", 5000);
+    double rel_tol = params.Get("Relative tolerance", 1e-6);
+    double abs_tol = params.Get("Absolute tolerance", 1e-8);
+
+    cg_.SetPrintLevel(print_level);
+    cg_.SetMaxIter(max_iter);
+    cg_.SetRelTol(rel_tol);
+    cg_.SetAbsTol(abs_tol);
     cg_.SetOperator(*op_);
     cg_.SetPreconditioner(*prec_);
     cg_.iterative_mode = false;

@@ -118,7 +118,9 @@ private:
 class PCG : public mfem::Solver
 {
 public:
-    PCG(std::unique_ptr<ParallelCSRMatrix> op, std::unique_ptr<mfem::Solver> prec);
+    PCG(std::unique_ptr<ParallelCSRMatrix> op,
+        std::unique_ptr<mfem::Solver> prec,
+        ParameterList &params);
 
     virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const
     {
