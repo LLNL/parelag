@@ -17,7 +17,7 @@
 #include "utilities/MemoryUtils.hpp"
 #include "linalg/utilities/ParELAG_MatrixUtils.hpp"
 #include "utilities/mpiUtils.hpp"
-
+#include "hypreExtension/hypreExtension.hpp"
 
 namespace parelag
 {
@@ -167,6 +167,8 @@ unique_ptr<ParallelCSRMatrix>
 Redistributor::BuildRedEntToTrueEnt(const ParallelCSRMatrix& elem_tE) const
 {
     auto redElem_tE = Mult(*redTrueEntity_trueEntity[0], elem_tE);
+    hypre_DropSmallEntries(*redElem_tE, 1e-6);
+
     matred::ParMatrix redElem_trueEntity(*redElem_tE, false);
     auto out = matred::BuildRedistributedEntityToTrueEntity(redElem_trueEntity);
     return Move(out);
@@ -187,10 +189,9 @@ Redistributor::BuildRedTrueEntToTrueEnt(const ParallelCSRMatrix& redE_redTE,
                                         const ParallelCSRMatrix& redE_tE) const
 {
     unique_ptr<ParallelCSRMatrix> redTE_redE(redE_redTE.Transpose());
-    unique_ptr<ParallelCSRMatrix> out = Mult(*redTE_redE, redE_tE);
+    unique_ptr<ParallelCSRMatrix> out = Mult(*redTE_redE, redE_tE, true);
+    hypre_DropSmallEntries(*out, 1e-6);
     *out = 1.0;
-    out->CopyRowStarts();
-    out->CopyColStarts();
     return out;
 }
 
@@ -228,6 +229,7 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
 
    auto redElem_redTrueElem = out->EntityTrueEntity(0).get_entity_trueEntity();
    redEntity_trueEntity[0] = Mult(*redElem_redTrueElem, *redTrueEntity_trueEntity[0]);
+   hypre_DropSmallEntries(*redEntity_trueEntity[0], 1e-6);
 
    auto redE_redTE = BuildRedEntToRedTrueEnt(*redEntity_trueEntity[1]);
 
