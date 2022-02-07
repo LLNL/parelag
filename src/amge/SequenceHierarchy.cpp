@@ -26,7 +26,7 @@ enum partition_type { MFEMRefined, METIS };
 void PrintCoarseningTime(int level, double time, partition_type type)
 {
     string msg = type == METIS ? "(using METIS)" : "(using MFEM refinement info)";
-    std::cout << "SequenceHierarchy: level-" << level << " DeRhamSequence is"
+    std::cout << "SequenceHierarchy: level-" << level << " DeRhamSequence is "
               << "coarsened " << msg << " in " << time << " seconds.\n";
 }
 

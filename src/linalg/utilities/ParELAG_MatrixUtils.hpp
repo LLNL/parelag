@@ -96,6 +96,9 @@ std::unique_ptr<mfem::HypreParMatrix>
 IgnoreNonLocalRange(
     hypre_ParCSRMatrix* RT, hypre_ParCSRMatrix* A, hypre_ParCSRMatrix* P);
 
+std::unique_ptr<mfem::HypreParMatrix>
+ToParMatrix(MPI_Comm comm, mfem::SparseMatrix A);
+
 /// Does a "real" RAP (i.e. you give it R, A, and P, and this just
 /// multiplies them together, unlike MFEM, where you give Rt and
 /// then it compute R=Transpose(Rt) before multiplying...)

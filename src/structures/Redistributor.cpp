@@ -197,13 +197,13 @@ Redistributor::BuildRedTrueEntToTrueEnt(const ParallelCSRMatrix& redE_redTE,
 
 
 unique_ptr<ParallelCSRMatrix>
-Redistributor::BuildRepeatedDofToTrueDof(const DofHandler& dof, int codim_)
+Redistributor::BuildRepeatedDofToTrueDof(const DofHandler& dof, int codim)
 {
-   auto codim = static_cast<AgglomeratedTopology::Entity>(codim_);
+   auto type = static_cast<AgglomeratedTopology::Entity>(codim);
    auto dof_TrueDof = dof.GetDofTrueDof().get_entity_trueEntity();
    auto comm = dof_TrueDof->GetComm();
 
-   auto& RDof_dof = dof.GetrDofDofTable(codim);
+   auto& RDof_dof = dof.GetrDofDofTable(type);
    mfem::Array<int> RDof_starts;
    int num_RDofs = RDof_dof.NumRows();
    ParPartialSums_AssumedPartitionCheck(comm, num_RDofs, RDof_starts);
@@ -212,6 +212,100 @@ Redistributor::BuildRepeatedDofToTrueDof(const DofHandler& dof, int codim_)
             dof_TrueDof->LeftDiagMult(RDof_dof, RDof_starts));
    RDof_TDof->CopyRowStarts();
    return RDof_TDof;
+}
+
+unique_ptr<ParallelCSRMatrix>
+Redistributor::BuildRepeatedDofRedistribution(const AgglomeratedTopology& topo,
+                                              const DofHandler& dof,
+                                              const DofHandler& redist_dof,
+                                              int codim, int jform)
+{
+   auto type = static_cast<AgglomeratedTopology::Entity>(codim);
+   auto& redTE_TE = *redTrueEntity_trueEntity[codim];
+   auto comm = redTE_TE.GetComm();
+
+   auto E_RD = ToParMatrix(comm, dof.GetEntityRDofTable(type));
+   auto E_TE = topo.EntityTrueEntity(codim).get_entity_trueEntity();
+   unique_ptr<ParallelCSRMatrix> TE_E(E_TE->Transpose());
+   auto TE_RD = Mult(*TE_E, *E_RD);
+
+   auto redE_redRD = ToParMatrix(comm, redist_dof.GetEntityRDofTable(type));
+   auto redE_redTE = redist_topo->EntityTrueEntity(codim).get_entity_trueEntity();
+   unique_ptr<ParallelCSRMatrix> redRD_redE(redE_redRD->Transpose());
+   auto redRD_redTE = Mult(*redRD_redE, *redE_redTE);
+
+   auto redRD_TE_RD = RAP(*redRD_redTE, redTE_TE, *TE_RD);
+
+   // Find intersection of redRDof_TrueElem_RDof and redRDof_TrueDof_RDof
+   auto RD_TD = BuildRepeatedDofToTrueDof(dof, codim);
+   unique_ptr<ParallelCSRMatrix> TD_RD(RD_TD->Transpose());
+   auto redRD_redTD = BuildRepeatedDofToTrueDof(redist_dof, codim);
+   auto redRD_TD_RD = RAP(*redRD_redTD, *redTrueDof_trueDof[jform], *TD_RD);
+
+   mfem::SparseMatrix redRD_TE_RD_diag, redRD_TE_RD_offd;
+   mfem::SparseMatrix redRD_TD_RD_diag, redRD_TD_RD_offd;
+   HYPRE_BigInt *redRD_TE_RD_colmap, *redRD_TD_RD_colmap;
+
+   redRD_TE_RD->GetDiag(redRD_TE_RD_diag);
+   redRD_TE_RD->GetOffd(redRD_TE_RD_offd, redRD_TE_RD_colmap);
+   redRD_TD_RD->GetDiag(redRD_TD_RD_diag);
+   redRD_TD_RD->GetOffd(redRD_TD_RD_offd, redRD_TD_RD_colmap);
+
+   HYPRE_BigInt * out_colmap = new HYPRE_BigInt[redRD_TE_RD_offd.NumCols()];
+   std::copy_n(redRD_TE_RD_colmap, redRD_TE_RD_offd.NumCols(), out_colmap);
+
+   auto out_diag = new SerialCSRMatrix(redRD_TE_RD_diag.NumRows(),
+                                       redRD_TE_RD_diag.NumCols());
+   auto out_offd = new SerialCSRMatrix(redRD_TE_RD_offd.NumRows(),
+                                       redRD_TE_RD_offd.NumCols());
+   for (int i = 0; i < redRD_TE_RD->NumRows(); ++i)
+   {
+       if (redRD_TE_RD_diag.RowSize(i) > 0)
+       {
+           for (int j = 0; j < redRD_TE_RD_diag.RowSize(i); ++j)
+           {
+               int RD = redRD_TE_RD_diag.GetRowColumns(i)[j];
+               mfem::Array<int> RDs(redRD_TD_RD_diag.GetRowColumns(i),
+                                    redRD_TD_RD_diag.RowSize(i));
+               if (RDs.Find(RD) != -1)
+               {
+                   out_diag->Add(i, RD, 1.0);
+                   break;
+               }
+           }
+           assert(out_diag->RowSize(i) == 1);
+       }
+       else
+       {
+           assert(redRD_TE_RD_offd.RowSize(i) > 0);
+           for (int j = 0; j < redRD_TE_RD_offd.RowSize(i); ++j)
+           {
+               int RD = redRD_TE_RD_offd.GetRowColumns(i)[j];
+               HYPRE_Int RD_global = redRD_TE_RD_colmap[RD];
+               mfem::Array<int> RDs(redRD_TD_RD_offd.RowSize(i));
+               for (int k = 0; k < RDs.Size(); ++k)
+               {
+                   RDs[k] = redRD_TD_RD_colmap[redRD_TD_RD_offd.GetRowColumns(i)[k]];
+               }
+               if (RDs.Find(RD_global) != -1)
+               {
+                   out_offd->Add(i, RD, 1.0);
+                   break;
+               }
+           }
+           assert(out_offd->RowSize(i) == 1);
+       }
+   }
+   out_diag->Finalize();
+   out_offd->Finalize();
+
+   auto redRD_RD = make_unique<ParallelCSRMatrix>(
+               comm, redE_redRD->N(), E_RD->N(), redE_redRD->ColPart(),
+               E_RD->ColPart(), out_diag, out_offd, out_colmap, true);
+   redRD_RD->CopyRowStarts();
+   redRD_RD->CopyColStarts();
+   redRD_RD->SetOwnerFlags(3, 3, 1);
+   return redRD_RD;
 }
 
 std::shared_ptr<AgglomeratedTopology>
@@ -288,6 +382,7 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
    {
       redE_bdrattr->GetOffd(redE_bdrattr_local_ref, trash_map);
    }
+
    mfem::SparseMatrix redE_bdrattr_local(redE_bdrattr_local_ref);
    out->facet_bdrAttribute = make_unique<TopologyTable>(redE_bdrattr_local);
 
@@ -328,6 +423,9 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(const DofHandler& dof)
     std::unique_ptr<ParallelCSRMatrix> tD_redD(redDof_trueDof[jform]->Transpose());
     out->dofTrueDof.SetUp(std::move(redDof_redTrueDof));
 
+    int myid;
+    MPI_Comm_rank(redist_topo->GetComm(), &myid);
+
     for (int i = 0; i < max_codim+1; ++i)
     {
        std::unique_ptr<ParallelCSRMatrix> tE_tD;
@@ -365,10 +463,7 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
    {
       const int jform = num_forms-codim-1;
       if (jform < sequence.jformStart_) { break; }
-
-      auto type = static_cast<AgglomeratedTopology::Entity>(codim);
-
-      auto& dof_handler = *sequence.Dof_[jform];
+      DofHandler& dof_handler = *sequence.Dof_[jform];
 
       redist_seq->Dof_[jform] = Redistribute(dof_handler);
       auto& redD_tD = redDof_trueDof[jform];
@@ -390,7 +485,7 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
       auto& Targets = *(sequence.Targets_[jform]);
       MultiVector trueTargets(Targets.NumberOfVectors(), true_size);
       trueTargets = 0.0;
-      dof_handler.AssembleGlobalMultiVector(type, Targets, trueTargets);
+      dof_handler.GetDofTrueDof().IgnoreNonLocal(Targets, trueTargets);
 
       const int redist_size = redist_seq->Dof_[jform]->GetNDofs();
       redist_seq->Targets_[jform].reset(
@@ -407,19 +502,37 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
 
       for (int j = sequence.jformStart_; j <= jform; ++j)
       {
-         auto RD_TD = BuildRepeatedDofToTrueDof(*sequence.Dof_[j], codim);
-         auto redRD_redTD = BuildRepeatedDofToTrueDof(*redist_seq->Dof_[j], codim);
-         unique_ptr<ParallelCSRMatrix> redTD_redRD(redRD_redTD->Transpose());
-         unique_ptr<ParallelCSRMatrix> tD_redTD(redTrueDof_trueDof[j]->Transpose());
-
          SerialCSRMatrix M(*const_cast<DeRhamSequence&>(sequence).GetM(type, j));
-         ParallelCSRMatrix pM(RD_TD->GetComm(), RD_TD->M(), RD_TD->RowPart(), &M);
-         auto trueM = IgnoreNonLocalRange(*RD_TD, pM, *RD_TD);
+         auto pM = ToParMatrix(redist_topo->GetComm(), M);
 
-         unique_ptr<ParallelCSRMatrix> red_trueM(
-                  mfem::RAP(tD_redTD.get(), trueM.get(), tD_redTD.get()));
+         unique_ptr<ParallelCSRMatrix> redM;
+         if (codim == 0) // redistribution of RDofs when codim=0 follows that of elements
+         {
+             auto topo = const_cast<DeRhamSequence&>(sequence).GetTopology();
+             auto redRD_RD = BuildRepeatedDofRedistribution(
+                     *topo, *sequence.Dof_[j], *redist_seq->Dof_[j], codim, j);
+             unique_ptr<ParallelCSRMatrix> RD_redRD(redRD_RD->Transpose());
+             redM = parelag::RAP(*redRD_RD, *pM, *RD_redRD);
+         }
+         else if (codim == 1) // codim-1 RDofs when jform=dim-2 are identified with true dofs
+         {
+             auto RD_TD = BuildRepeatedDofToTrueDof(*sequence.Dof_[j], codim);
+             auto redRD_redTD = BuildRepeatedDofToTrueDof(*redist_seq->Dof_[j], codim);
+             unique_ptr<ParallelCSRMatrix> redTD_redRD(redRD_redTD->Transpose());
+             unique_ptr<ParallelCSRMatrix> tD_redTD(redTrueDof_trueDof[j]->Transpose());
 
-         unique_ptr<ParallelCSRMatrix> redM(mfem::RAP(red_trueM.get(), redTD_redRD.get()));
+             auto trueM = IgnoreNonLocalRange(*RD_TD, *pM, *RD_TD);
+
+             unique_ptr<ParallelCSRMatrix> red_trueM(
+                      mfem::RAP(tD_redTD.get(), trueM.get(), tD_redTD.get()));
+             redM.reset(mfem::RAP(red_trueM.get(), redTD_redRD.get()));
+         }
+         else
+         {
+             PARELAG_TEST_FOR_EXCEPTION(
+                     true, std::runtime_error,
+                     "redistribution of M when codim > 1 is not implemented.");
+         }
 
          SerialCSRMatrix redM_diag;
          redM->GetDiag(redM_diag);
@@ -432,6 +545,8 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
    auto redTD_tD = TrueDofRedistribution(dim);
    redist_seq->L2_const_rep_.SetSize(redTD_tD.NumRows());
    redTD_tD.Mult(sequence.L2_const_rep_, redist_seq->L2_const_rep_);
+
+   redist_seq->SetSVDTol(sequence.GetSVDTol());
 
    return redist_seq;
 }

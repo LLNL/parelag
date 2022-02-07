@@ -250,6 +250,9 @@ public:
         SVD_Tolerance_ = tol;
     }
 
+    /// Get the SVD tolerance
+    double GetSVDTol() const { return SVD_Tolerance_; }
+
     ///@}
     /// \name Math-y stuff
     ///@{

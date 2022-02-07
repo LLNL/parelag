@@ -74,6 +74,12 @@ class Redistributor
 
    unique_ptr<ParallelCSRMatrix>
    BuildRepeatedDofToTrueDof(const DofHandler& dof, int codim);
+
+   unique_ptr<ParallelCSRMatrix>
+   BuildRepeatedDofRedistribution(const AgglomeratedTopology& topo,
+                                  const DofHandler& dof,
+                                  const DofHandler& redist_dof,
+                                  int codim, int jform);
 public:
 
    /// Constructor for Redistributor

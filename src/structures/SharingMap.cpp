@@ -726,6 +726,17 @@ int SharingMap::IgnoreNonLocal(const Vector & data, Vector & trueData) const
     return ierr;
 }
 
+int SharingMap::IgnoreNonLocal(const MultiVector & data, MultiVector & trueData) const
+{
+    Vector local_view, true_view;
+    for(int i = 0; i < data.NumberOfVectors(); ++i)
+    {
+        const_cast<MultiVector &>(data).GetVectorView(i, local_view);
+        trueData.GetVectorView(i, true_view);
+        IgnoreNonLocal(local_view, true_view);
+    }
+}
+
 int SharingMap::Assemble(const Array<int> & data, Array<int> & trueData) const
 {
     elag_assert(GetTrueLocalSize() == trueData.Size());
