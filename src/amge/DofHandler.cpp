@@ -1464,4 +1464,30 @@ void DofHandlerALG::checkMyInvariants() const
 {
     PARELAG_NOT_IMPLEMENTED();
 }
+
+unique_ptr<DofHandlerALG> DofHandlerALG::RebuildOnDifferentComm(const std::shared_ptr<AgglomeratedTopology>& redist_topo)
+{
+    // auto& nonconst_dof = const_cast<DofHandler&>(dof);
+    // auto dof_alg = dynamic_cast<DofHandlerALG*>(&nonconst_dof);
+    // PARELAG_ASSERT(dof_alg); // only DofHandlerALG can be redistributed currently
+
+    const int dim = redist_topo->Dimensions();
+    const int max_codim = GetMaxCodimensionBaseForDof();
+    const int jform = dim - max_codim;
+    auto out = make_unique<DofHandlerALG>(max_codim, redist_topo);
+
+    out->dofTrueDof.SetUp(dofTrueDof);
+
+    int myid;
+    MPI_Comm_rank(redist_topo->GetComm(), &myid);
+
+    for (int i = 0; i < max_codim+1; ++i)
+    {
+       out->entity_dof[i].reset(new SerialCSRMatrix(*entity_dof[i], false));
+       out->finalized[i] = true;
+    }
+
+    return out;
+}
+
 }//namespace parelag

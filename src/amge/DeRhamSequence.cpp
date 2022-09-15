@@ -54,6 +54,12 @@ DeRhamSequence::DeRhamSequence(
     Pi_(nForms_),
     CoarserSequence_{},
     FinerSequence_{},
+    DistributedSequence_{},
+    RedistributedSequences_{},
+    redistributed_idx_(-1),
+    ParentSequence_{},
+    ChildSequence_{},
+    nGlobalCopies_(1),
     SVD_Tolerance_(1e-9),
     SmallestEntry_(std::numeric_limits<double>::epsilon())
 {
@@ -689,6 +695,8 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
     MultiVector coarse_const(coarse_rep.GetData(), 1, coarse_rep.Size());
     Pi_[nForms_-1]->Project(fine_const, coarse_const);
 
+    coarser_sequence->nGlobalCopies_ = this->nGlobalCopies_;
+    
     return coarser_sequence;
 }
 
@@ -717,6 +725,12 @@ DeRhamSequence::Coarsen(Redistributor& redistributor)
    }
 
    return coarser_sequence;
+}
+
+std::vector<std::shared_ptr<DeRhamSequence>>
+DeRhamSequence::Coarsen(MultiRedistributor& multi_redistributor)
+{
+    PARELAG_NOT_IMPLEMENTED();
 }
 
 void DeRhamSequence::CheckInvariants()
@@ -1215,6 +1229,27 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
         coarser_sequence->Dof_[jform]->GetDofTrueDof());
 }
 
+void DeRhamSequence::ApplyTruePTranspose(int jform, const mfem::Vector &x, mfem::Vector &y) const
+{
+    if (RedistributedSequences_.size())
+    {
+        auto num_copies = RedistributedSequences_.size();
+        int myidx = redistributed_idx_;
+        std::vector<Vector> z(num_copies);
+        for (size_t i(0); i < num_copies; i++)
+        {
+            auto tD_rTD = RedistributedSequence(i)->GetTrueDofRedTrueDof(jform);
+            z[i].SetSize(tD_rTD.Width());
+            tD_rTD.MultTranspose(x, z[i]);
+        }
+        RedistributedSequence(myidx)->ChildSequence()->GetTrueP(jform).MultTranspose(z[myidx], y);
+    }
+    else
+    {
+        GetTrueP(jform).MultTranspose(x, y);
+    }
+}
+
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTruePi(int jform)
 {
     PARELAG_ASSERT((truePi_.size() && truePi_[jform]) || Pi_[jform]);
@@ -1244,6 +1279,39 @@ const ParallelCSRMatrix& DeRhamSequence::GetTruePi(int jform)
       truePi_[jform] = ComputeTruePi(jform);
    }
    return *truePi_[jform];
+}
+
+void DeRhamSequence::ApplyTruePi(int jform, const Vector &x, Vector &y)
+{
+    if (RedistributedSequences_.size())
+    {
+        auto num_copies = RedistributedSequences_.size();
+        int myidx = redistributed_idx_;
+        std::vector<Vector> z(num_copies);
+        for (size_t i(0); i < num_copies; i++)
+        {
+            auto tD_rTD = RedistributedSequence(i)->GetTrueDofRedTrueDof(jform);
+            z[i].SetSize(tD_rTD.Width());
+            tD_rTD.MultTranspose(x, z[i]);
+        }
+        RedistributedSequence(myidx)->ChildSequence()->GetTruePi(jform).Mult(z[myidx], y);
+    }
+    else
+    {
+        GetTruePi(jform).Mult(x, y);
+    }
+}
+
+const ParallelCSRMatrix& DeRhamSequence::GetTrueDofRedTrueDof(int jform) const
+{
+    PARELAG_ASSERT(trueDofs_redTrueDofs_.size() && trueDofs_redTrueDofs_[jform]);
+    return *trueDofs_redTrueDofs_[jform];
+}
+
+const ParallelCSRMatrix* DeRhamSequence::ViewTrueDofRedTrueDof(int jform) const
+{
+    PARELAG_ASSERT(trueDofs_redTrueDofs_.size() && trueDofs_redTrueDofs_[jform]);
+    return trueDofs_redTrueDofs_[jform].get();
 }
 
 unique_ptr<ParallelCSRMatrix>
@@ -3441,6 +3509,57 @@ void DeRhamSequenceAlg::ProjectVectorCoefficient(int jform,
     finer_sequence->ProjectVectorCoefficient(jform, c, vf);
     finer_sequence->GetPi(jform)->GetProjectorMatrix().Mult(vf, v);
 }
+
+std::shared_ptr<DeRhamSequenceAlg> DeRhamSequenceAlg::RebuildOnDifferentComm(const std::shared_ptr<AgglomeratedTopology>& redist_topo)
+{
+   const int dim = redist_topo->Dimensions();
+   const int num_forms = GetNumberOfForms();
+   auto redist_seq = std::make_shared<DeRhamSequenceAlg>(redist_topo, num_forms);
+   redist_seq->Targets_.resize(num_forms);
+   
+   redist_seq->ParentSequence_ = shared_from_this();
+   ChildSequence_ = redist_seq;
+
+   auto &sequence = *this;
+
+   for (int codim = 0; codim < num_forms; ++codim)
+   {
+      const int jform = num_forms-codim-1;
+      if (jform < sequence.jformStart_) { break; }
+      auto* dof_alg = dynamic_cast<DofHandlerALG*>(Dof_[jform].get());
+
+      redist_seq->Dof_[jform] = move(dof_alg->RebuildOnDifferentComm(redist_topo));
+
+      if (jform != (num_forms - 1))
+      {
+         redist_seq->D_[jform].reset(new SerialCSRMatrix(*sequence.D_[jform], false));
+      }
+
+      redist_seq->Targets_[jform].reset(
+               new MultiVector(*sequence.Targets_[jform]));
+   }
+
+   for (int codim = 0; codim < num_forms; ++codim)
+   {
+      const int jform = num_forms-codim-1;
+      if (jform < sequence.jformStart_) { break; }
+
+      for (int j = sequence.jformStart_; j <= jform; ++j)
+      {
+         const int idx = (dim-j)*(num_forms-j)/2 + codim;
+         redist_seq->M_[idx].reset(new SerialCSRMatrix(*(sequence.M_[idx]), false));
+      }
+   }
+
+   redist_seq->L2_const_rep_.SetDataAndSize(sequence.L2_const_rep_.GetData(), sequence.L2_const_rep_.Size());
+
+   redist_seq->SetSVDTol(sequence.GetSVDTol());
+
+   redist_seq->nGlobalCopies_ = this->nGlobalCopies_;
+
+   return redist_seq;
+}
+
 
 std::stringstream DeRhamSequence::DeRhamSequence_os;
 }//namespace parelag

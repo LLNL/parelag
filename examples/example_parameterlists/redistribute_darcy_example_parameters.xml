@@ -29,7 +29,7 @@
     <Parameter name="Upscaling order" type="int" value="0"/>
 
     <!-- Level in the AMGe hierarchy at which to solve the problem. -->
-    <Parameter name="Solve level" type="int" value="3"/>
+    <Parameter name="Solve level" type="int" value="4"/>
 
     <!-- Whether or not to apply a mesh deformation. -->
     <Parameter name="Deformation" type="bool" value="false"/>
@@ -42,6 +42,10 @@
 
     <!-- Coarsening factor of processors if redistribution is triggered. -->
     <Parameter name="Processor coarsening factor" type="int" value="2"/>
+
+    <!-- Control how the redistribution is handled, either keep the excess 
+         processors idleing or distribute copies to run concurrently -->
+    <Parameter name="Distribute multiple copies" type="bool" value="true" />
 
     <!-- When the minimum of nonzero number of local elements on a particular  
          level is below this threshold, redistribution will be triggered. -->
@@ -62,7 +66,7 @@
   <ParameterList name="Output control">
     <!-- Control whether the solution should be displayed via GLVis. A
          GLVis server must be listening or this will fail. -->
-    <Parameter name="Visualize solution" type="bool" value="true"/>
+    <Parameter name="Visualize solution" type="bool" value="false"/>
 
     <!-- Control whether timing information is summarized at the end
          of a run. -->

@@ -38,11 +38,15 @@ unique_ptr<ParallelCSRMatrix> Move(matred::ParMatrix& A);
 
 void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax);
 
-// From the parallel proc-to-proc connectivity table,
-// get a copy of the global matrix as a serial matrix locally (via permutation),
-// and then call METIS to "partition processors" in each processor locally
+/// From the parallel proc-to-proc connectivity table,
+/// get a copy of the global matrix as a serial matrix locally (via permutation),
+/// and then call METIS to "partition processors" in each processor locally
+/// @param shift_procs shift the redistribution to the right
 std::vector<int> RedistributeElements(
-      ParallelCSRMatrix& elem_face, int& num_redist_procs);
+      ParallelCSRMatrix& elem_face, int& num_redist_procs, int shift_procs = 0);
+
+// std::vector<std::vector<int>> RedistributeElementsToMultiple(
+//       ParallelCSRMatrix& elem_face, int& num_redist_procs, const int num_current_procs);
 
 /// A helper to redistribute AgglomeratedTopology, DofHandler, DeRhamSequence
 class Redistributor
@@ -92,7 +96,10 @@ public:
                  const std::vector<int>& elem_redist_procs);
 
    /// @param num_redist_procs number of processors to be redistributed to
-   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs);
+   /// @param shift_procs shift the redistribution to the right
+   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, int shift_procs = 0);
+
+   // Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, bool multi_redistribution = false);
 
    void Init(const AgglomeratedTopology& topo,
              const std::vector<int>& elem_redist_procs);
@@ -110,6 +117,80 @@ public:
    AgglomeratedTopology& GetRedistributedTopology() { return *redist_topo; }
 
    std::shared_ptr<DeRhamSequenceAlg> Redistribute(const DeRhamSequence& seq);
+
+   friend class MultiRedistributor;
+};
+
+class MultiRedistributor
+{
+protected:
+   MPI_Comm parent_comm_;
+   // FIXME (aschaf 09/13/22): find a better name than copy/copies?
+   int num_copies_;
+   std::vector<std::shared_ptr<Redistributor>> redistributors_;
+   int mycopy_;
+   MPI_Comm child_comm_;
+
+public:
+
+   /// Constructor for MultiRedistributor
+   /// A list of redistributed topologies will be constructed and stored in the class
+   /// @param num_current_procs number of parent processors from which to redistribute
+   /// @param num_redist_procs number of processors to be redistributed to
+   MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs);
+
+/*    
+   /// @param topo topology in the original data distribution
+   /// @param elem_redist_procs an 2D array of size number of chunks x number of local elements.
+   /// elem_redist_procs[c][i] indicates which processor the i-th local element
+   /// will be redistributed to within chunk c. Other entities are redistributed accordingly.
+   MultiRedistributor(const AgglomeratedTopology& topo,
+                 const std::vector<std::vector<int>>& elem_redist_procs); 
+*/
+
+   std::shared_ptr<Redistributor> GetRedistributor() const
+   {
+      return redistributors_[mycopy_];
+   }
+
+   std::vector<std::shared_ptr<Redistributor>> GetRedistributors() const
+   {
+      return redistributors_;
+   }
+
+   std::shared_ptr<Redistributor> GetRedistributor(int copy) const
+   {
+      PARELAG_ASSERT(copy >= 0 && copy < num_copies_)
+      return redistributors_[copy];
+   }
+
+   std::vector<std::shared_ptr<AgglomeratedTopology>> GetRedistributedTopologies() const;
+
+   std::vector<std::shared_ptr<DeRhamSequenceAlg>> Redistribute(const std::shared_ptr<DeRhamSequence>& seq);
+
+   // std::shared_ptr<AgglomeratedTopology> RedistributeComm(const AgglomeratedTopology& redist_topo);
+
+   // std::shared_ptr<DeRhamSequenceAlg> RedistributeComm(const DeRhamSequenceAlg& redist_seq);
+
+
+   void ResetChildComm(const MPI_Comm &comm, int num_copies, int mycopy);
+
+   /// Get the split communicator object
+   MPI_Comm GetChildComm() const noexcept
+   {
+      return child_comm_;
+   }
+
+   int GetNumCopies() const
+   {
+      return num_copies_;
+   }
+
+   int GetMyCopy() const
+   {
+      return mycopy_;
+   }
+
 };
 
 } // namespace parelag

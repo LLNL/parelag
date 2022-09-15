@@ -868,6 +868,56 @@ AgglomeratedTopology::Coarsen(Redistributor& redistributor,
    return coarse_redist_topo;
 }
 
+std::vector<std::shared_ptr<AgglomeratedTopology>>
+AgglomeratedTopology::Coarsen(MultiRedistributor& multi_redistributor,
+                              MetisGraphPartitioner& partitioner,
+                              int coarsening_factor, bool check_topology,
+                              bool preserve_material_interfaces)
+{
+    PARELAG_NOT_IMPLEMENTED();
+}
+
+std::shared_ptr<AgglomeratedTopology>
+AgglomeratedTopology::RebuildOnDifferentComm(MPI_Comm comm)
+{
+    auto out = make_shared<AgglomeratedTopology>(comm, nCodim_);
+
+    ChildTopology_ = out;
+    out->ParentTopology_ = shared_from_this();
+
+    out->nDim_ = nDim_;
+
+    out->entityTrueEntity[0]->SetUp(entityTrueEntity[0]->GetLocalSize());
+    for (int icodim = 0; icodim < nCodim_; ++icodim)
+    {
+        if (B_[icodim])
+        {
+            out->B_[icodim] = make_unique<TopologyTable>(B_[icodim]->GetI(), B_[icodim]->GetJ(), B_[icodim]->GetData(), B_[icodim]->Height(), B_[icodim]->Width());
+            out->B_[icodim]->LoseData();
+        }
+        if (entityTrueEntity[icodim + 1])
+        {
+            out->entityTrueEntity[icodim + 1]->SetUp(*entityTrueEntity[icodim + 1]);
+        }
+    }
+
+    if (facet_bdrAttribute)
+    {
+        out->facet_bdrAttribute = make_unique<TopologyTable>(facet_bdrAttribute->GetI(), facet_bdrAttribute->GetJ(), facet_bdrAttribute->GetData(), facet_bdrAttribute->Height(), facet_bdrAttribute->Width());
+        out->facet_bdrAttribute->LoseData();
+    }
+
+    for (int icodim = 0; icodim < std::min(nCodim_+1,nDim_); ++icodim)
+        if (Weights_[icodim])
+            out->Weights_[icodim]->SetDataAndSize(Weights_[icodim]->GetData(), Weights_[icodim]->Size());
+
+    element_attribute.Copy(out->element_attribute);
+
+    out->BuildConnectivity();
+
+    return out;
+}
+
 #if 0
 // Input: fec = coarse level Finite-element collection
 // Output: R = array of restriction operators -- owned by caller

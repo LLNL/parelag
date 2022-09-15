@@ -185,6 +185,26 @@ void SharingMap::SetUp(Array<int> & entityStart,
         "SharingMap::SetUp(entityStart, trueEntityStart, entity_trueEntity_)");
 }
 
+void SharingMap::SetUp(SharingMap & parent_map)
+{
+    // we assume that this method is only ever called from processors that are in the nonzero portion of parent_map
+    // hence we should be able to reuse the nonzero parts of the ParCSR matrices in parent_map
+    int localSize = parent_map.GetLocalSize();
+    ParPartialSums_AssumedPartitionCheck(Comm_, localSize, entity_start);
+
+    parent_map.entity_start.Copy(entity_start);
+    parent_map.trueEntity_start.Copy(trueEntity_start);
+
+    SerialCSRMatrix diag, offd;
+    HYPRE_BigInt* cmap;
+    parent_map.entity_trueEntity->GetDiag(diag);
+    parent_map.entity_trueEntity->GetOffd(offd, cmap);
+
+    auto tmp = make_unique<ParallelCSRMatrix>(Comm_, entity_start.Last(), trueEntity_start.Last(), entity_start.GetData(), trueEntity_start.GetData(), &diag, &offd, cmap);
+
+    this->SetUp(entity_start, trueEntity_start, move(tmp));
+}
+
 void SharingMap::resetHypreParVectors()
 {
     //hypre_ParVectorDestroy(xTrue_);

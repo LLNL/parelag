@@ -40,6 +40,14 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
 
     topo_.resize(num_levels);
     seq_.resize(num_levels);
+    redist_parent_topo_.resize(num_levels);
+    redist_parent_seq_.resize(num_levels);
+    redist_topo_.resize(num_levels);
+    redist_seq_.resize(num_levels);
+    mycopy_.resize(num_levels);
+    // redistribution_.resize(num_levels, false);
+    // comms_.resize(num_levels, MPI_COMM_WORLD);
+    num_global_groups_.resize(num_levels, 1);
 
     topo_[0] = make_shared<AgglomeratedTopology>(mesh, 1);
 
@@ -56,7 +64,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
     seq_[0]->SetjformStart(start_form);
 }
 
-void SequenceHierarchy::Build(const Array<int>& num_elements)
+void SequenceHierarchy::Build(const Array<int>& num_elements, const vector<shared_ptr<DeRhamSequence>> &other_sequence)
 {
     PARELAG_ASSERT(mesh_->GetNE() == num_elements[0]);
 
@@ -67,7 +75,8 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
     auto num_global_elems_threshold = params_.Get("Global elements threshold", 10);
     auto upscale_order = params_.Get("Upscaling order", 0);
     auto SVD_tol = params_.Get("SVD tolerance", 1e-6);
-
+    auto multi_dist = params_.Get("Distribute multiple copies", false);
+    
     const int dim = mesh_->Dimension();
     const int start_form = dim-1; // TODO: read from ParameterList
 
@@ -88,7 +97,10 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
 
     int num_nonempty_procs;
     MPI_Comm_size(comm_, &num_nonempty_procs);
+    int myid;
+    MPI_Comm_rank(comm_, &myid);
     int num_redist_procs = num_nonempty_procs;
+    int num_global_comms = 1;
 
     StopWatch chrono;
     MetisGraphPartitioner partitioner;
@@ -120,27 +132,84 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
         const int min_num_local_elems =
                 MinNonzeroNumLocalElements(l, num_local_elems_threshold);
 
-        if (min_num_local_elems < num_local_elems_threshold)
+        bool is_forced = false;
+        if (other_sequence.size())
+        {
+            is_forced = (other_sequence[l]->RedistributedSequences().size()) || other_sequence[l]->GetTopology()->PerformGlobalAgglomeration();
+        }
+        
+        if ((min_num_local_elems < num_local_elems_threshold) || is_forced)
         {
             num_redist_procs = max(num_nonempty_procs/proc_coarsening_factor, 1);
         }
 
         if (num_redist_procs < num_nonempty_procs)
         {
-            Redistributor redistributor(*topo_[l], num_redist_procs);
-
-            if (verbose_)
+            // redistribution_[l] = true;
+            if (!comms_.size())
+                comms_.resize(num_levels, MPI_COMM_WORLD);
+            if (multi_dist)
             {
-                std::cout << "SequenceHierarchy: minimal nonzero number of "
-                          << "local elements (" << min_num_local_elems << ") on"
-                          << " level " << l << " is below threshold ("
-                          << num_local_elems_threshold << "), redistributing the"
-                          << " level to " << num_redist_procs << " processors\n";
-            }
+                MultiRedistributor multi_redistributor(*topo_[l], num_nonempty_procs, num_redist_procs);
+                num_global_comms *= (num_nonempty_procs / num_redist_procs);
+                num_global_groups_[l+1] = num_global_comms;
+                // FIXME (aschaf 09/14/22) The way below is not the cleanest way, better would probably be to do it via a constructor
+                if (is_forced)
+                    multi_redistributor.ResetChildComm(other_sequence[l+1]->GetTopology()->GetComm(), other_sequence[l]->RedistributedSequences().size(), other_sequence[l]->GetRedistributedIndex());
+                if (verbose_)
+                {
+                    if (is_forced)
+                        std::cout << "SequenceHierarchy: redistributing"
+                            << " level " << l << " to " << num_global_comms << " groups of " 
+                            << num_redist_procs << " processors each\n";
+                    else
+                        std::cout << "SequenceHierarchy: minimal nonzero number of "
+                            << "local elements (" << min_num_local_elems << ") on"
+                            << " level " << l << " is below threshold ("
+                            << num_local_elems_threshold << "), redistributing the"
+                            << " level to " << num_global_comms << " groups of " 
+                            << num_redist_procs << " processors each\n";
+                }
+                int mycopy = multi_redistributor.GetMyCopy();
+                mycopy_[l+1] = mycopy;
+                redist_parent_topo_[l] = multi_redistributor.GetRedistributedTopologies();
+                redist_parent_seq_[l] = multi_redistributor.Redistribute(seq_[l]);
+                MPI_Comm child_comm = multi_redistributor.GetChildComm();
+                comms_[l+1] = child_comm;
+                redist_topo_[l] = redist_parent_topo_[l][mycopy]->RebuildOnDifferentComm(child_comm);
+                redist_seq_[l] = redist_parent_seq_[l][mycopy]->RebuildOnDifferentComm(redist_topo_[l]);
+                
+                //NOTE (aschaf 09/14/22): copied from AgglomeratedTopology::Coarsen(Redistributor, ...)
+                int tmp_num_local_elems = redist_topo_[l]->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT);
+                Array<int> partition(tmp_num_local_elems);
+                if (tmp_num_local_elems > 0)
+                {
+                    int num_aggs = max((tmp_num_local_elems) / elem_coarsening_factor, 1);
+                    auto elem_elem = redist_topo_[l]->LocalElementElementTable();
+                    partitioner.setParELAGDefaultFlags(num_aggs);
+                    partitioner.doPartition(*elem_elem, num_aggs, partition);
+                }
 
-            topo_[l+1] = topo_[l]->Coarsen(redistributor, partitioner,
-                                           elem_coarsening_factor, 0, 0);
-            seq_[l+1] = seq_[l]->Coarsen(redistributor);
+                topo_[l+1] = redist_topo_[l]->CoarsenLocalPartitioning(partition, 0, 0, 2);
+                seq_[l+1] = redist_seq_[l]->Coarsen();
+            }
+            else
+            {
+                Redistributor redistributor(*topo_[l], num_redist_procs, (int)0);
+
+                if (verbose_)
+                {
+                    std::cout << "SequenceHierarchy: minimal nonzero number of "
+                            << "local elements (" << min_num_local_elems << ") on"
+                            << " level " << l << " is below threshold ("
+                            << num_local_elems_threshold << "), redistributing the"
+                            << " level to " << num_redist_procs << " processors\n";
+                }
+
+                topo_[l+1] = topo_[l]->Coarsen(redistributor, partitioner,
+                                            elem_coarsening_factor, 0, 0);
+                seq_[l+1] = seq_[l]->Coarsen(redistributor);
+            }
             num_nonempty_procs = num_redist_procs;
         }
         else
@@ -167,7 +236,12 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
         for (int i = 0; i < topo_.size(); ++i)
         {
             std::cout << "\tNumber of global elements on level " << i << " is "
-                      << topo_[i]->GetNumberGlobalTrueEntities(elem_t_) <<".\n";
+                      << topo_[i]->GetNumberGlobalTrueEntities(elem_t_);
+                          
+            if (num_global_groups_[i] == 1)
+                std::cout <<".\n";
+            else
+                std::cout << " (x" << num_global_groups_[i] <<").\n";
         }
         std::cout << "\n";
     }
@@ -212,6 +286,52 @@ int SequenceHierarchy::MinNonzeroNumLocalElements(int level, int zero_replace)
     int out;
     MPI_Allreduce(&num_local_elems, &out, 1, MPI_INT, MPI_MIN, comm_);
     return out;
+}
+
+void SequenceHierarchy::ApplyTruePTranspose(int l, int jform, const Vector &x, Vector &y)
+{
+    if (redist_parent_seq_[l].size())
+    {
+        auto num_copies = redist_parent_seq_[l].size();
+        int mycopy = mycopy_[l+1];
+        std::vector<Vector> z(num_copies);
+        for (size_t i(0); i < num_copies; i++)
+        {
+            auto tD_rTD = redist_parent_seq_[l][i]->GetTrueDofRedTrueDof(jform);
+            z[i].SetSize(tD_rTD.Width());
+            tD_rTD.MultTranspose(x, z[i]);
+        }
+        Vector w;
+        w.SetDataAndSize(z[mycopy].GetData(), z[mycopy].Size());
+        redist_seq_[l]->GetTrueP(jform).MultTranspose(w, y);
+    }
+    else
+    {
+        seq_[l]->GetTrueP(jform).MultTranspose(x, y);
+    }
+}
+
+void SequenceHierarchy::ApplyTruePi(int l, int jform, const Vector &x, Vector &y)
+{
+    if (redist_parent_seq_[l].size())
+    {
+        auto num_copies = redist_parent_seq_[l].size();
+        int mycopy = mycopy_[l+1];
+        std::vector<Vector> z(num_copies);
+        for (size_t i(0); i < num_copies; i++)
+        {
+            auto tD_rTD = redist_parent_seq_[l][i]->GetTrueDofRedTrueDof(jform);
+            z[i].SetSize(tD_rTD.Width());
+            tD_rTD.MultTranspose(x, z[i]);
+        }
+        Vector w;
+        w.SetDataAndSize(z[mycopy].GetData(), z[mycopy].Size());
+        redist_seq_[l]->GetTruePi(jform).Mult(w, y);
+    }
+    else
+    {
+        seq_[l]->GetTruePi(jform).Mult(x, y);
+    }
 }
 
 }

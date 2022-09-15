@@ -102,6 +102,9 @@ public:
     /// entity_interiordofs matrix.
     void SetUp(SharingMap & e_Te, mfem::SparseMatrix & e_idof);
 
+    /// Build a SharingMap from another SharingMap, whose communicator is a super-set of our communicator
+    void SetUp(SharingMap & map);
+
     /// Destructor.
     virtual ~SharingMap();
 

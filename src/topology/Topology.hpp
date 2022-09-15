@@ -32,6 +32,7 @@ namespace parelag
 {
 
 class Redistributor;
+class MultiRedistributor;
 
 //! @class
 /*!
@@ -381,6 +382,14 @@ public:
           int coarsening_factor, bool check_topology,
           bool preserve_material_interfaces);
 
+    std::vector<std::shared_ptr<AgglomeratedTopology>> Coarsen(
+          MultiRedistributor& multi_redistributor,
+          MetisGraphPartitioner& partitioner,
+          int coarsening_factor, bool check_topology,
+          bool preserve_material_interfaces);
+
+    std::shared_ptr<AgglomeratedTopology> RebuildOnDifferentComm(MPI_Comm comm);
+
     /// Split agglomerates that are deemed "bad" into agglomerates
     /// that are... "not bad"? (Hopefully)
     void DeAgglomerateBadAgglomeratedEntities(
@@ -398,6 +407,7 @@ public:
 
     void ShowMe(std::ostream & os);
 
+    // NOTE (aschaf 09/08/22): does this need to work for the multiple copy setting?
     AgglomeratedTopology * FinestTopology();
 
     std::shared_ptr<AgglomeratedTopology> FinerTopology() const noexcept
@@ -410,14 +420,43 @@ public:
         return CoarserTopology_.lock();
     }
 
+    std::shared_ptr<AgglomeratedTopology> DistributedTopology() const noexcept
+    {
+        return DistributedTopology_.lock();
+    }
+
+    std::vector<std::shared_ptr<AgglomeratedTopology>> RedistributedTopologies() const noexcept
+    {
+        std::vector<std::shared_ptr<AgglomeratedTopology>> out(RedistributedTopologies_.size());
+        for (size_t i(0); i < out.size(); i++)
+            out[i] = RedistributedTopologies_[i].lock();
+        return out;
+    }
+
+    std::shared_ptr<AgglomeratedTopology> ParentTopology() const noexcept
+    {
+        return ParentTopology_.lock();
+    }
+
+    std::shared_ptr<AgglomeratedTopology> ChildTopology() const noexcept
+    {
+        return ChildTopology_.lock();
+    }
+
     bool PerformGlobalAgglomeration() const { return globalAgglomeration; }
 
     friend class Redistributor;
+    friend class MultiRedistributor;
 
 protected:
 
     std::weak_ptr<AgglomeratedTopology> FinerTopology_;
     std::weak_ptr<AgglomeratedTopology> CoarserTopology_;
+
+    std::weak_ptr<AgglomeratedTopology> ParentTopology_;
+    std::weak_ptr<AgglomeratedTopology> ChildTopology_;
+    std::weak_ptr<AgglomeratedTopology> DistributedTopology_;
+    std::vector<std::weak_ptr<AgglomeratedTopology>> RedistributedTopologies_;
 
     void generateTopology(mfem::ParMesh& pmesh);
     void initializeWeights(const mfem::Mesh& mesh);

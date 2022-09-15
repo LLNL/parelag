@@ -62,7 +62,8 @@ function(add_parelag_executable PARELAG_EXE_NAME)
 
   target_include_directories(${PARELAG_EXE_NAME} PRIVATE ${MPI_CXX_INCLUDE_PATH})
   if (MPI_CXX_COMPILE_FLAGS)
-    target_compile_options(${PARELAG_EXE_NAME} PRIVATE ${MPI_CXX_COMPILE_FLAGS})
+    separate_arguments(_MPI_CXX_COMPILE_OPTIONS UNIX_COMMAND "${MPI_CXX_COMPILE_FLAGS}")
+    target_compile_options(${PARELAG_EXE_NAME} PRIVATE ${_MPI_CXX_COMPILE_OPTIONS})
   endif()
 
   if (MPI_CXX_LINK_FLAGS)

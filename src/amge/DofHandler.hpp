@@ -323,6 +323,8 @@ public:
         return Topology_->EntityTrueEntity(codim);
     }
 
+    std::unique_ptr<DofHandlerALG> RebuildOnDifferentComm(const std::shared_ptr<AgglomeratedTopology>& redist_topo);
+
     friend class Redistributor;
 
 protected:

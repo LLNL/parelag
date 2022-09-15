@@ -36,6 +36,18 @@ class SequenceHierarchy
 {
     vector<shared_ptr<AgglomeratedTopology>> topo_;
     vector<shared_ptr<DeRhamSequence>> seq_;
+    // redistributed topologies and DeRham sequences with the bigger communicators
+    vector<vector<shared_ptr<AgglomeratedTopology>>> redist_parent_topo_;
+    vector<vector<shared_ptr<DeRhamSequenceAlg>>> redist_parent_seq_;
+    // redistributed topology and DeRham sequence with the split communicators
+    vector<shared_ptr<AgglomeratedTopology>> redist_topo_;
+    vector<shared_ptr<DeRhamSequence>> redist_seq_;
+    // tag indicating in which subgroup the level belongs in relation to the previous level
+    // TODO (aschaf 09/08/22): decide on a canonical way to store this information
+    vector<int> mycopy_;
+    // vector<bool> redistribution_;
+    vector<MPI_Comm> comms_;
+    vector<int> num_global_groups_;
 
     MPI_Comm comm_;
     std::shared_ptr<mfem::ParMesh> mesh_;
@@ -105,7 +117,12 @@ public:
     /// mfem (parallel) refinements. num_elements[0] is number of elements on
     /// the finest level. Geometric coarsening will be performed until all the
     /// numbers in num_elements have been used. Further coarsenings are algebraic.
-    void Build(const Array<int>& num_elements);
+    void Build(const Array<int>& num_elements, const vector<shared_ptr<DeRhamSequence>> &other_sequence);
+    void Build(const Array<int>& num_elements)
+    {
+        vector <shared_ptr<DeRhamSequence>> dummy(0);
+        Build(num_elements, dummy);
+    }
     void Build(vector<int> num_elements)
     {
         Array<int> num_elems(num_elements.data(), num_elements.size());
@@ -140,6 +157,43 @@ public:
     void ReplaceMassIntegrator(int form,
                                unique_ptr<BilinearFormIntegrator> integ,
                                bool recompute_mass);
+
+
+    int GetMyCopy(int level) const noexcept
+    {
+        return mycopy_[level];
+    }
+
+    // vector<bool> GetRedistributionBoolVector() const noexcept
+    // {
+    //     return redistribution_;
+    // }
+
+    vector<MPI_Comm> GetComms() const noexcept
+    {
+        return comms_;
+    }
+
+    MPI_Comm GetComm(int level) const
+    {
+        return comms_[level];
+    }
+
+    int GetNumGlobalGroups(int level) const
+    {
+        return num_global_groups_[level];
+    }
+
+    // FIXME (aschaf 09/08/22) Find a better name for these functions
+    /// Applies the TrueP matrix from a given level, projecting from level l to l+1
+    /// If multiple copies are available, it redistributes a copy of the result to
+    /// each group of processors. 
+
+    MFEM_DEPRECATED
+    void ApplyTruePi(int l, int jform, const Vector &x, Vector &y);
+
+    MFEM_DEPRECATED
+    void ApplyTruePTranspose(int level, int jform, const Vector &x, Vector &y);
 };
 
 }

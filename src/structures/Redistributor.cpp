@@ -12,6 +12,7 @@
 */
 
 #include <numeric>
+#include <iterator>
 
 #include "Redistributor.hpp"
 #include "utilities/MemoryUtils.hpp"
@@ -55,7 +56,7 @@ void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int
 }
 
 std::vector<int> RedistributeElements(
-      ParallelCSRMatrix& elem_face, int& num_redist_procs)
+      ParallelCSRMatrix& elem_face, int& num_redist_procs, int shift_procs)
 {
     MPI_Comm comm = elem_face.GetComm();
     int myid;
@@ -63,10 +64,40 @@ std::vector<int> RedistributeElements(
 
     mfem::Array<int> proc_starts, perm_rowstarts;
     int num_procs_loc = elem_face.NumRows() > 0 ? 1 : 0;
+   //  int first_proc = 0;
+   //  {
+   //      // find first non-zero processor (only necessary when comm == MPI_COMM_WORLD)
+   //      struct
+   //      {
+   //         int num_procs_loc;
+   //         int rank;
+   //      } in, out;
+   //      in.num_procs_loc = num_procs_loc;
+   //      in.rank = myid;
+   //      MPI_Allreduce(&in, &out, 1, MPI_2INT, MPI_MAXLOC, comm);
+   //      first_proc = out.rank;
+   //  }
+    int num_nonzero_procs;
+    {
+        MPI_Allreduce(&num_procs_loc, &num_nonzero_procs, 1, MPI_INT, MPI_SUM, comm);
+    }
+    num_procs_loc = 1;
     ParPartialSums_AssumedPartitionCheck(comm, num_procs_loc, proc_starts);
 
     int num_procs = proc_starts.Last();
     ParPartialSums_AssumedPartitionCheck(comm, num_procs, perm_rowstarts);
+    if (false)
+    {
+       printf("=========== %d : RedistributeElements ===========\n", myid);
+       printf("num_procs_loc = %d\n", num_procs_loc);
+       printf("proc_starts = ");
+       proc_starts.Print(mfem::out, proc_starts.Size());
+       printf("num_procs = %d\n", num_procs);
+       printf("perm_rowstarts = ");
+       perm_rowstarts.Print(mfem::out, perm_rowstarts.Size());
+       printf("=================================================\n");
+       MPI_Barrier(comm);
+    }
 
     SerialCSRMatrix proc_elem(num_procs_loc, elem_face.NumRows());
     if (num_procs_loc == 1)
@@ -113,21 +144,72 @@ std::vector<int> RedistributeElements(
     SerialCSRMatrix globProc_globProc;
     permProc_permProc->GetDiag(globProc_globProc);
 
+    if (false && myid == 0)
+    {
+        char name[250];
+        sprintf(name, "globProc_globProc%d.%05d", num_redist_procs, myid);
+        ofstream ofs(name);
+        globProc_globProc.PrintMatlab(ofs);
+    }
+
     std::vector<int> out(elem_face.NumRows());
     if (elem_face.NumRows() > 0)
     {
         mfem::Array<int> partition;
         MetisGraphPartitioner partitioner;
         partitioner.setParELAGDefaultMetisOptions();
-        partitioner.setParELAGDefaultFlags(globProc_globProc.NumRows()/num_redist_procs);
-        partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
+        // NOTE (aschaf 09/14/22) We might not even need to modify this method at all, but instead do the partition shift in the MultiRedistributor constructor!
+        int n = globProc_globProc.NumRows()/num_nonzero_procs;
+        int tmpid = myid;
+        int first_proc = 0;
+        if (n != 1)
+        {
+            // since globProc_globProc contains the whole range of processors, we need to find the only nonzero block
+            auto* I = globProc_globProc.GetI();
+            for (first_proc = 0; first_proc < globProc_globProc.Size(); ++first_proc)
+                  if (I[first_proc] != I[first_proc+1])
+                     break;
+            int N = first_proc / num_nonzero_procs;
+            mfem::Array2D<SerialCSRMatrix*> blocks(n,n);
+            globProc_globProc.GetBlocks(blocks);
+            SerialCSRMatrix& newGlobProc_globProc = *blocks(N, N);
+            partitioner.setParELAGDefaultFlags(newGlobProc_globProc.NumRows()/num_redist_procs);
+            partitioner.doPartition(newGlobProc_globProc, num_redist_procs, partition);
+            tmpid -= first_proc;
+        }
+        else
+        {
+            partitioner.setParELAGDefaultFlags(globProc_globProc.NumRows()/num_redist_procs);
+            partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
+        }
+        if (false)
+        {
+            printf("partition =");
+            for (auto v : partition)
+               printf(" %d", first_proc + ((v + shift_procs) % num_procs));
+            printf("\n");
+        }
 
-        PARELAG_ASSERT(myid < partition.Size());
-        std::fill_n(out.begin(), elem_face.NumRows(), partition[myid]);
+        PARELAG_ASSERT(tmpid < partition.Size());
+        std::fill_n(out.begin(), elem_face.NumRows(), first_proc + ((partition[tmpid] + shift_procs) % num_procs));
     }
     return out;
 }
 
+/* std::vector<std::vector<int>> RedistributeElementsToMultiple(
+      ParallelCSRMatrix& elem_face, int& num_redist_procs, const int num_current_procs)
+{
+   int num_chunks = num_current_procs / num_redist_procs;
+   std::vector<std::vector<int>> out(num_chunks);
+   int offset = 0;
+   for (auto &&chunk : out)
+   {
+      chunk = RedistributeElements(elem_face, num_redist_procs, offset);
+      offset += num_redist_procs;
+   }
+   return out;
+}
+ */
 Redistributor::Redistributor(
       const AgglomeratedTopology& topo, const std::vector<int>& elem_redist_procs)
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
@@ -138,13 +220,13 @@ Redistributor::Redistributor(
    Init(topo, elem_redist_procs);
 }
 
-Redistributor::Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs)
+Redistributor::Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, int shift_procs)
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
      redEntity_trueEntity(topo.Codimensions()+1),
      redTrueDof_trueDof(topo.Dimensions()+1),
      redDof_trueDof(topo.Dimensions()+1)
 {
-   auto elem_redist_procs = RedistributeElements(topo.TrueB(0), num_redist_procs);
+   auto elem_redist_procs = RedistributeElements(topo.TrueB(0), num_redist_procs, shift_procs);
    Init(topo, elem_redist_procs);
 }
 
@@ -549,6 +631,78 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
    redist_seq->SetSVDTol(sequence.GetSVDTol());
 
    return redist_seq;
+}
+/* 
+MultiRedistributor::MultiRedistributor(const AgglomeratedTopology& topo,
+                 const std::vector<std::vector<int>>& elem_redist_procs) : parent_comm_(topo.GetComm()), num_copies_(elem_redist_procs.size()), redistributors_(elem_redist_procs.size())
+{
+   int i = 0;
+   for (auto &erp : elem_redist_procs)
+      redistributors_[i++] = make_unique<Redistributor>(topo, erp);
+}
+ */
+MultiRedistributor::MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs) : parent_comm_(topo.GetComm())
+{
+   num_copies_ = num_current_procs / num_redist_procs;
+   redistributors_.resize(num_copies_);
+   int offset = 0, count(0);
+   auto& nonconst_topo = const_cast<AgglomeratedTopology&>(topo);
+   nonconst_topo.RedistributedTopologies_.resize(num_copies_);
+   for (auto &&chunk : redistributors_)
+   {
+      chunk = make_unique<Redistributor>(topo, num_redist_procs, offset);
+
+      chunk->redist_topo->DistributedTopology_ = nonconst_topo.shared_from_this();
+      nonconst_topo.RedistributedTopologies_[count++] = chunk->redist_topo;
+
+      offset += num_redist_procs;
+   }
+
+   int myid;
+   MPI_Comm_rank(parent_comm_, &myid);
+   mycopy_ = myid / num_redist_procs;
+   MPI_Comm_split(parent_comm_, mycopy_, myid, &child_comm_);
+}
+
+std::vector<std::shared_ptr<AgglomeratedTopology>> MultiRedistributor::GetRedistributedTopologies() const
+{
+   vector<shared_ptr<AgglomeratedTopology>> out(num_copies_);
+   for (int i(0) ; i < num_copies_; ++i)
+   {
+      out[i] = redistributors_[i]->redist_topo;
+   }
+
+   return out;
+}
+
+std::vector<std::shared_ptr<DeRhamSequenceAlg>> MultiRedistributor::Redistribute(const std::shared_ptr<DeRhamSequence>& seq)
+{
+   vector<shared_ptr<DeRhamSequenceAlg>> out(num_copies_);
+   seq->RedistributedSequences_.resize(num_copies_);
+   seq->redistributed_idx_ = mycopy_;
+   for (int i(0) ; i < num_copies_; ++i)
+   {
+      out[i] = redistributors_[i]->Redistribute(*seq);
+      out[i]->DistributedSequence_ = seq;
+      seq->RedistributedSequences_[i] = out[i];
+      out[i]->trueDofs_redTrueDofs_.resize(out[i]->nForms_);
+      out[i]->nGlobalCopies_ = seq->nGlobalCopies_ * num_copies_;
+      // NOTE (aschaf 09/14/22) both newDof_dof maps for each form could also be given to seq
+      for (int jform = out[i]->jformStart_; jform < out[i]->nForms_; jform++)
+      {
+         auto& redTD_tD = redistributors_[i]->TrueDofRedistribution(jform);
+         out[i]->trueDofs_redTrueDofs_[jform].reset(redTD_tD.Transpose());
+      }
+   }
+   return out;
+}
+
+void MultiRedistributor::ResetChildComm(const MPI_Comm &comm, int num_copies, int mycopy)
+{
+   MPI_Comm_free(&child_comm_);
+   child_comm_ = comm;
+   num_copies_ = num_copies;
+   mycopy_ = mycopy;
 }
 
 } // namespace parelag
