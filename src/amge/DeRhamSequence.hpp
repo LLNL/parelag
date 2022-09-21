@@ -376,6 +376,7 @@ public:
 
     const ParallelCSRMatrix& GetTrueP(int jform) const;
 
+    MFEM_DEPRECATED
     void ApplyTruePTranspose(int jform, const mfem::Vector &x, mfem::Vector &y) const;
 
     /// Returns the parallel-ized P matrix for the given form with
@@ -389,6 +390,7 @@ public:
 
     const ParallelCSRMatrix& GetTruePi(int jform);
 
+    MFEM_DEPRECATED
     void ApplyTruePi(int jform, const mfem::Vector &x, mfem::Vector &y);
 
     const ParallelCSRMatrix& GetTrueDofRedTrueDof(int jform) const;

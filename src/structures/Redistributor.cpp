@@ -215,7 +215,8 @@ Redistributor::Redistributor(
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
      redEntity_trueEntity(topo.Codimensions()+1),
      redTrueDof_trueDof(topo.Dimensions()+1),
-     redDof_trueDof(topo.Dimensions()+1)
+     redDof_trueDof(topo.Dimensions()+1),
+     trueDof_redTrueDof(topo.Dimensions()+1)
 {
    Init(topo, elem_redist_procs);
 }
@@ -224,7 +225,8 @@ Redistributor::Redistributor(const AgglomeratedTopology& topo, int& num_redist_p
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
      redEntity_trueEntity(topo.Codimensions()+1),
      redTrueDof_trueDof(topo.Dimensions()+1),
-     redDof_trueDof(topo.Dimensions()+1)
+     redDof_trueDof(topo.Dimensions()+1),
+     trueDof_redTrueDof(topo.Dimensions()+1)
 {
    auto elem_redist_procs = RedistributeElements(topo.TrueB(0), num_redist_procs, shift_procs);
    Init(topo, elem_redist_procs);
@@ -501,6 +503,7 @@ std::unique_ptr<DofHandler> Redistributor::Redistribute(const DofHandler& dof)
     auto redDof_redTrueDof = BuildRedEntToRedTrueEnt(*redDof_trueDof[jform]);
     redTrueDof_trueDof[jform] = // TODO: prabably need to take case of rdof ordering
           BuildRedTrueEntToTrueEnt(*redDof_redTrueDof, *redDof_trueDof[jform]);
+    trueDof_redTrueDof[jform].reset(redTrueDof_trueDof[jform]->Transpose());
 
     std::unique_ptr<ParallelCSRMatrix> tD_redD(redDof_trueDof[jform]->Transpose());
     out->dofTrueDof.SetUp(std::move(redDof_redTrueDof));
@@ -664,6 +667,25 @@ MultiRedistributor::MultiRedistributor(const AgglomeratedTopology& topo, const i
    MPI_Comm_split(parent_comm_, mycopy_, myid, &child_comm_);
 }
 
+MultiRedistributor::MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs, const MultiRedistributor &other_redist) : parent_comm_(other_redist.parent_comm_), child_comm_(other_redist.child_comm_), mycopy_(other_redist.mycopy_)
+{
+   num_copies_ = num_current_procs / num_redist_procs;
+   PARELAG_ASSERT(num_copies_ == other_redist.num_copies_);
+   redistributors_.resize(num_copies_);
+   int offset = 0, count(0);
+   auto& nonconst_topo = const_cast<AgglomeratedTopology&>(topo);
+   nonconst_topo.RedistributedTopologies_.resize(num_copies_);
+   for (auto &&chunk : redistributors_)
+   {
+      chunk = make_unique<Redistributor>(topo, num_redist_procs, offset);
+
+      chunk->redist_topo->DistributedTopology_ = nonconst_topo.shared_from_this();
+      nonconst_topo.RedistributedTopologies_[count++] = chunk->redist_topo;
+
+      offset += num_redist_procs;
+   }
+}
+
 std::vector<std::shared_ptr<AgglomeratedTopology>> MultiRedistributor::GetRedistributedTopologies() const
 {
    vector<shared_ptr<AgglomeratedTopology>> out(num_copies_);
@@ -679,12 +701,12 @@ std::vector<std::shared_ptr<DeRhamSequenceAlg>> MultiRedistributor::Redistribute
 {
    vector<shared_ptr<DeRhamSequenceAlg>> out(num_copies_);
    seq->RedistributedSequences_.resize(num_copies_);
-   seq->redistributed_idx_ = mycopy_;
+   // seq->redistributed_idx_ = mycopy_;
    for (int i(0) ; i < num_copies_; ++i)
    {
       out[i] = redistributors_[i]->Redistribute(*seq);
       out[i]->DistributedSequence_ = seq;
-      seq->RedistributedSequences_[i] = out[i];
+      // seq->RedistributedSequences_[i] = out[i];
       out[i]->trueDofs_redTrueDofs_.resize(out[i]->nForms_);
       out[i]->nGlobalCopies_ = seq->nGlobalCopies_ * num_copies_;
       // NOTE (aschaf 09/14/22) both newDof_dof maps for each form could also be given to seq

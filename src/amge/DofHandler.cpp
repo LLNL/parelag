@@ -1478,12 +1478,9 @@ unique_ptr<DofHandlerALG> DofHandlerALG::RebuildOnDifferentComm(const std::share
 
     out->dofTrueDof.SetUp(dofTrueDof);
 
-    int myid;
-    MPI_Comm_rank(redist_topo->GetComm(), &myid);
-
     for (int i = 0; i < max_codim+1; ++i)
     {
-       out->entity_dof[i].reset(new SerialCSRMatrix(*entity_dof[i], false));
+       out->entity_dof[i] = move(entity_dof[i]);
        out->finalized[i] = true;
     }
 

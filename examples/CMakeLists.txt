@@ -28,6 +28,7 @@ list(APPEND EXAMPLE_SRCS
   Upscaling2FormSpectralAMGe.cpp
   UpscalingMaxwell.cpp
   RedistributeTestDarcy.cpp
+  RedistributeTestDarcy_multi.cpp
   )
 
 list(APPEND EXAMPLE_SRCS

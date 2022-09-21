@@ -195,12 +195,15 @@ void SharingMap::SetUp(SharingMap & parent_map)
     parent_map.entity_start.Copy(entity_start);
     parent_map.trueEntity_start.Copy(trueEntity_start);
 
-    SerialCSRMatrix diag, offd;
+    // TODO (aschaf 09/21/22) Check if data is really stolen.
+    SerialCSRMatrix *diag = new SerialCSRMatrix;
+    SerialCSRMatrix *offd = new SerialCSRMatrix;
     HYPRE_BigInt* cmap;
-    parent_map.entity_trueEntity->GetDiag(diag);
-    parent_map.entity_trueEntity->GetOffd(offd, cmap);
+    parent_map.entity_trueEntity->GetDiag(*diag);
+    parent_map.entity_trueEntity->GetOffd(*offd, cmap);
+    parent_map.entity_trueEntity->SetOwnerFlags(0, 0, 0);
 
-    auto tmp = make_unique<ParallelCSRMatrix>(Comm_, entity_start.Last(), trueEntity_start.Last(), entity_start.GetData(), trueEntity_start.GetData(), &diag, &offd, cmap);
+    auto tmp = make_unique<ParallelCSRMatrix>(Comm_, entity_start.Last(), trueEntity_start.Last(), entity_start.GetData(), trueEntity_start.GetData(), diag, offd, cmap, true);
 
     this->SetUp(entity_start, trueEntity_start, move(tmp));
 }

@@ -34,20 +34,25 @@ using namespace mfem;
  */
 class SequenceHierarchy
 {
-    vector<shared_ptr<AgglomeratedTopology>> topo_;
-    vector<shared_ptr<DeRhamSequence>> seq_;
+    vector<vector<shared_ptr<AgglomeratedTopology>>> topo_;
+    vector<vector<shared_ptr<DeRhamSequence>>> seq_;
+    vector<unique_ptr<MultiRedistributor>> redistributors_;
     // redistributed topologies and DeRham sequences with the bigger communicators
-    vector<vector<shared_ptr<AgglomeratedTopology>>> redist_parent_topo_;
-    vector<vector<shared_ptr<DeRhamSequenceAlg>>> redist_parent_seq_;
+    // MFEM_DEPRECATED vector<vector<shared_ptr<AgglomeratedTopology>>> redist_parent_topo_;
+    // MFEM_DEPRECATED vector<vector<shared_ptr<DeRhamSequenceAlg>>> redist_parent_seq_;
     // redistributed topology and DeRham sequence with the split communicators
-    vector<shared_ptr<AgglomeratedTopology>> redist_topo_;
-    vector<shared_ptr<DeRhamSequence>> redist_seq_;
+    // MFEM_DEPRECATED vector<shared_ptr<AgglomeratedTopology>> redist_topo_;
+    // MFEM_DEPRECATED vector<shared_ptr<DeRhamSequence>> redist_seq_;
     // tag indicating in which subgroup the level belongs in relation to the previous level
     // TODO (aschaf 09/08/22): decide on a canonical way to store this information
     vector<int> mycopy_;
-    // vector<bool> redistribution_;
+    vector<bool> level_is_redistributed_;
+    bool is_redistributed_;
     vector<MPI_Comm> comms_;
-    vector<int> num_global_groups_;
+    vector<int> num_copies_;
+    vector<int> num_global_copies_;
+    /// $ k_\ell $ 
+    vector<int> redistribution_index;
 
     MPI_Comm comm_;
     std::shared_ptr<mfem::ParMesh> mesh_;
@@ -117,11 +122,11 @@ public:
     /// mfem (parallel) refinements. num_elements[0] is number of elements on
     /// the finest level. Geometric coarsening will be performed until all the
     /// numbers in num_elements have been used. Further coarsenings are algebraic.
-    void Build(const Array<int>& num_elements, const vector<shared_ptr<DeRhamSequence>> &other_sequence);
+    void Build(const Array<int>& num_elements, const SequenceHierarchy &other_sequence_hierarchy);
     void Build(const Array<int>& num_elements)
     {
-        vector <shared_ptr<DeRhamSequence>> dummy(0);
-        Build(num_elements, dummy);
+        // vector <shared_ptr<DeRhamSequence>> dummy(0);
+        Build(num_elements, *this);
     }
     void Build(vector<int> num_elements)
     {
@@ -132,7 +137,7 @@ public:
     /// Construct the hierarchy without geometric coarsening.
     void Build() { Build(vector<int>(0)); }
 
-    const vector<shared_ptr<DeRhamSequence>>& GetDeRhamSequences() const { return seq_; }
+    const vector<shared_ptr<DeRhamSequence>>& GetDeRhamSequences(int k = 0) const;
 
     /// A portal to DeRhamSequenceFE::ReplaceMassIntegrator.
     /// This is for setting coefficients for mass matrices in the fine sequence.
@@ -169,19 +174,65 @@ public:
     //     return redistribution_;
     // }
 
-    vector<MPI_Comm> GetComms() const noexcept
+    const vector<MPI_Comm> & GetComms() const noexcept
     {
         return comms_;
     }
 
-    MPI_Comm GetComm(int level) const
+    MPI_Comm GetComm(int k) const
     {
-        return comms_[level];
+        return comms_[k];
     }
 
-    int GetNumGlobalGroups(int level) const
+    /// Returns the number of groups within MPI_COMM_WORLD for redistribution index k
+    int GetNumGlobalCopies(int k) const
     {
-        return num_global_groups_[level];
+        return num_global_copies_[k];
+    }
+
+    const vector<int> & GetNumGlobalCopies() const
+    {
+        return num_global_copies_;
+    }
+
+    /// Returns the number of groups within the parent communicator
+    int GetNumCopies(int level) const
+    {
+        return num_copies_[level];
+    }
+
+    inline bool IsRedistributed() const noexcept
+    {
+        return is_redistributed_;
+    }
+
+
+    inline bool IsRedistributed(int level) const
+    {
+        return level_is_redistributed_[level];
+    }
+
+    bool IsVectorRedistributed(int level, int jform, const mfem::Vector &x);
+
+    unique_ptr<ParallelCSRMatrix> RedistributeParMatrix(int level, int jform, const ParallelCSRMatrix *mat);
+
+    unique_ptr<ParallelCSRMatrix> RedistributeParMatrix(int level, int jform, const ParallelCSRMatrix *mat, const SequenceHierarchy &range_hierarchy);
+
+    void RedistributeVector(int level, int jform, const Vector &x, Vector &redist_x);
+
+    int GetRedistributionIndex(int level) const
+    {
+        return redistribution_index[level];
+    }
+
+    const std::vector<int> & GetRedistributionIndices() const
+    {
+        return redistribution_index;
+    }
+
+    int GetNumRedistributions() const
+    {
+        return redistribution_index.back();
     }
 
     // FIXME (aschaf 09/08/22) Find a better name for these functions
@@ -189,10 +240,8 @@ public:
     /// If multiple copies are available, it redistributes a copy of the result to
     /// each group of processors. 
 
-    MFEM_DEPRECATED
     void ApplyTruePi(int l, int jform, const Vector &x, Vector &y);
 
-    MFEM_DEPRECATED
     void ApplyTruePTranspose(int level, int jform, const Vector &x, Vector &y);
 };
 

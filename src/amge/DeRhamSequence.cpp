@@ -696,7 +696,7 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
     Pi_[nForms_-1]->Project(fine_const, coarse_const);
 
     coarser_sequence->nGlobalCopies_ = this->nGlobalCopies_;
-    
+
     return coarser_sequence;
 }
 
@@ -3517,7 +3517,6 @@ std::shared_ptr<DeRhamSequenceAlg> DeRhamSequenceAlg::RebuildOnDifferentComm(con
    auto redist_seq = std::make_shared<DeRhamSequenceAlg>(redist_topo, num_forms);
    redist_seq->Targets_.resize(num_forms);
    
-   redist_seq->ParentSequence_ = shared_from_this();
    ChildSequence_ = redist_seq;
 
    auto &sequence = *this;
@@ -3532,11 +3531,10 @@ std::shared_ptr<DeRhamSequenceAlg> DeRhamSequenceAlg::RebuildOnDifferentComm(con
 
       if (jform != (num_forms - 1))
       {
-         redist_seq->D_[jform].reset(new SerialCSRMatrix(*sequence.D_[jform], false));
+         redist_seq->D_[jform] = move(sequence.D_[jform]);
       }
 
-      redist_seq->Targets_[jform].reset(
-               new MultiVector(*sequence.Targets_[jform]));
+      redist_seq->Targets_[jform] = move(sequence.Targets_[jform]);
    }
 
    for (int codim = 0; codim < num_forms; ++codim)
@@ -3547,11 +3545,13 @@ std::shared_ptr<DeRhamSequenceAlg> DeRhamSequenceAlg::RebuildOnDifferentComm(con
       for (int j = sequence.jformStart_; j <= jform; ++j)
       {
          const int idx = (dim-j)*(num_forms-j)/2 + codim;
-         redist_seq->M_[idx].reset(new SerialCSRMatrix(*(sequence.M_[idx]), false));
+         redist_seq->M_[idx] = move(sequence.M_[idx]);
       }
    }
 
-   redist_seq->L2_const_rep_.SetDataAndSize(sequence.L2_const_rep_.GetData(), sequence.L2_const_rep_.Size());
+   // FIXME (aschaf 09/20/22) Check if data is really owned
+   redist_seq->L2_const_rep_.SetDataAndSize(sequence.L2_const_rep_.StealData(), sequence.L2_const_rep_.Size());
+   redist_seq->L2_const_rep_.MakeDataOwner();
 
    redist_seq->SetSVDTol(sequence.GetSVDTol());
 

@@ -57,6 +57,7 @@ class Redistributor
    std::vector<unique_ptr<ParallelCSRMatrix> > redTrueEntity_trueEntity;
    std::vector<unique_ptr<ParallelCSRMatrix> > redEntity_trueEntity;
    std::vector<unique_ptr<ParallelCSRMatrix> > redTrueDof_trueDof;
+   std::vector<unique_ptr<ParallelCSRMatrix> > trueDof_redTrueDof;
    std::vector<unique_ptr<ParallelCSRMatrix> > redDof_trueDof;
 
    shared_ptr<AgglomeratedTopology> redist_topo;
@@ -114,6 +115,18 @@ public:
       return *(redTrueDof_trueDof[jform]);
    }
 
+   const ParallelCSRMatrix* TrueDofRedistributionPtr(int jform) const
+   {
+      return redTrueDof_trueDof[jform].get();
+   }
+
+   // TODO (aschaf 09/20/22) Find a better name for this.
+   /// Access the transpose of the relation redTrueDof_trueDof
+   const ParallelCSRMatrix* TrueDofRedistributionTransposePtr(int jform) const
+   {
+      return trueDof_redTrueDof[jform].get();
+   }
+
    AgglomeratedTopology& GetRedistributedTopology() { return *redist_topo; }
 
    std::shared_ptr<DeRhamSequenceAlg> Redistribute(const DeRhamSequence& seq);
@@ -138,6 +151,13 @@ public:
    /// @param num_current_procs number of parent processors from which to redistribute
    /// @param num_redist_procs number of processors to be redistributed to
    MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs);
+
+   /// @brief Constructor for MultiRedistributor
+   /// A list of redistributed topologies will be constructed and stored in the class
+   /// @param num_current_procs number of parent processors from which to redistribute
+   /// @param num_redist_procs number of processors to be redistributed to
+   /// @param other_redistributors another MultiRedistributor we copy the Communicator from
+   MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs, const MultiRedistributor &other_redistributors);
 
 /*    
    /// @param topo topology in the original data distribution
@@ -172,7 +192,7 @@ public:
 
    // std::shared_ptr<DeRhamSequenceAlg> RedistributeComm(const DeRhamSequenceAlg& redist_seq);
 
-
+   MFEM_DEPRECATED
    void ResetChildComm(const MPI_Comm &comm, int num_copies, int mycopy);
 
    /// Get the split communicator object
