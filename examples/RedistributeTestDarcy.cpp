@@ -265,9 +265,11 @@ int main (int argc, char *argv[])
             auto tmp_p = make_unique<mfem::Vector>(
                 sequence[ii+1]->GetNumTrueDofs(pform) );
             // sequence[ii]->GetTrueP(uform).MultTranspose(*rhs_u,*tmp_u);
-            sequence[ii]->ApplyTruePTranspose(uform,*rhs_u,*tmp_u);
+            // sequence[ii]->ApplyTruePTranspose(uform,*rhs_u,*tmp_u);
+            hierarchy.ApplyTruePTranspose(ii, uform, *rhs_u, *tmp_u);
             // sequence[ii]->GetTrueP(pform).MultTranspose(*rhs_p,*tmp_p);
-            sequence[ii]->ApplyTruePTranspose(pform,*rhs_p,*tmp_p);
+            // sequence[ii]->ApplyTruePTranspose(pform,*rhs_p,*tmp_p);
+            hierarchy.ApplyTruePTranspose(ii, pform,*rhs_p,*tmp_p);
             rhs_u = std::move(tmp_u);
             rhs_p = std::move(tmp_p);
         }
