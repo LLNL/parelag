@@ -161,7 +161,6 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             }
         }
 
-
         seq_[k_l][l]->SetSVDTol(SVD_tol);
 
         const int num_local_elems = topo_[k_l][l]->GetNumberLocalEntities(elem_t_);
@@ -212,11 +211,11 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 int mycopy = multi_redistributor.GetMyCopy();
                 mycopy_[l+1] = mycopy;
                 auto redist_parent_topos = multi_redistributor.GetRedistributedTopologies();
-                auto redist_parent_seq = multi_redistributor.Redistribute(seq_[k_l][l]);
+                auto redist_parent_seqs = multi_redistributor.Redistribute(seq_[k_l][l]);
                 MPI_Comm child_comm = multi_redistributor.GetChildComm();
                 comms_.push_back(child_comm);
                 topo_[k_l+1][l] = redist_parent_topos[mycopy]->RebuildOnDifferentComm(child_comm);
-                seq_[k_l+1][l] = redist_parent_seq[mycopy]->RebuildOnDifferentComm(topo_[k_l+1][l]);
+                seq_[k_l+1][l] = redist_parent_seqs[mycopy]->RebuildOnDifferentComm(topo_[k_l+1][l]);
                 
                 //NOTE (aschaf 09/14/22): copied from AgglomeratedTopology::Coarsen(Redistributor, ...)
                 int tmp_num_local_elems = topo_[k_l+1][l]->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT);
@@ -235,7 +234,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             }
             else
             {
-                Redistributor redistributor(*topo_[k_l][l], num_redist_procs, (int)0);
+                Redistributor redistributor(*topo_[k_l][l], num_redist_procs);
 
                 if (verbose_)
                 {
@@ -335,19 +334,11 @@ void SequenceHierarchy::ApplyTruePTranspose(int l, int jform, const Vector &x, V
     int k_l = redistribution_index[l];
     if (redistributors_[l])
     {
-        auto num_copies = redistributors_[l]->GetNumCopies();
-        int mycopy = mycopy_[l+1];
-        std::vector<Vector> z(num_copies);
-        for (size_t i(0); i < num_copies; i++)
-        {
-            auto rTD_tD = redistributors_[l]->GetRedistributor(i)->TrueDofRedistribution(jform);
-            //auto tD_rTD = redist_parent_seq_[l][i]->GetTrueDofRedTrueDof(jform);
-            z[i].SetSize(rTD_tD.Height());
-            rTD_tD.Mult(x, z[i]);
-        }
-        Vector w;
-        w.SetDataAndSize(z[mycopy].GetData(), z[mycopy].Size());
-        seq_[redistribution_index[l+1]][l]->GetTrueP(jform).MultTranspose(w, y);
+        Vector z(seq_[redistribution_index[l+1]][l]->GetNumberOfTrueDofs(jform));
+
+        RedistributeVector(l, jform, x, z);
+
+        seq_[redistribution_index[l+1]][l]->GetTrueP(jform).MultTranspose(z, y);
     }
     else
     {
@@ -360,18 +351,11 @@ void SequenceHierarchy::ApplyTruePi(int l, int jform, const Vector &x, Vector &y
     int k_l = redistribution_index[l];
     if (redistributors_[l])
     {
-        auto num_copies = redistributors_[l]->GetNumCopies();
-        int mycopy = mycopy_[l+1];
-        std::vector<Vector> z(num_copies);
-        for (size_t i(0); i < num_copies; i++)
-        {
-            auto* rTD_tD = redistributors_[l]->GetRedistributor(i)->TrueDofRedistributionTransposePtr(jform);
-            z[i].SetSize(rTD_tD->Height());
-            rTD_tD->Mult(x, z[i]);
-        }
-        Vector w;
-        w.SetDataAndSize(z[mycopy].GetData(), z[mycopy].Size());
-        seq_[redistribution_index[l+1]][l]->GetTruePi(jform).Mult(w, y);
+        Vector z(seq_[redistribution_index[l+1]][l]->GetNumberOfTrueDofs(jform));
+
+        RedistributeVector(l, jform, x, z);
+
+        seq_[redistribution_index[l+1]][l]->GetTruePi(jform).Mult(z, y);
     }
     else
     {
@@ -418,8 +402,8 @@ unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level
     vector<unique_ptr<ParallelCSRMatrix>> tmp(copies);
     for (int i(0); i < copies; i++)
     {
-        auto* td_rTD = redistributors_[level]->GetRedistributor(i)->TrueDofRedistributionTransposePtr(jform);
-        auto* orig_td_rTD = range_hierarchy.redistributors_[level]->GetRedistributor(i)->TrueDofRedistributionTransposePtr(jform);
+        auto* td_rTD = redistributors_[level]->TrueDofRedistributedTrueDofPtr(i, jform);
+        auto* orig_td_rTD = range_hierarchy.redistributors_[level]->TrueDofRedistributedTrueDofPtr(i, jform);
         tmp[i].reset(
             mfem::RAP(orig_td_rTD, mat, td_rTD)
         );

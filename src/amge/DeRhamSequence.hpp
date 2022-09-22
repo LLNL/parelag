@@ -376,9 +376,6 @@ public:
 
     const ParallelCSRMatrix& GetTrueP(int jform) const;
 
-    MFEM_DEPRECATED
-    void ApplyTruePTranspose(int jform, const mfem::Vector &x, mfem::Vector &y) const;
-
     /// Returns the parallel-ized P matrix for the given form with
     /// boundary conditions applied.
     std::unique_ptr<ParallelCSRMatrix> ComputeTrueP(
@@ -389,13 +386,6 @@ public:
     std::unique_ptr<ParallelCSRMatrix> ComputeTruePi(int jform);
 
     const ParallelCSRMatrix& GetTruePi(int jform);
-
-    MFEM_DEPRECATED
-    void ApplyTruePi(int jform, const mfem::Vector &x, mfem::Vector &y);
-
-    const ParallelCSRMatrix& GetTrueDofRedTrueDof(int jform) const;
-
-    const ParallelCSRMatrix* ViewTrueDofRedTrueDof(int jform) const;
 
     /// TODO
     std::unique_ptr<ParallelCSRMatrix>
@@ -483,41 +473,6 @@ public:
 
     std::shared_ptr<DeRhamSequence> FinerSequence() const noexcept
     { return FinerSequence_.lock(); }
-
-    std::shared_ptr<DeRhamSequence> DistributedSequence() const noexcept
-    { return DistributedSequence_.lock(); }
-
-    std::vector<std::shared_ptr<DeRhamSequence>> RedistributedSequences() const noexcept
-    {
-        std::vector<std::shared_ptr<DeRhamSequence>> out(RedistributedSequences_.size());
-        for (size_t i(0); i < out.size(); i++)
-            out[i] = RedistributedSequences_[i].lock();
-        return out;
-    }
-
-    int GetRedistributedIndex() const noexcept
-    {
-        return redistributed_idx_;
-    }
-
-    std::shared_ptr<DeRhamSequence> RedistributedSequence(int idx) const
-    {
-        if (RedistributedSequences_.size())
-            return RedistributedSequences_[idx].lock();
-        
-        return {};
-    }
-
-    std::shared_ptr<DeRhamSequence> ParentSequence() const noexcept
-    { return ParentSequence_.lock(); }
-
-    std::shared_ptr<DeRhamSequence> ChildSequence() const noexcept
-    { return ChildSequence_.lock(); }
-
-    int NumGlobalCopies() const noexcept
-    {
-        return nGlobalCopies_;
-    }
 
     ///@}
     /// \name Debugging help
@@ -764,9 +719,6 @@ protected:
 
     mutable std::vector<std::unique_ptr<mfem::HypreParMatrix>> truePi_;
 
-    // TODO (aschaf 09/13/22) make it shared?
-    mutable std::vector<std::unique_ptr<ParallelCSRMatrix>> trueDofs_redTrueDofs_;
-
     /// Representation of constant one function in L2 (dim-form)
     mfem::Vector L2_const_rep_;
 
@@ -775,24 +727,6 @@ protected:
 
     /// The next finest sequence in the hierarchy
     std::weak_ptr<DeRhamSequence> FinerSequence_;
-
-    /// Link to the sequence we redistributed from
-    std::weak_ptr<DeRhamSequence> DistributedSequence_;
-
-    /// Link to the redistributed sequences
-    std::vector<std::weak_ptr<DeRhamSequence>> RedistributedSequences_;
-
-    /// Index of which of the redistributed sequences lives on this processor
-    int redistributed_idx_;
-
-    /// Link to the sequence on the parent communicator
-    std::weak_ptr<DeRhamSequence> ParentSequence_;
-
-    /// Link to the sequence on the active child communicator
-    std::weak_ptr<DeRhamSequence> ChildSequence_;
-
-    /// Number of copies of this sequence wrt the finest level communicator
-    int nGlobalCopies_;
 
     /// Relative tolerance to be used in the SVD
     double SVD_Tolerance_;

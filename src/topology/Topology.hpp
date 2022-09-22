@@ -420,29 +420,6 @@ public:
         return CoarserTopology_.lock();
     }
 
-    std::shared_ptr<AgglomeratedTopology> DistributedTopology() const noexcept
-    {
-        return DistributedTopology_.lock();
-    }
-
-    std::vector<std::shared_ptr<AgglomeratedTopology>> RedistributedTopologies() const noexcept
-    {
-        std::vector<std::shared_ptr<AgglomeratedTopology>> out(RedistributedTopologies_.size());
-        for (size_t i(0); i < out.size(); i++)
-            out[i] = RedistributedTopologies_[i].lock();
-        return out;
-    }
-
-    std::shared_ptr<AgglomeratedTopology> ParentTopology() const noexcept
-    {
-        return ParentTopology_.lock();
-    }
-
-    std::shared_ptr<AgglomeratedTopology> ChildTopology() const noexcept
-    {
-        return ChildTopology_.lock();
-    }
-
     bool PerformGlobalAgglomeration() const { return globalAgglomeration; }
 
     friend class Redistributor;
@@ -452,11 +429,6 @@ protected:
 
     std::weak_ptr<AgglomeratedTopology> FinerTopology_;
     std::weak_ptr<AgglomeratedTopology> CoarserTopology_;
-
-    std::weak_ptr<AgglomeratedTopology> ParentTopology_;
-    std::weak_ptr<AgglomeratedTopology> ChildTopology_;
-    std::weak_ptr<AgglomeratedTopology> DistributedTopology_;
-    std::vector<std::weak_ptr<AgglomeratedTopology>> RedistributedTopologies_;
 
     void generateTopology(mfem::ParMesh& pmesh);
     void initializeWeights(const mfem::Mesh& mesh);

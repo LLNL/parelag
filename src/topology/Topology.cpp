@@ -882,9 +882,6 @@ AgglomeratedTopology::RebuildOnDifferentComm(MPI_Comm comm)
 {
     auto out = make_shared<AgglomeratedTopology>(comm, nCodim_);
 
-    ChildTopology_ = out;
-    out->ParentTopology_ = shared_from_this();
-
     out->nDim_ = nDim_;
 
     out->entityTrueEntity[0]->SetUp(entityTrueEntity[0]->GetLocalSize());

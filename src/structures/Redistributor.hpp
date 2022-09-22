@@ -41,12 +41,8 @@ void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int
 /// From the parallel proc-to-proc connectivity table,
 /// get a copy of the global matrix as a serial matrix locally (via permutation),
 /// and then call METIS to "partition processors" in each processor locally
-/// @param shift_procs shift the redistribution to the right
 std::vector<int> RedistributeElements(
-      ParallelCSRMatrix& elem_face, int& num_redist_procs, int shift_procs = 0);
-
-// std::vector<std::vector<int>> RedistributeElementsToMultiple(
-//       ParallelCSRMatrix& elem_face, int& num_redist_procs, const int num_current_procs);
+      ParallelCSRMatrix& elem_face, int& num_redist_procs);
 
 /// A helper to redistribute AgglomeratedTopology, DofHandler, DeRhamSequence
 class Redistributor
@@ -57,7 +53,6 @@ class Redistributor
    std::vector<unique_ptr<ParallelCSRMatrix> > redTrueEntity_trueEntity;
    std::vector<unique_ptr<ParallelCSRMatrix> > redEntity_trueEntity;
    std::vector<unique_ptr<ParallelCSRMatrix> > redTrueDof_trueDof;
-   std::vector<unique_ptr<ParallelCSRMatrix> > trueDof_redTrueDof;
    std::vector<unique_ptr<ParallelCSRMatrix> > redDof_trueDof;
 
    shared_ptr<AgglomeratedTopology> redist_topo;
@@ -97,10 +92,7 @@ public:
                  const std::vector<int>& elem_redist_procs);
 
    /// @param num_redist_procs number of processors to be redistributed to
-   /// @param shift_procs shift the redistribution to the right
-   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, int shift_procs = 0);
-
-   // Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, bool multi_redistribution = false);
+   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs);
 
    void Init(const AgglomeratedTopology& topo,
              const std::vector<int>& elem_redist_procs);
@@ -120,13 +112,6 @@ public:
       return redTrueDof_trueDof[jform].get();
    }
 
-   // TODO (aschaf 09/20/22) Find a better name for this.
-   /// Access the transpose of the relation redTrueDof_trueDof
-   const ParallelCSRMatrix* TrueDofRedistributionTransposePtr(int jform) const
-   {
-      return trueDof_redTrueDof[jform].get();
-   }
-
    AgglomeratedTopology& GetRedistributedTopology() { return *redist_topo; }
 
    std::shared_ptr<DeRhamSequenceAlg> Redistribute(const DeRhamSequence& seq);
@@ -144,6 +129,10 @@ protected:
    int mycopy_;
    MPI_Comm child_comm_;
 
+   std::vector<std::vector<unique_ptr<ParallelCSRMatrix>>> trueDof_redTrueDof;
+
+   void Init(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs);
+
 public:
 
    /// Constructor for MultiRedistributor
@@ -158,15 +147,6 @@ public:
    /// @param num_redist_procs number of processors to be redistributed to
    /// @param other_redistributors another MultiRedistributor we copy the Communicator from
    MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs, const MultiRedistributor &other_redistributors);
-
-/*    
-   /// @param topo topology in the original data distribution
-   /// @param elem_redist_procs an 2D array of size number of chunks x number of local elements.
-   /// elem_redist_procs[c][i] indicates which processor the i-th local element
-   /// will be redistributed to within chunk c. Other entities are redistributed accordingly.
-   MultiRedistributor(const AgglomeratedTopology& topo,
-                 const std::vector<std::vector<int>>& elem_redist_procs); 
-*/
 
    std::shared_ptr<Redistributor> GetRedistributor() const
    {
@@ -192,8 +172,9 @@ public:
 
    // std::shared_ptr<DeRhamSequenceAlg> RedistributeComm(const DeRhamSequenceAlg& redist_seq);
 
-   MFEM_DEPRECATED
-   void ResetChildComm(const MPI_Comm &comm, int num_copies, int mycopy);
+   // Access to the transpose of Redistributor::TrueDofRedistribution(jform)
+   // If not set, we build it.
+   ParallelCSRMatrix* TrueDofRedistributedTrueDofPtr(int group, int jform);
 
    /// Get the split communicator object
    MPI_Comm GetChildComm() const noexcept

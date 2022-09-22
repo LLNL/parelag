@@ -34,25 +34,34 @@ using namespace mfem;
  */
 class SequenceHierarchy
 {
+    // TODO (aschaf 09/21/22) Describe topo_ and seq_ layout
+    /**
+     * The topologies and sequences are stored based on which communicator C_k they belong to, 
+     * with k the communicator or redistribution index. Hence, if multiple communicators are used,
+     * as is the case when we coarsen beyond the number of processors and want to have multiple 
+     * coarse copies. 
+     * 
+     * 
+     */
     vector<vector<shared_ptr<AgglomeratedTopology>>> topo_;
     vector<vector<shared_ptr<DeRhamSequence>>> seq_;
+    // 
     vector<unique_ptr<MultiRedistributor>> redistributors_;
-    // redistributed topologies and DeRham sequences with the bigger communicators
-    // MFEM_DEPRECATED vector<vector<shared_ptr<AgglomeratedTopology>>> redist_parent_topo_;
-    // MFEM_DEPRECATED vector<vector<shared_ptr<DeRhamSequenceAlg>>> redist_parent_seq_;
-    // redistributed topology and DeRham sequence with the split communicators
-    // MFEM_DEPRECATED vector<shared_ptr<AgglomeratedTopology>> redist_topo_;
-    // MFEM_DEPRECATED vector<shared_ptr<DeRhamSequence>> redist_seq_;
-    // tag indicating in which subgroup the level belongs in relation to the previous level
     // TODO (aschaf 09/08/22): decide on a canonical way to store this information
+    // tag indicating in which subgroup the level belongs in relation to the previous level
     vector<int> mycopy_;
     vector<bool> level_is_redistributed_;
     bool is_redistributed_;
-    vector<MPI_Comm> comms_;
     vector<int> num_copies_;
-    vector<int> num_global_copies_;
-    /// $ k_\ell $ 
+    /**
+     * @brief Redistribution index $ k_\ell $
+     * 
+     * 
+     */
     vector<int> redistribution_index;
+    /// communicators C_k, C_0 is usually MPI_COMM_WORLD
+    vector<MPI_Comm> comms_;
+    vector<int> num_global_copies_;
 
     MPI_Comm comm_;
     std::shared_ptr<mfem::ParMesh> mesh_;
@@ -205,7 +214,6 @@ public:
     {
         return is_redistributed_;
     }
-
 
     inline bool IsRedistributed(int level) const
     {
