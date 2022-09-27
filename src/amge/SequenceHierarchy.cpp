@@ -17,6 +17,7 @@
 #include <partitioning/MFEMRefinedMeshPartitioner.hpp>
 #include <partitioning/MetisGraphPartitioner.hpp>
 #include <utilities/MemoryUtils.hpp>
+#include <utilities/ParELAG_TimeManager.hpp>
 
 namespace parelag
 {
@@ -186,10 +187,15 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             {
                 topo_.push_back(vector<shared_ptr<AgglomeratedTopology>>(num_levels));
                 seq_.push_back(vector<shared_ptr<DeRhamSequence>>(num_levels));
-                if (is_forced)
-                    redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs, *(other_sequence_hierarchy.redistributors_[l]));
-                else
-                    redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs);
+                {
+                    Timer redistribute = TimeManager::AddTimer(
+                            std::string("SequenceHierarchy: Build Redistribute -- Level ")
+                            .append(std::to_string(l)));
+                    if (is_forced)
+                        redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs, *(other_sequence_hierarchy.redistributors_[l]));
+                    else
+                        redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs);
+                }
                 auto &multi_redistributor = *redistributors_[l];
                 num_copies_[l] = (num_nonempty_procs / num_redist_procs);
                 num_global_groups *= num_copies_[l];
@@ -210,13 +216,18 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 }
                 int mycopy = multi_redistributor.GetMyCopy();
                 mycopy_[l+1] = mycopy;
-                auto redist_parent_topos = multi_redistributor.GetRedistributedTopologies();
-                auto redist_parent_seqs = multi_redistributor.Redistribute(seq_[k_l][l]);
-                MPI_Comm child_comm = multi_redistributor.GetChildComm();
-                comms_.push_back(child_comm);
-                topo_[k_l+1][l] = redist_parent_topos[mycopy]->RebuildOnDifferentComm(child_comm);
-                seq_[k_l+1][l] = redist_parent_seqs[mycopy]->RebuildOnDifferentComm(topo_[k_l+1][l]);
-                
+                {
+                    Timer redistribute = TimeManager::AddTimer(
+                        std::string("SequenceHierarchy: Build Redistribute -- Level ")
+                            .append(std::to_string(l)));
+                    auto redist_parent_topos = multi_redistributor.GetRedistributedTopologies();
+                    auto redist_parent_seqs = multi_redistributor.Redistribute(seq_[k_l][l]);
+                    MPI_Comm child_comm = multi_redistributor.GetChildComm();
+                    comms_.push_back(child_comm);
+                    topo_[k_l + 1][l] = redist_parent_topos[mycopy]->RebuildOnDifferentComm(child_comm);
+                    seq_[k_l + 1][l] = redist_parent_seqs[mycopy]->RebuildOnDifferentComm(topo_[k_l + 1][l]);
+                }
+
                 //NOTE (aschaf 09/14/22): copied from AgglomeratedTopology::Coarsen(Redistributor, ...)
                 int tmp_num_local_elems = topo_[k_l+1][l]->GetNumberLocalEntities(AgglomeratedTopology::ELEMENT);
                 Array<int> partition(tmp_num_local_elems);
@@ -397,6 +408,9 @@ unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level
 
 unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level, int jform, const ParallelCSRMatrix *mat, const SequenceHierarchy &range_hierarchy)
 {
+    Timer redistribute = TimeManager::AddTimer(
+        std::string("SequenceHierarchy: Redistribute ParallelCSRMatrix -- Level ")
+        .append(std::to_string(level)));
     unique_ptr<ParallelCSRMatrix> out;
     int copies = num_copies_[level];
     vector<unique_ptr<ParallelCSRMatrix>> tmp(copies);
@@ -428,6 +442,9 @@ unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level
 
 void SequenceHierarchy::RedistributeVector(int level, int jform, const Vector &x, Vector &redist_x)
 {
+    Timer redistribute = TimeManager::AddTimer(
+        std::string("SequenceHierarchy: Redistribute Vector -- Level ")
+        .append(std::to_string(level)));
     int k_lp1 = redistribution_index[level+1];
     int copies = num_copies_[level];
     vector<Vector> tmp(copies);
@@ -439,6 +456,38 @@ void SequenceHierarchy::RedistributeVector(int level, int jform, const Vector &x
         auto rTD_tD = redistributors_[level]->GetRedistributor(i)->TrueDofRedistribution(jform);
         rTD_tD.Mult(x, tmp[i]);
     }
+}
+
+void SequenceHierarchy::ShowTrueData(int level, int k, int groupid, int jform, MultiVector &true_v)
+{
+    // TODO (aschaf 09/23/22) Asserts
+    int ilevel = level;
+    int ik = k;
+    int igid = groupid;
+    int groupsize = 2;
+    MultiVector v0(true_v.GetData(), true_v.NumberOfVectors(), true_v.Size());
+
+    for ( ; ik >= 1; ik--)
+    {
+        MultiVector vk(v0.StealData(), v0.NumberOfVectors(), v0.Size());
+        // first traverse communicator upwards
+        for ( ; seq_[ik][ilevel]->ViewFinerSequence(); ilevel--)
+        {
+            MultiVector vi(vk.StealData(), vk.NumberOfVectors(), vk.Size());
+            auto finer_sequence = seq_[ik][ilevel]->FinerSequence();
+            vk.SetSizeAndNumberOfVectors(finer_sequence->GetNumTrueDofs(jform), true_v.NumberOfVectors());
+            Mult(finer_sequence->GetTrueP(jform), vi, vk);
+        }
+
+        // copy to other processor
+        auto * tD_rTD = redistributors_[ilevel]->TrueDofRedistributedTrueDofPtr(igid % groupsize, jform);
+        vk.SetSizeAndNumberOfVectors(tD_rTD->Width(),  true_v.NumberOfVectors());
+        v0.SetSizeAndNumberOfVectors(tD_rTD->Height(), true_v.NumberOfVectors());
+        Mult(*tD_rTD, vk, v0);
+        igid /= num_global_copies_[ik-1];
+    }
+
+    seq_[ik][ilevel]->ShowTrueData(jform, v0);
 }
 
 }

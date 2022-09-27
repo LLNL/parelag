@@ -54,7 +54,7 @@ class SequenceHierarchy
     bool is_redistributed_;
     vector<int> num_copies_;
     /**
-     * @brief Redistribution index $ k_\ell $
+     * @brief Redistribution index \f$ k_\ell \f$
      * 
      * 
      */
@@ -224,8 +224,11 @@ public:
 
     unique_ptr<ParallelCSRMatrix> RedistributeParMatrix(int level, int jform, const ParallelCSRMatrix *mat);
 
+    /// Redistribute copies of a parallel matrix \p mat , where domain and range are from different sequence hiearchies.
+    /// Both hierarchies \b MUST share the same communicator layout!
     unique_ptr<ParallelCSRMatrix> RedistributeParMatrix(int level, int jform, const ParallelCSRMatrix *mat, const SequenceHierarchy &range_hierarchy);
 
+    /// Redistribute copies of a parallel vector \p x on level \p level
     void RedistributeVector(int level, int jform, const Vector &x, Vector &redist_x);
 
     int GetRedistributionIndex(int level) const
@@ -251,6 +254,17 @@ public:
     void ApplyTruePi(int l, int jform, const Vector &x, Vector &y);
 
     void ApplyTruePTranspose(int level, int jform, const Vector &x, Vector &y);
+
+    /**
+     * @brief 
+     * 
+     * @param level 
+     * @param k redistribution index
+     * @param groupid which group in communicator C_k
+     * @param jform 
+     * @param true_v 
+     */
+    void ShowTrueData(int level, int k, int groupid, int jform, MultiVector & true_v);
 };
 
 }

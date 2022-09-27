@@ -252,6 +252,12 @@ Redistributor::BuildRepeatedDofRedistribution(const AgglomeratedTopology& topo,
    redRD_TD_RD->GetDiag(redRD_TD_RD_diag);
    redRD_TD_RD->GetOffd(redRD_TD_RD_offd, redRD_TD_RD_colmap);
 
+   // NOTE (aschaf 09/26/22) When redistributing a geometrically coarsened sequence,
+   // this matrix sometimes is full of zeros, which in turn violates the assert in 
+   // the (redRD_TE_RD_diag.RowSize(i) > 0) == true branch of the if below.
+   if (redRD_TE_RD_diag.NumNonZeroElems())
+      redRD_TE_RD_diag.Threshold(std::numeric_limits<double>::epsilon());
+
    HYPRE_BigInt * out_colmap = new HYPRE_BigInt[redRD_TE_RD_offd.NumCols()];
    std::copy_n(redRD_TE_RD_colmap, redRD_TE_RD_offd.NumCols(), out_colmap);
 
@@ -559,6 +565,12 @@ MultiRedistributor::MultiRedistributor(const AgglomeratedTopology& topo, const i
    int myid;
    MPI_Comm_rank(parent_comm_, &myid);
    mycopy_ = myid / num_redist_procs;
+   if (num_current_procs % num_redist_procs)
+   {
+      // we assign all the excess processors to the last group, but keep them "inactive"
+      if (mycopy_ == num_copies_)
+         mycopy_--;
+   }
    MPI_Comm_split(parent_comm_, mycopy_, myid, &child_comm_);
 
    Init(topo, num_current_procs, num_redist_procs);

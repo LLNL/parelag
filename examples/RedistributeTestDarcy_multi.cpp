@@ -437,10 +437,15 @@ int main (int argc, char *argv[])
 
         if (visualize)
         {
+            int k_l = hierarchy.GetRedistributionIndex(start_level);
+            int level_numgroups = hierarchy.GetNumGlobalCopies(k_l);
             MultiVector u(psol.GetData(), 1, psol.BlockSize(0));
-            sequence[start_level]->ShowTrueData(uform, u);
             MultiVector p(psol.GetBlock(1).GetData(), 1, psol.BlockSize(1));
-            sequence[start_level]->ShowTrueData(pform, p);
+            for (int groupid(0); groupid < level_numgroups; groupid++)
+            {
+                hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, uform, u);
+                hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, pform, p);
+            }
         }
 
         if (print_progress_report)
