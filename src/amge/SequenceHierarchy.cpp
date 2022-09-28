@@ -189,7 +189,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 seq_.push_back(vector<shared_ptr<DeRhamSequence>>(num_levels));
                 {
                     Timer redistribute = TimeManager::AddTimer(
-                            std::string("SequenceHierarchy: Build Redistribute -- Level ")
+                        std::string("Redistribution: Redistribute Topology and DeRhamSequence -- Level ")
                             .append(std::to_string(l)));
                     if (is_forced)
                         redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs, *(other_sequence_hierarchy.redistributors_[l]));
@@ -218,7 +218,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 mycopy_[l+1] = mycopy;
                 {
                     Timer redistribute = TimeManager::AddTimer(
-                        std::string("SequenceHierarchy: Build Redistribute -- Level ")
+                        std::string("Redistribution: Redistribute Topology and DeRhamSequence -- Level ")
                             .append(std::to_string(l)));
                     auto redist_parent_topos = multi_redistributor.GetRedistributedTopologies();
                     auto redist_parent_seqs = multi_redistributor.Redistribute(seq_[k_l][l]);
@@ -409,7 +409,7 @@ unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level
 unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level, int jform, const ParallelCSRMatrix *mat, const SequenceHierarchy &range_hierarchy)
 {
     Timer redistribute = TimeManager::AddTimer(
-        std::string("SequenceHierarchy: Redistribute ParallelCSRMatrix -- Level ")
+        std::string("Redistribution: Redistribute ParallelCSRMatrix -- Level ")
         .append(std::to_string(level)));
     unique_ptr<ParallelCSRMatrix> out;
     int copies = num_copies_[level];
@@ -443,7 +443,7 @@ unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level
 void SequenceHierarchy::RedistributeVector(int level, int jform, const Vector &x, Vector &redist_x)
 {
     Timer redistribute = TimeManager::AddTimer(
-        std::string("SequenceHierarchy: Redistribute Vector -- Level ")
+        std::string("Redistribution: Redistribute Vector -- Level ")
         .append(std::to_string(level)));
     int k_lp1 = redistribution_index[level+1];
     int copies = num_copies_[level];

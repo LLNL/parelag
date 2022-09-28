@@ -37,6 +37,11 @@
     <!-- Max number of levels of the DeRhamSequence hierarchy. -->
     <Parameter name="Hierarchy levels" type="int" value="7"/>
 
+    <!-- If value="true", use METIS for unstructured coarsening 
+         (Beware: can be problematic).
+         Else, use derefinement to build the hierarchy. -->  
+    <Parameter name="Unstructured coarsening" type="bool" value="true" />
+
     <!-- Coarsening factor of the DeRhamSequence hierarchy. -->
     <Parameter name="Hierarchy coarsening factor" type="int" value="4"/>
 
@@ -46,6 +51,9 @@
     <!-- Control how the redistribution is handled, either keep the excess 
          processors idleing or distribute copies to run concurrently -->
     <Parameter name="Distribute multiple copies" type="bool" value="true" />
+
+    <!-- Control whether to visualize all coarse copies or just one realization -->
+    <Parameter name="Visualize multiple copies" type="bool" value="false" />
 
     <!-- When the minimum of nonzero number of local elements on a particular  
          level is below this threshold, redistribution will be triggered. -->
@@ -66,7 +74,7 @@
   <ParameterList name="Output control">
     <!-- Control whether the solution should be displayed via GLVis. A
          GLVis server must be listening or this will fail. -->
-    <Parameter name="Visualize solution" type="bool" value="false"/>
+    <Parameter name="Visualize solution" type="bool" value="true"/>
 
     <!-- Control whether timing information is summarized at the end
          of a run. -->

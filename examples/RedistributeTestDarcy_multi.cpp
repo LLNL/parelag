@@ -106,6 +106,7 @@ int main (int argc, char *argv[])
     const bool print_time = output_list.Get("Print timings",true);
     const bool show_progress = output_list.Get("Show progress",true);
     const bool visualize = output_list.Get("Visualize solution",false);
+    const bool unstructured = prob_list.Get("Unstructured coarsening", false);
 
     const bool print_progress_report = (!myid && show_progress);
 
@@ -198,6 +199,8 @@ int main (int argc, char *argv[])
         num_elements[par_ref_levels-l] = pmesh->GetNE();
         pmesh->UniformRefinement();
     }
+    if (unstructured)
+        num_elements.resize(1);
     num_elements[0] = pmesh->GetNE();
 
     if (print_progress_report)
@@ -441,6 +444,8 @@ int main (int argc, char *argv[])
             int level_numgroups = hierarchy.GetNumGlobalCopies(k_l);
             MultiVector u(psol.GetData(), 1, psol.BlockSize(0));
             MultiVector p(psol.GetBlock(1).GetData(), 1, psol.BlockSize(1));
+            if (!prob_list.Get("Visualize multiple copies", false))
+                level_numgroups = 1;
             for (int groupid(0); groupid < level_numgroups; groupid++)
             {
                 hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, uform, u);
