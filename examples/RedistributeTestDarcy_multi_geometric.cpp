@@ -121,7 +121,9 @@ int main (int argc, char *argv[])
                  << "*  Mesh: " << meshfile << "\n*\n";
     }
 
-    Array<int> par_partitioning;
+    int ser_ref_levels;
+    Array<int> partitioning_permuation;
+    // Array<int> local2global, global2local;
     shared_ptr<ParMesh> pmesh;
     {
         if (print_progress_report)
@@ -154,7 +156,7 @@ int main (int argc, char *argv[])
                           << "\" successfully.\n";
         }
 
-        int ser_ref_levels =
+        ser_ref_levels =
             prob_list.Get("Serial refinement levels", -1);
 
         // This will do no refs if ser_ref_levels <= 0.
@@ -181,13 +183,38 @@ int main (int argc, char *argv[])
         }
 
         if (print_progress_report)
-            std::cout << "-- Building parallel mesh...\n";
+            std::cout << "-- Building parallel mesh...\n" << std::flush;
 
-        par_partitioning.MakeRef(mesh->GeneratePartitioning(num_ranks), mesh->GetNE());
-        pmesh = make_shared<ParMesh>(comm, *mesh, par_partitioning);
+        bool geometric_coarsening = prob_list.Get("Use geometric coarsening", false);
+        if (geometric_coarsening)
+            partitioning_permuation.SetSize(mesh->GetNE());
+        // {
+        //     auto timer = TimeManager::AddTimer("Mesh : build permutation map");
+        //     Array<Array<int>*> tmp1(num_ranks);
+        //     for (auto && arr : tmp1)
+        //     {
+        //         arr = new Array<int>(0);
+        //         arr->Reserve(par_partitioning.Size() / num_ranks * 15 / 10);
+        //     }
+
+        //     for (int i = 0; i < par_partitioning.Size(); i++)
+        //         tmp1[par_partitioning[i]]->Append(i);
+            
+        //     Array<int> tmp2;
+        //     tmp2.Reserve(par_partitioning.Size());
+        //     for (auto && arr : tmp1)
+        //         tmp2.Append(*arr);
+
+        //     partitioning_permuation.SetSize(tmp2.Size());
+        //     for (int i = 0; i < partitioning_permuation.Size(); i++)
+        //         partitioning_permuation[tmp2[i]] = i;
+        //     tmp1.DeleteAll();
+        // }
+
+        pmesh = BuildParallelMesh(comm, *mesh, partitioning_permuation);
 
         if (pmesh && print_progress_report)
-            std::cout << "-- Built parallel mesh successfully.\n";
+            std::cout << "-- Built parallel mesh successfully.\n" << std::flush;
     }
 
     const int nDimensions = pmesh->Dimension();
@@ -235,6 +262,7 @@ int main (int argc, char *argv[])
     SequenceHierarchy hierarchy(pmesh, prob_list, print_progress_report);
     hierarchy.SetCoefficient(pform, coeffL2, false);
     hierarchy.SetCoefficient(uform, coeffHdiv, true);
+    hierarchy.SetSerialRefinementInfo(ser_ref_levels, partitioning_permuation);
     hierarchy.Build(move(num_elements));
     auto& sequence = hierarchy.GetDeRhamSequences();
 
@@ -444,6 +472,12 @@ int main (int argc, char *argv[])
             int level_numgroups = hierarchy.GetNumGlobalCopies(k_l);
             MultiVector u(psol.GetData(), 1, psol.BlockSize(0));
             MultiVector p(psol.GetBlock(1).GetData(), 1, psol.BlockSize(1));
+
+            int loc = psol.BlockSize(1);
+            int o = 0;
+            MPI_Exscan(&loc, &o, 1, MPI_INT, MPI_SUM, hierarchy.GetComm(hierarchy.GetRedistributionIndex(start_level)));
+            for (auto && pp : psol.GetBlock(1))
+                pp = o++;
             if (!prob_list.Get("Visualize multiple copies", false))
                 level_numgroups = 1;
             for (int groupid(0); groupid < level_numgroups; groupid++)
@@ -459,6 +493,9 @@ int main (int argc, char *argv[])
 
     if (print_progress_report)
         std::cout << "-- Good bye!\n\n";
+
+    if (print_time) TimeManager::Print(std::cout);
+
 
     return EXIT_SUCCESS;
 }

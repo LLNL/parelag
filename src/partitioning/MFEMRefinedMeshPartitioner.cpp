@@ -89,6 +89,32 @@ void MFEMRefinedMeshPartitioner::Partition(int nElements, int nParts, Array<int>
 #endif
 }
 
+void MFEMRefinedMeshPartitioner::PermutedPartition(int nElements, int nParts, const mfem::Array<int>& permutation, mfem::Array<int> & partitioning)
+{
+    int nsplits = 1<<nDim;// nsplit = 2^nDim.
+
+    elag_assert(nElements > nParts);
+    elag_assert(partitioning.Size() == nElements);
+    elag_assert(nElements % nParts == 0);
+
+    int coarseningFactor = nElements / nParts;
+    elag_assert(coarseningFactor % nsplits == 0);
+
+    int * p = partitioning.GetData();
+    const int * perm = permutation.GetData();
+
+    // MFEM 4.1 changed the numbering in refinement.
+#if (MFEM_VERSION_MAJOR >= 4 && MFEM_VERSION_MINOR >= 1)
+    int j = 0;
+    for(int i = 0; i < nParts; ++i)
+        for(int k = 0; k < coarseningFactor; ++k)
+            p[perm[j++]] = i;
+    elag_assert(j == nElements);
+#else
+    elag_error(999, "Not implemented!");
+#endif
+}
+
 MFEMRefinedMeshPartitioner::~MFEMRefinedMeshPartitioner()
 {
 }

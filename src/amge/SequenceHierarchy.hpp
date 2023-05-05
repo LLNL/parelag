@@ -75,6 +75,9 @@ class SequenceHierarchy
     void GeometricCoarsenings(const Array<int>& num_elems, int dim);
 
     int MinNonzeroNumLocalElements(int level, int zero_replace);
+
+    int ser_ref_levels; // number of serial refinements (to undo)
+    Array<int> partitioning_permutation; // inverse map on how the elements are distributed along the processors (not owned)
 public:
 
     /** \brief Constructor.
@@ -265,6 +268,18 @@ public:
      * @param true_v 
      */
     void ShowTrueData(int level, int k, int groupid, int jform, MultiVector & true_v);
+
+    /**
+     * @brief Set the number of serial refinements as well as the parallel partioning of the final serial refinement. Does not assume ownership of the array.
+     * 
+     * @param serial_refinements number of serial refinements before distributing the mesh
+     * @param partitioning_permutation map of the initial distribution to the original ordering
+     */
+    void SetSerialRefinementInfo(int serial_refinements, const Array<int>& partitioning_permutation)
+    {
+        ser_ref_levels = serial_refinements;
+        this->partitioning_permutation.MakeRef(partitioning_permutation);
+    }
 };
 
 }
