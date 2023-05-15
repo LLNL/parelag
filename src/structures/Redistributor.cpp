@@ -161,6 +161,14 @@ void Redistributor::Init(
    auto elem_trueEntity = const_cast<AgglomeratedTopology&>(topo).TrueB(0);
    redEntity_trueEntity[1] = BuildRedEntToTrueEnt(elem_trueEntity);
 
+   auto elem_trueRidge = IgnoreNonLocalRange(
+            *(topo.entityTrueEntity[0]), *(topo.Conn_[1]->AsCSRMatrix()), *(topo.entityTrueEntity[2]));
+   redEntity_trueEntity[2] = BuildRedEntToTrueEnt(*elem_trueRidge);
+
+   auto elem_truePeak = IgnoreNonLocalRange(
+            *(topo.entityTrueEntity[0]), *(topo.Conn_[2]->AsCSRMatrix()), *(topo.entityTrueEntity[3]));
+   redEntity_trueEntity[3] = BuildRedEntToTrueEnt(*elem_truePeak);
+
    redist_topo = Redistribute(topo);
 }
 
@@ -341,16 +349,56 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
          BuildRedTrueEntToTrueEnt(*redE_redTE, *redEntity_trueEntity[1]);
    out->entityTrueEntity[1]->SetUp(std::move(redE_redTE));
 
+   redE_redTE = BuildRedEntToRedTrueEnt(*redEntity_trueEntity[2]);
+
+   redTrueEntity_trueEntity[2] =
+         BuildRedTrueEntToTrueEnt(*redE_redTE, *redEntity_trueEntity[2]);
+   out->entityTrueEntity[2]->SetUp(std::move(redE_redTE));
+
+   redE_redTE = BuildRedEntToRedTrueEnt(*redEntity_trueEntity[3]);
+
+   redTrueEntity_trueEntity[3] =
+         BuildRedTrueEntToTrueEnt(*redE_redTE, *redEntity_trueEntity[3]);
+   out->entityTrueEntity[3]->SetUp(std::move(redE_redTE));
+
    // Redistribute other remaining data
-   auto& trueB = const_cast<AgglomeratedTopology&>(topo).TrueB(0);
-   unique_ptr<ParallelCSRMatrix> TE_redE(redEntity_trueEntity[1]->Transpose());
-   auto redB = RAP(*redTrueEntity_trueEntity[0], trueB, *TE_redE);
+   auto &trueB0 = const_cast<AgglomeratedTopology &>(topo).TrueB(0);
+   {
+      unique_ptr<ParallelCSRMatrix> TE_redE(redEntity_trueEntity[1]->Transpose());
+      auto redB = RAP(*redTrueEntity_trueEntity[0], trueB0, *TE_redE);
 
-   SerialCSRMatrix redB_diag;
-   redB->GetDiag(redB_diag);
-   SerialCSRMatrix redB_diag_copy(redB_diag);
+      SerialCSRMatrix redB_diag;
+      redB->GetDiag(redB_diag);
+      SerialCSRMatrix redB_diag_copy(redB_diag);
 
-   out->B_[0] = make_unique<TopologyTable>(redB_diag_copy);
+      out->B_[0] = make_unique<TopologyTable>(redB_diag_copy);
+   }
+
+   // for codim = 1
+   auto &trueB1 = const_cast<AgglomeratedTopology &>(topo).TrueB(1);
+   {
+      unique_ptr<ParallelCSRMatrix> TE_redE(redEntity_trueEntity[2]->Transpose());
+      auto redB = RAP(*redTrueEntity_trueEntity[1], trueB1, *TE_redE);
+
+      SerialCSRMatrix redB_diag;
+      redB->GetDiag(redB_diag);
+      SerialCSRMatrix redB_diag_copy(redB_diag);
+
+      out->B_[1] = make_unique<TopologyTable>(redB_diag_copy);
+   }
+
+   // for codim = 2
+   auto &trueB2 = const_cast<AgglomeratedTopology &>(topo).TrueB(2);
+   {
+      unique_ptr<ParallelCSRMatrix> TE_redE(redEntity_trueEntity[3]->Transpose());
+      auto redB = RAP(*redTrueEntity_trueEntity[2], trueB2, *TE_redE);
+
+      SerialCSRMatrix redB_diag;
+      redB->GetDiag(redB_diag);
+      SerialCSRMatrix redB_diag_copy(redB_diag);
+
+      out->B_[2] = make_unique<TopologyTable>(redB_diag_copy);
+   }
 
    auto e_tE = topo.EntityTrueEntity(1).get_entity_trueEntity();
    unique_ptr<ParallelCSRMatrix> tE_E(e_tE->Transpose());
@@ -405,6 +453,10 @@ Redistributor::Redistribute(const AgglomeratedTopology& topo)
    auto trueFacetWeight = topo.TrueWeight(1);
    out->Weights_[1]->SetSize(out->B_[0]->NumCols());
    redEntity_trueEntity[1]->Mult(*trueFacetWeight, *(out->Weights_[1]));
+
+   auto trueRidgeWeight = topo.TrueWeight(2);
+   out->Weights_[2]->SetSize(out->B_[1]->NumCols());
+   redEntity_trueEntity[2]->Mult(*trueRidgeWeight, *(out->Weights_[2]));
 
    return out;
 }
@@ -524,7 +576,7 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
              unique_ptr<ParallelCSRMatrix> RD_redRD(redRD_RD->Transpose());
              redM = parelag::RAP(*redRD_RD, *pM, *RD_redRD);
          }
-         else if (codim == 1) // codim-1 RDofs when jform=dim-2 are identified with true dofs
+         else if (codim == 1 || codim == 2) // codim-1 RDofs when jform=dim-2 are identified with true dofs
          {
              auto RD_TD = BuildRepeatedDofToTrueDof(*sequence.Dof_[j], codim);
              auto redRD_redTD = BuildRepeatedDofToTrueDof(*redist_seq->Dof_[j], codim);
@@ -541,7 +593,7 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
          {
              PARELAG_TEST_FOR_EXCEPTION(
                      true, std::runtime_error,
-                     "redistribution of M when codim > 1 is not implemented.");
+                     "redistribution of M when codim > 2 is not implemented.");
          }
 
          SerialCSRMatrix redM_diag;

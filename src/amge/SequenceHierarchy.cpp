@@ -37,7 +37,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
 {
     auto num_levels = params_.Get("Hierarchy levels", 2);
     auto fe_order = params_.Get("Finite element order", 0);
-    const int start_form = mesh_->Dimension()-1; // TODO: read from ParameterList
+    const auto start_form = params_.Get("Start form", mesh_->Dimension()-1); // TODO: read from ParameterList
 
     topo_.resize(1);
     topo_[0].resize(num_levels);
@@ -55,7 +55,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
     num_copies_.resize(num_levels, 1);
     redistribution_index.resize(num_levels, 0);
 
-    topo_[0][0] = make_shared<AgglomeratedTopology>(mesh, 1);
+    topo_[0][0] = make_shared<AgglomeratedTopology>(mesh, mesh_->Dimension() - start_form);
 
     if (mesh_->Dimension() == 3)
     {
