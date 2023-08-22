@@ -86,12 +86,35 @@ private:
     mfem::Array<int> partitioning;
 };
 
-inline std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mesh, mfem::Array<int> &partitioning_permutation)
+inline std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mesh, mfem::Array<int> &partitioning_permutation, bool use_metis = true)
 {
-    int num_ranks;
+    int num_ranks, myid;
     MPI_Comm_size(comm, &num_ranks);
+    MPI_Comm_rank(comm, &myid);
     mfem::Array<int> par_partitioning;
-    par_partitioning.MakeRef(mesh.GeneratePartitioning(num_ranks), mesh.GetNE());
+    if (!use_metis)
+    {
+        int cartesian[3] = {1, 1, 1};
+        if (num_ranks > 1)
+        {
+            int num = num_ranks;
+            cartesian[2] = int(ceil(pow(num, 1. / 3)));
+            num /= cartesian[2];
+            cartesian[1] = int(ceil(sqrt(num)));
+            num /= cartesian[1];
+            cartesian[0] = int(ceil(num));
+            if (myid == 0)
+            {
+                printf("-- Cartesian partioning : %dx%dx%d\n", cartesian[0], cartesian[1], cartesian[2]);
+                std::cout << std::flush;
+            }
+        }
+        par_partitioning.MakeRef(mesh.CartesianPartitioning(cartesian), mesh.GetNE());
+    }
+    else
+    {
+        par_partitioning.MakeRef(mesh.GeneratePartitioning(num_ranks), mesh.GetNE());
+    }
     if (partitioning_permutation.Size())
     {
         // auto timer = TimeManager::AddTimer("Mesh : build permutation map");

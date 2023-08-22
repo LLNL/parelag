@@ -204,9 +204,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
         {
             num_redist_procs = max(num_nonempty_procs/proc_coarsening_factor, 1);
         }
-        // XXX (aschaf 04/24/23) : This needs to be throughly tested!!!
-        bool can_geom_deref = (num_local_elems % (num_local_elems / geom_elem_coarsening_factor) == 0);
-        MPI_Allreduce(MPI_IN_PLACE, &can_geom_deref, 1, MPI_CXX_BOOL, MPI_LAND, comms_[k_l]);
+
         if (use_geometric_coarsening)
         {
             num_redist_procs = 1;
@@ -235,11 +233,14 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 num_global_copies_.push_back(num_global_groups);
                 if (verbose_)
                 {
-                    // TODO (2023-05-05) : add the correct message when redistribution happens because of geometric coarsening
                     if (is_forced)
                         std::cout << "SequenceHierarchy: redistributing"
                             << " level " << l << " to " << num_global_groups << " groups of " 
                             << num_redist_procs << " processors each\n";
+                    else if (use_geometric_coarsening)
+                        std::cout << "SequenceHierarchy: geometric coarsening of "
+                                << "sequential mesh requires reconstruction, redistributing the"
+                                << " level to " << num_redist_procs << " processors\n";
                     else
                         std::cout << "SequenceHierarchy: minimal nonzero number of "
                             << "local elements (" << min_num_local_elems << ") on"
@@ -300,15 +301,36 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
 
                 if (verbose_)
                 {
-                    std::cout << "SequenceHierarchy: minimal nonzero number of "
-                            << "local elements (" << min_num_local_elems << ") on"
-                            << " level " << l << " is below threshold ("
-                            << num_local_elems_threshold << "), redistributing the"
-                            << " level to " << num_redist_procs << " processors\n";
+                    if (use_geometric_coarsening)
+                    {
+                        std::cout << "SequenceHierarchy: geometric coarsening of "
+                                << "sequential mesh requires reconstruction, redistributing the"
+                                << " level to " << num_redist_procs << " processors\n";
+                    }
+                    else
+                    {
+                        std::cout << "SequenceHierarchy: minimal nonzero number of "
+                                << "local elements (" << min_num_local_elems << ") on"
+                                << " level " << l << " is below threshold ("
+                                << num_local_elems_threshold << "), redistributing the"
+                                << " level to " << num_redist_procs << " processors\n";
+                    }
                 }
-
-                topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partitioner,
-                                            elem_coarsening_factor, 0, 0);
+                if (use_geometric_coarsening)
+                {
+                    auto num_local_elems = redistributor.GetRedistributedTopology().GetNumberLocalEntities(elem_t_);
+                    Array<int> partition(num_local_elems);
+                    if (num_local_elems > 0)
+                    {
+                        int num_coarse_elems = num_local_elems / geom_elem_coarsening_factor;
+                        mfem_partitioner.PermutedPartition(num_local_elems, num_coarse_elems, partitioning_permutation, partition);
+                        coarsen_type = partition_type::MFEMRefined;
+                    }
+                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partition, 0, 0);
+                }
+                else
+                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partitioner,
+                                                elem_coarsening_factor, 0, 0);
                 seq_[k_l][l+1] = seq_[k_l][l]->Coarsen(redistributor);
                 redistribution_index[l+1] = k_l;
             }
@@ -316,6 +338,9 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
         }
         else
         {
+            // XXX (aschaf 04/24/23) : This needs to be throughly tested!!!
+            bool can_geom_deref = num_local_elems ? (num_local_elems % (num_local_elems / geom_elem_coarsening_factor) == 0) : true;
+            MPI_Allreduce(MPI_IN_PLACE, &can_geom_deref, 1, MPI_CXX_BOOL, MPI_LAND, comms_[k_l]);
             Array<int> partition(num_local_elems);
             if (num_local_elems > 0)
             {
