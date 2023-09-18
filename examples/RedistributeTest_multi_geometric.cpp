@@ -797,7 +797,7 @@ int main(int argc, char *argv[])
         auto lib = SolverLibrary::CreateLibrary(prec_list);
 
         // Get the factory
-        const std::string solver_type = "PCG with Auxiliary Space Preconditioner"; // "CG-AMG";
+        const std::string solver_type =  prob_list.Get("Linear solver 1-Form", "CG-AMG");// "PCG with Auxiliary Space Preconditioner"; // "CG-AMG";
         auto prec_factory = lib->GetSolverFactory(solver_type);
         // const int rescale_iter = prec_list.Sublist(solver_type).Sublist(
         //         "Solver Parameters").Get<int>("RescaleIteration");

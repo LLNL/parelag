@@ -31,9 +31,9 @@
     <!-- The linear solver to use to solve the problem at "Solve level". -->
     <Parameter name="Linear solver" type="string"
                value="MINRES-BlkJacobi-GS-AMG"/>
-    <!-- <Parameter name="Linear solver" type="string"
-               value="PCG with Auxiliary Space Preconditioner"/> -->
-    <!-- <Parameter name="Linear solver" type="string"
+    <Parameter name="Linear solver 1-Form" type="string"
+               value="PCG with Auxiliary Space Preconditioner"/>
+    <!-- <Parameter name="Linear solver 1-Form" type="string"
                value="CG-AMG"/> -->
 
     <!-- The order of the Hdiv and L2 finite element spaces. H1 and
@@ -292,12 +292,28 @@
         <Parameter name="Forms" type="vector_int" value="1"/>
         <Parameter name="PreSmoother" type="string" value="Hiptmair-GS-GS"/>
         <Parameter name="PostSmoother" type="string" value="Hiptmair-GS-GS"/>
-        <Parameter name="Coarse solver" type="string" value="PCG-AMS"/>
+        <Parameter name="Coarse solver" type="string" value="PCG-AMG"/>
         <Parameter name="Cycle type" type="string" value="V-cycle"/>
       </ParameterList>
       <!-- ParameterList "Parameters" -->
     </ParameterList>
     <!-- ParameterList "AMGe-HIP-GS_1" -->
+
+      <!-- Conjugate gradient preconditioned with BoomerAMG. -->
+    <ParameterList name="PCG-AMG">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="PCG"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="BoomerAMG Solver"/>
+        <Parameter name="Print level" type="int" value="-1"/>
+        <Parameter name="Maximum iterations" type="int" value="5000"/>
+        <Parameter name="Relative tolerance" type="double" value="1e-6"/>
+        <Parameter name="Absolute tolerance" type="double" value="1e-8"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "CG-AMG" -->
 
     <!-- Hiptmair smoother with L1 Gauss-Seidel as the primary and
          auxiliary space smoother -->
