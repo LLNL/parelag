@@ -1194,7 +1194,7 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
         const int num_marked =
               coarser_sequence->Dof_[jform]->MarkDofsOnSelectedBndr(ess_label, marker);
 
-        auto dof_sharingmap = coarser_sequence->Dof_[jform]->GetDofTrueDof();
+        auto& dof_sharingmap = coarser_sequence->Dof_[jform]->GetDofTrueDof();
         SerialCSRMatrix dof_trueDof_diag;
         dof_sharingmap.get_entity_trueEntity()->GetDiag(dof_trueDof_diag);
 
