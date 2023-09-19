@@ -751,13 +751,15 @@ int SharingMap::IgnoreNonLocal(const Vector & data, Vector & trueData) const
 
 int SharingMap::IgnoreNonLocal(const MultiVector & data, MultiVector & trueData) const
 {
+    int ierr;
     Vector local_view, true_view;
     for(int i = 0; i < data.NumberOfVectors(); ++i)
     {
         const_cast<MultiVector &>(data).GetVectorView(i, local_view);
         trueData.GetVectorView(i, true_view);
-        IgnoreNonLocal(local_view, true_view);
+        ierr = IgnoreNonLocal(local_view, true_view);
     }
+    return ierr;
 }
 
 int SharingMap::Assemble(const Array<int> & data, Array<int> & trueData) const
