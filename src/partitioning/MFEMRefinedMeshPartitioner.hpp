@@ -16,6 +16,7 @@
 
 #include <mfem.hpp>
 #include "topology/Topology.hpp"
+#include "utilities/ParELAG_TimeManager.hpp"
 
 namespace parelag
 {
@@ -88,6 +89,7 @@ private:
 
 inline std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mesh, mfem::Array<int> &partitioning_permutation, bool use_metis = true)
 {
+    auto timer = TimeManager::AddTimer("Mesh : Build Parallel Mesh");
     int num_ranks, myid;
     MPI_Comm_size(comm, &num_ranks);
     MPI_Comm_rank(comm, &myid);
@@ -117,7 +119,7 @@ inline std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Me
     }
     if (partitioning_permutation.Size())
     {
-        // auto timer = TimeManager::AddTimer("Mesh : build permutation map");
+        auto timer = TimeManager::AddTimer("Mesh : build permutation map");
         mfem::Array<mfem::Array<int>*> tmp1(num_ranks);
         for (auto && arr : tmp1)
         {

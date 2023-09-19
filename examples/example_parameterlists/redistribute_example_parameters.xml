@@ -25,6 +25,8 @@
 
     <Parameter name="Solve form" type="int" value="1" />
 
+    <Parameter name="Use METIS for parallel partitioning" type="bool" value="true" />
+
     <!-- Level in the AMGe hierarchy at which to solve the problem. -->
     <Parameter name="Solve level" type="int" value="0"/>
 
@@ -283,7 +285,7 @@
     <!-- AMGe for the 1-form (H(curl)) problem using Hiptmair
         (auxiliary space) smoothing with L1 Gauss-Seidel for the
         primary and the auxiliary solver for the pre- and
-        post-smoothing steps, with AMS-preconditioned CG for the
+        post-smoothing steps, with AMG-preconditioned CG for the
         coarse-grid solve -->
     <ParameterList name="AMGe-HIP-GS_1">
       <Parameter name="Type" type="string" value="AMGe"/>
@@ -292,7 +294,7 @@
         <Parameter name="Forms" type="vector_int" value="1"/>
         <Parameter name="PreSmoother" type="string" value="Hiptmair-GS-GS"/>
         <Parameter name="PostSmoother" type="string" value="Hiptmair-GS-GS"/>
-        <Parameter name="Coarse solver" type="string" value="PCG-AMG"/>
+        <Parameter name="Coarse solver" type="string" value="PCG-AMG-coarse"/>
         <Parameter name="Cycle type" type="string" value="V-cycle"/>
       </ParameterList>
       <!-- ParameterList "Parameters" -->
@@ -310,6 +312,22 @@
         <Parameter name="Maximum iterations" type="int" value="5000"/>
         <Parameter name="Relative tolerance" type="double" value="1e-6"/>
         <Parameter name="Absolute tolerance" type="double" value="1e-8"/>
+      </ParameterList>
+      <!-- ParameterList "Solver Parameters" -->
+    </ParameterList>
+    <!-- ParameterList "CG-AMG" -->
+
+    <!-- Conjugate gradient preconditioned with BoomerAMG as a coarse solver matching PCG-AMS. -->
+    <ParameterList name="PCG-AMG-coarse">
+      <Parameter name="Type" type="string" value="Krylov"/>
+      <ParameterList name="Solver Parameters">
+        <Parameter name="Solver name" type="string" value="PCG"/>
+        <Parameter name="Preconditioner" type="string"
+                   value="BoomerAMG Solver"/>
+        <Parameter name="Print level" type="int" value="-1"/>
+        <Parameter name="Maximum iterations" type="int" value="3"/>
+        <Parameter name="Relative tolerance" type="double" value="1e-4"/>
+        <Parameter name="Absolute tolerance" type="double" value="1e-4"/>
       </ParameterList>
       <!-- ParameterList "Solver Parameters" -->
     </ParameterList>

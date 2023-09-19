@@ -39,6 +39,7 @@ int main(int argc, char *argv[])
     // 1. Initialize MPI
     mpi_session sess(argc, argv);
     MPI_Comm comm = MPI_COMM_WORLD;
+    auto total_timer = TimeManager::AddTimer("ZTotal time");
 
     double sigma = 1;
     double kappa = 0.1 * M_PI;
@@ -219,7 +220,8 @@ int main(int argc, char *argv[])
 
 
         // FIXME (aschaf 08/22/23) : when using METIS to generate the parallel distribution there are problems with processor boundaries when redistributing back to a single processor
-        pmesh = BuildParallelMesh(comm, *mesh, partitioning_permuation, false);
+        bool metis_partitioning = prob_list.Get("Use METIS for parallel partitioning", false);
+        pmesh = BuildParallelMesh(comm, *mesh, partitioning_permuation, metis_partitioning);
 
         if (pmesh && print_progress_report)
             std::cout << "-- Built parallel mesh successfully.\n"
@@ -559,7 +561,10 @@ int main(int argc, char *argv[])
                           << std::endl;
         }
 
-        solver->Mult(prhs, psol);
+        {
+            auto timer = TimeManager::AddTimer("Solve");
+            solver->Mult(prhs, psol);
+        }
 
         {
             mfem::Vector tmp(A->Height());
@@ -735,6 +740,7 @@ int main(int argc, char *argv[])
         size_t local_nnz = 0;
         mfem::Vector prhs;
         {
+            auto timer = TimeManager::AddTimer(string("Building operator on level ").append(to_string(start_level)));
             Vector truesoltmp(hcurl_dofTrueDof.GetLocalSize()), rhstmp(hcurl_dofTrueDof.GetLocalSize());
             hcurl_dofTrueDof.DisAssemble(*rhs_u, rhstmp);
             hcurl_dofTrueDof.DisAssemble(*truesol, truesoltmp);
@@ -849,7 +855,10 @@ int main(int argc, char *argv[])
                           << std::endl;
         }
 
-        solver->Mult(prhs, psol);
+        {
+            auto timer = TimeManager::AddTimer("Solve");
+            solver->Mult(prhs, psol);
+        }
 
         {
             mfem::Vector tmp(pA->Height());
@@ -873,16 +882,22 @@ int main(int argc, char *argv[])
             }
         }
         {
+            auto timer = TimeManager::AddTimer("Postprocessing : compute errors");
             mfem::Vector err(psol);
             err -= *truesol;
-            double local_norm = err.Normlinf();
+            // double local_norm = err.Normlinf();
             double global_norm;
-            MPI_Reduce(&local_norm, &global_norm, 1, GetMPIType(local_norm),
-            MPI_MAX, 0, comm);
+            // MPI_Reduce(&local_norm, &global_norm, 1, GetMPIType(local_norm),
+            // MPI_MAX, 0, comm);
+            auto M = hierarchy.GetDeRhamSequences(hierarchy.GetRedistributionIndex(start_level))[start_level]->ComputeMassOperator(theform);
+            auto pM = Assemble(hcurl_dofTrueDof, *M, hcurl_dofTrueDof);
 
+            mfem::Vector Merr(err.Size());
+            pM->Mult(err, Merr);
+            global_norm = sqrt(mfem::InnerProduct(hierarchy.GetComm(hierarchy.GetRedistributionIndex(start_level)), Merr, err));
             if (!myid)
             {
-                std::cout << "||u* - uh||_infty : " << (global_norm) << std::endl;
+                std::cout << "||u* - uh||_L2 : " << (global_norm) << std::endl;
             }
         }
 
@@ -1216,6 +1231,8 @@ int main(int argc, char *argv[])
 
     if (print_progress_report)
         std::cout << "-- Good bye!\n\n";
+
+    total_timer.Stop();
 
     if (print_time)
         TimeManager::Print(std::cout);

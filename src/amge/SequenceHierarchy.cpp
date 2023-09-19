@@ -72,6 +72,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
 
 void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHierarchy &other_sequence_hierarchy)
 {
+    auto build_timer = TimeManager::AddTimer("SequenceHierarchy : Build");
     PARELAG_ASSERT(mesh_->GetNE() == num_elements[0]);
 
     auto num_levels = params_.Get("Hierarchy levels", 2);
