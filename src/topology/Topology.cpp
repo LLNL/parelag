@@ -884,6 +884,7 @@ AgglomeratedTopology::Coarsen(MultiRedistributor& multi_redistributor,
                               bool preserve_material_interfaces)
 {
     PARELAG_NOT_IMPLEMENTED();
+    return {};
 }
 
 std::shared_ptr<AgglomeratedTopology>

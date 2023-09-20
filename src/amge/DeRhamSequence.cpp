@@ -723,6 +723,7 @@ std::vector<std::shared_ptr<DeRhamSequence>>
 DeRhamSequence::Coarsen(MultiRedistributor& multi_redistributor)
 {
     PARELAG_NOT_IMPLEMENTED();
+    return {};
 }
 
 void DeRhamSequence::CheckInvariants()

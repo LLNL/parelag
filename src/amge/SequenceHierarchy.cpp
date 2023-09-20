@@ -490,6 +490,7 @@ unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level
         // mfem::RAP(orig_td_rTD, Gt[ilevel].get(), td_rTD)
         // );
     }
+    return {};
 }
 
 unique_ptr<ParallelCSRMatrix> SequenceHierarchy::RedistributeParMatrix(int level, int jform, const ParallelCSRMatrix *mat, const SequenceHierarchy &range_hierarchy)

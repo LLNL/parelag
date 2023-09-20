@@ -50,6 +50,7 @@ int QDQCalculator::Compute(DenseMatrix & A)
             "i = " << i << "; evals[i] = " << val << ".");
             D_(i) = 1.0/val;
     }
+    return {};
 }
 
 void QDQCalculator::Mult(const Vector & x, Vector & y) const
