@@ -16,6 +16,7 @@
 
 #include <amge/DeRhamSequenceFE.hpp>
 #include <utilities/ParELAG_SimpleXMLParameterListReader.hpp>
+#include <partitioning/MFEMRefinedMeshPartitioner.hpp>
 
 namespace parelag {
 
@@ -49,6 +50,11 @@ class SequenceHierarchy
     void GeometricCoarsenings(const Array<int>& num_elems, int dim);
 
     int MinNonzeroNumLocalElements(int level, int zero_replace);
+
+    int ser_ref_levels; // number of serial refinements (to undo)
+
+    std::vector<SerialRefinementInfo> serial_refinement_infos_;
+    std::vector<int> number_of_nonempty_ranks_;
 public:
 
     /** \brief Constructor.
@@ -140,6 +146,18 @@ public:
     void ReplaceMassIntegrator(int form,
                                unique_ptr<BilinearFormIntegrator> integ,
                                bool recompute_mass);
+
+    /**
+     * @brief Set the number of serial refinements as well as the parallel partioning of the final serial refinement. Does not assume ownership of the array.
+     * 
+     * @param serial_refinements number of serial refinements before distributing the mesh
+     * @param partitioning_permutation map of the initial distribution to the original ordering
+     */
+    void SetSerialRefinementInfos(const std::vector<SerialRefinementInfo> &serial_refinements)
+    {
+        ser_ref_levels = serial_refinements.size();
+        this->serial_refinement_infos_.assign(serial_refinements.begin(), serial_refinements.end());
+    }
 };
 
 }

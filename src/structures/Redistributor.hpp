@@ -38,9 +38,9 @@ unique_ptr<ParallelCSRMatrix> Move(matred::ParMatrix& A);
 
 void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int>& Ax);
 
-// From the parallel proc-to-proc connectivity table,
-// get a copy of the global matrix as a serial matrix locally (via permutation),
-// and then call METIS to "partition processors" in each processor locally
+/// From the parallel proc-to-proc connectivity table,
+/// get a copy of the global matrix as a serial matrix locally (via permutation),
+/// and then call METIS to "partition processors" in each processor locally
 std::vector<int> RedistributeElements(
       ParallelCSRMatrix& elem_face, int& num_redist_procs);
 

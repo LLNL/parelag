@@ -16,6 +16,7 @@
 
 #include <mfem.hpp>
 #include "topology/Topology.hpp"
+#include "utilities/ParELAG_ParameterList.hpp"
 
 namespace parelag
 {
@@ -84,6 +85,15 @@ public:
 private:
     mfem::Array<int> partitioning;
 };
+
+struct SerialRefinementInfo
+{
+    int num_redist_proc;
+    std::vector<int> elem_redist_procs;
+    mfem::Array<int> partition;
+};
+
+std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mesh, std::vector<SerialRefinementInfo> &partitioning_permutation, ParameterList &parameter_list);
 
 }//namespace parelag
 #endif /* MFEMREFINEDMESHPARTITIONER_HPP_ */

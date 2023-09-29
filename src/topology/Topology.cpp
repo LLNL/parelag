@@ -843,6 +843,15 @@ AgglomeratedTopology::Coarsen(Redistributor& redistributor,
       partitioner.doPartition(*elem_elem, num_partitions, partitioning);
    }
 
+   return Coarsen(redistributor,partitioning, check_topology, preserve_material_interfaces);
+}
+
+std::shared_ptr<AgglomeratedTopology>
+AgglomeratedTopology::Coarsen(Redistributor& redistributor,
+                              mfem::Array<int>& partitioning, bool check_topology,
+                              bool preserve_material_interfaces)
+{
+   auto& redist_topo = redistributor.GetRedistributedTopology();
    const int coarsefaces_algo = this->Dimensions() == 3 ? 2 : 0;
    auto coarse_redist_topo = redist_topo.CoarsenLocalPartitioning(
             partitioning, check_topology, preserve_material_interfaces, coarsefaces_algo);
