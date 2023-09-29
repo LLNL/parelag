@@ -91,6 +91,7 @@ public:
         if (krylov_solver) { return krylov_solver->GetNumIters(); }
         auto pcg_solver = dynamic_cast<PCG*>(Solver_.get());
         if (pcg_solver) { return pcg_solver->GetNumIters(); }
+        return {};
     }
 
     ///@}

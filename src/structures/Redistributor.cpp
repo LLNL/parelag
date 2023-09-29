@@ -251,6 +251,15 @@ Redistributor::BuildRepeatedDofRedistribution(const AgglomeratedTopology& topo,
    redRD_TD_RD->GetDiag(redRD_TD_RD_diag);
    redRD_TD_RD->GetOffd(redRD_TD_RD_offd, redRD_TD_RD_colmap);
 
+   // NOTE (aschaf/csl 09/28/22) When redistributing a geometrically coarsened sequence,
+   // this matrix sometimes is full of zeros, which in turn violates the assert in 
+   // the (redRD_TE_RD_diag.RowSize(i) > 0) == true branch of the if below. The
+   // reason is when hypre does matrix-matrix multiplication C=A*B, if C is a square 
+   // matrix locally and globally, it creates artificial "non-zeros" in C on the 
+   // diagonal of diag (the diag block of C), with value 0.0
+   if (redRD_TE_RD_diag.NumNonZeroElems() && redRD_TE_RD_diag.IsSquare() && (redRD_TE_RD->GetGlobalNumCols() == redRD_TE_RD->GetGlobalNumRows()))
+      redRD_TE_RD_diag.Threshold(std::numeric_limits<double>::epsilon());
+
    HYPRE_BigInt * out_colmap = new HYPRE_BigInt[redRD_TE_RD_offd.NumCols()];
    std::copy_n(redRD_TE_RD_colmap, redRD_TE_RD_offd.NumCols(), out_colmap);
 
