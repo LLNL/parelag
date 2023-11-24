@@ -376,18 +376,10 @@ public:
 
     /// Coarsen the redistributed topology locally. Construct inter-level
     /// entity relations using the information given by redistributor.
-    /// Uses METIS to generate a coarser partitioning.
     std::shared_ptr<AgglomeratedTopology> Coarsen(
           Redistributor& redistributor,
           MetisGraphPartitioner& partitioner,
           int coarsening_factor, bool check_topology,
-          bool preserve_material_interfaces);
-
-    /// Coarsen the redistributed topology locally. Construct inter-level
-    /// entity relations using the information given by redistributor.
-    std::shared_ptr<AgglomeratedTopology> Coarsen(
-          Redistributor& redistributor,
-          mfem::Array<int>& partitioning, bool check_topology,
           bool preserve_material_interfaces);
 
     std::vector<std::shared_ptr<AgglomeratedTopology>> Coarsen(

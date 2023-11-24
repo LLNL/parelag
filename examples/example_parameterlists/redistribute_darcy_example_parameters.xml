@@ -40,9 +40,7 @@
     <!-- If value="true", use METIS for unstructured coarsening 
          (Beware: can be problematic).
          Else, use derefinement to build the hierarchy. -->  
-    <Parameter name="Unstructured coarsening" type="bool" value="false" />
-
-    <Parameter name="Use geometric coarsening" type="bool" value="true" />
+    <Parameter name="Unstructured coarsening" type="bool" value="true" />
 
     <!-- Coarsening factor of the DeRhamSequence hierarchy. -->
     <Parameter name="Hierarchy coarsening factor" type="int" value="4"/>

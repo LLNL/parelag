@@ -37,7 +37,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
 {
     auto num_levels = params_.Get("Hierarchy levels", 2);
     auto fe_order = params_.Get("Finite element order", 0);
-    const auto start_form = params_.Get("Start form", mesh_->Dimension()-1); // TODO: read from ParameterList
+    const int start_form = mesh_->Dimension()-1; // TODO: read from ParameterList
 
     topo_.resize(1);
     topo_[0].resize(num_levels);
@@ -55,7 +55,7 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
     num_copies_.resize(num_levels, 1);
     redistribution_index.resize(num_levels, 0);
 
-    topo_[0][0] = make_shared<AgglomeratedTopology>(mesh, mesh_->Dimension() - start_form);
+    topo_[0][0] = make_shared<AgglomeratedTopology>(mesh, 1);
 
     if (mesh_->Dimension() == 3)
     {
@@ -72,7 +72,6 @@ SequenceHierarchy::SequenceHierarchy(shared_ptr<ParMesh> mesh, ParameterList par
 
 void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHierarchy &other_sequence_hierarchy)
 {
-    auto build_timer = TimeManager::AddTimer("SequenceHierarchy : Build");
     PARELAG_ASSERT(mesh_->GetNE() == num_elements[0]);
 
     auto num_levels = params_.Get("Hierarchy levels", 2);
@@ -83,11 +82,9 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
     auto upscale_order = params_.Get("Upscaling order", 0);
     auto SVD_tol = params_.Get("SVD tolerance", 1e-6);
     auto multi_dist = params_.Get("Distribute multiple copies", false);
-    auto use_geometric_coarsening = params_.Get("Use geometric coarsening", false);
-
+    
     const int dim = mesh_->Dimension();
     const int start_form = dim-1; // TODO: read from ParameterList
-    int geom_elem_coarsening_factor = int(pow(2, dim));
 
     if (verbose_)
     {
@@ -114,15 +111,12 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
     StopWatch chrono;
     MetisGraphPartitioner partitioner;
     partitioner.setParELAGDefaultMetisOptions();
-    MFEMRefinedMeshPartitioner mfem_partitioner(dim);
-    auto coarsen_type = partition_type::METIS;
 
     for (int l = num_elements.Size()-1; l < num_levels-1; ++l)
     {
         int k_l = redistribution_index[l];
         chrono.Clear();
         chrono.Start();
-        coarsen_type = partition_type::METIS;
 
         int num_global_elems = topo_[k_l][l]->GetNumberGlobalTrueEntities(elem_t_);
         if (num_global_elems < num_global_elems_threshold)
@@ -167,23 +161,6 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 break;
             }
         }
-        if (use_geometric_coarsening && (l == ser_ref_levels + num_elements.Size() - 1))
-        {
-            if (verbose_)
-            {
-                std::cout << "SequenceHierarchy: reached geometrically coarsest level, terminating the coarsening process earlier.\n";
-            }
-            for (int k = 0; k <= k_l; k++)
-            {
-                topo_[k].resize(l+1);
-                seq_[k].resize(l+1);
-            }
-            redistribution_index.resize(l+1);
-            redistributors_.resize(l+1);
-            mycopy_.resize(l+1);
-            level_is_redistributed_.resize(l+1);
-            break;
-        }
 
         seq_[k_l][l]->SetSVDTol(SVD_tol);
 
@@ -197,18 +174,9 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             is_forced = other_sequence_hierarchy.level_is_redistributed_[l];
         }
         
-        // three conditions can trigger a redistribution:
-        // (a) forced by some other hierarchy
-        // (b) number of local elements is below some threshold
-        // (c) geometric derefinement is requested and is not possible without redistribution
         if ((min_num_local_elems < num_local_elems_threshold) || is_forced)
         {
             num_redist_procs = max(num_nonempty_procs/proc_coarsening_factor, 1);
-        }
-
-        if (use_geometric_coarsening)
-        {
-            num_redist_procs = 1;
         }
 
         if (num_redist_procs < num_nonempty_procs)
@@ -238,10 +206,6 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                         std::cout << "SequenceHierarchy: redistributing"
                             << " level " << l << " to " << num_global_groups << " groups of " 
                             << num_redist_procs << " processors each\n";
-                    else if (use_geometric_coarsening)
-                        std::cout << "SequenceHierarchy: geometric coarsening of "
-                                << "sequential mesh requires reconstruction, redistributing the"
-                                << " level to " << num_redist_procs << " processors\n";
                     else
                         std::cout << "SequenceHierarchy: minimal nonzero number of "
                             << "local elements (" << min_num_local_elems << ") on"
@@ -257,19 +221,11 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                         std::string("Redistribution: Redistribute Topology and DeRhamSequence -- Level ")
                             .append(std::to_string(l)));
                     auto redist_parent_topos = multi_redistributor.GetRedistributedTopologies();
-                    Timer redistribute_seq = TimeManager::AddTimer(std::string("Redistribution: Redistribute DeRhamSequence -- Level ").append(std::to_string(l)));
                     auto redist_parent_seqs = multi_redistributor.Redistribute(seq_[k_l][l]);
-                    redistribute_seq.Stop();
                     MPI_Comm child_comm = multi_redistributor.GetChildComm();
                     comms_.push_back(child_comm);
-                    {
-                        auto tmp_timer = TimeManager::AddTimer(std::string("Redistribution: Rebuild Topology -- Level ").append(std::to_string(l)));
-                        topo_[k_l + 1][l] = redist_parent_topos[mycopy]->RebuildOnDifferentComm(child_comm);
-                    }
-                    {
-                        auto tmp_timer = TimeManager::AddTimer(std::string("Redistribution: Rebuild DeRhamSequence -- Level ").append(std::to_string(l)));
-                        seq_[k_l + 1][l] = redist_parent_seqs[mycopy]->RebuildOnDifferentComm(topo_[k_l + 1][l]);
-                    }
+                    topo_[k_l + 1][l] = redist_parent_topos[mycopy]->RebuildOnDifferentComm(child_comm);
+                    seq_[k_l + 1][l] = redist_parent_seqs[mycopy]->RebuildOnDifferentComm(topo_[k_l + 1][l]);
                 }
 
                 //NOTE (aschaf 09/14/22): copied from AgglomeratedTopology::Coarsen(Redistributor, ...)
@@ -277,19 +233,10 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 Array<int> partition(tmp_num_local_elems);
                 if (tmp_num_local_elems > 0)
                 {
-                    if (use_geometric_coarsening && (tmp_num_local_elems % (tmp_num_local_elems / geom_elem_coarsening_factor) == 0))
-                    {
-                        int num_coarse_elems = tmp_num_local_elems / geom_elem_coarsening_factor;
-                        mfem_partitioner.PermutedPartition(tmp_num_local_elems, num_coarse_elems, partitioning_permutation, partition);
-                        coarsen_type = partition_type::MFEMRefined;
-                    }
-                    else
-                    {
-                        int num_aggs = max((tmp_num_local_elems) / elem_coarsening_factor, 1);
-                        auto elem_elem = topo_[k_l+1][l]->LocalElementElementTable();
-                        partitioner.setParELAGDefaultFlags(num_aggs);
-                        partitioner.doPartition(*elem_elem, num_aggs, partition);
-                    }
+                    int num_aggs = max((tmp_num_local_elems) / elem_coarsening_factor, 1);
+                    auto elem_elem = topo_[k_l+1][l]->LocalElementElementTable();
+                    partitioner.setParELAGDefaultFlags(num_aggs);
+                    partitioner.doPartition(*elem_elem, num_aggs, partition);
                 }
 
                 topo_[k_l+1][l+1] = topo_[k_l+1][l]->CoarsenLocalPartitioning(partition, 0, 0, 2);
@@ -302,36 +249,15 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
 
                 if (verbose_)
                 {
-                    if (use_geometric_coarsening)
-                    {
-                        std::cout << "SequenceHierarchy: geometric coarsening of "
-                                << "sequential mesh requires reconstruction, redistributing the"
-                                << " level to " << num_redist_procs << " processors\n";
-                    }
-                    else
-                    {
-                        std::cout << "SequenceHierarchy: minimal nonzero number of "
-                                << "local elements (" << min_num_local_elems << ") on"
-                                << " level " << l << " is below threshold ("
-                                << num_local_elems_threshold << "), redistributing the"
-                                << " level to " << num_redist_procs << " processors\n";
-                    }
+                    std::cout << "SequenceHierarchy: minimal nonzero number of "
+                            << "local elements (" << min_num_local_elems << ") on"
+                            << " level " << l << " is below threshold ("
+                            << num_local_elems_threshold << "), redistributing the"
+                            << " level to " << num_redist_procs << " processors\n";
                 }
-                if (use_geometric_coarsening)
-                {
-                    auto num_local_elems = redistributor.GetRedistributedTopology().GetNumberLocalEntities(elem_t_);
-                    Array<int> partition(num_local_elems);
-                    if (num_local_elems > 0)
-                    {
-                        int num_coarse_elems = num_local_elems / geom_elem_coarsening_factor;
-                        mfem_partitioner.PermutedPartition(num_local_elems, num_coarse_elems, partitioning_permutation, partition);
-                        coarsen_type = partition_type::MFEMRefined;
-                    }
-                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partition, 0, 0);
-                }
-                else
-                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partitioner,
-                                                elem_coarsening_factor, 0, 0);
+
+                topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partitioner,
+                                            elem_coarsening_factor, 0, 0);
                 seq_[k_l][l+1] = seq_[k_l][l]->Coarsen(redistributor);
                 redistribution_index[l+1] = k_l;
             }
@@ -339,25 +265,13 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
         }
         else
         {
-            // XXX (aschaf 04/24/23) : This needs to be throughly tested!!!
-            bool can_geom_deref = num_local_elems ? (num_local_elems % (num_local_elems / geom_elem_coarsening_factor) == 0) : true;
-            MPI_Allreduce(MPI_IN_PLACE, &can_geom_deref, 1, MPI_CXX_BOOL, MPI_LAND, comms_[k_l]);
             Array<int> partition(num_local_elems);
             if (num_local_elems > 0)
             {
-                if (use_geometric_coarsening && can_geom_deref)
-                {
-                    int num_coarse_elems = num_local_elems / geom_elem_coarsening_factor;
-                    mfem_partitioner.Partition(num_local_elems, num_coarse_elems, partition);
-                    coarsen_type = partition_type::MFEMRefined;
-                }
-                else
-                {
-                    int num_aggs = ceil(((double)num_local_elems) / elem_coarsening_factor);
-                    auto elem_elem = topo_[k_l][l]->LocalElementElementTable();
-                    partitioner.setParELAGDefaultFlags(num_aggs);
-                    partitioner.doPartition(*elem_elem, num_aggs, partition);
-                }
+                int num_aggs = ceil(((double)num_local_elems) / elem_coarsening_factor);
+                auto elem_elem = topo_[k_l][l]->LocalElementElementTable();
+                partitioner.setParELAGDefaultFlags(num_aggs);
+                partitioner.doPartition(*elem_elem, num_aggs, partition);
             }
 
             topo_[k_l][l+1] = topo_[k_l][l]->CoarsenLocalPartitioning(partition, 0, 0, 2);
@@ -365,7 +279,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             redistribution_index[l+1] = k_l;
         }
 
-        if (verbose_) { PrintCoarseningTime(l, chrono.RealTime(), coarsen_type); }
+        if (verbose_) { PrintCoarseningTime(l, chrono.RealTime(), METIS); }
     }
 
     if (verbose_)
