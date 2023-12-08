@@ -839,6 +839,7 @@ AgglomeratedTopology::Coarsen(Redistributor& redistributor,
    {
       int num_partitions = max(num_local_redist_elems / coarsening_factor, 1);
       auto elem_elem = redist_topo.LocalElementElementTable();
+      PARELAG_ASSERT_DEBUG(IsConnected(*elem_elem));
       partitioner.setParELAGDefaultFlags(num_partitions);
       partitioner.doPartition(*elem_elem, num_partitions, partitioning);
    }

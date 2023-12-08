@@ -150,6 +150,9 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
             {
                 int num_aggs = ceil(((double)num_local_elems) / elem_coarsening_factor);
                 auto elem_elem = topo_[l]->LocalElementElementTable();
+
+                PARELAG_ASSERT_DEBUG(IsConnected(*elem_elem));
+
                 partitioner.setParELAGDefaultFlags(num_aggs);
                 partitioner.doPartition(*elem_elem, num_aggs, partition);
             }
