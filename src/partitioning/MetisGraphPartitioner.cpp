@@ -683,7 +683,10 @@ int IsConnected(const mfem::SparseMatrix& adj_mat)
 {
     mfem::Array<int> visited(adj_mat.NumRows());
     visited = 0;
-    DFS(0, adj_mat, visited);
+    if (adj_mat.NumRows() > 0)
+    {
+        DFS(0, adj_mat, visited);
+    }
     return visited.Sum() == visited.Size();
 }
 
