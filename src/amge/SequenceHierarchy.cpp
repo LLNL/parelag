@@ -158,11 +158,11 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
         if (num_redist_procs < num_nonempty_procs)
         {
             unique_ptr<Redistributor> redistributor;
-            int has_elem_redist_procs = serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs.size();
-            MPI_Allreduce(MPI_IN_PLACE, &has_elem_redist_procs, 1, MPI_INT, MPI_SUM, comm_);
-            if (use_geometric_coarsening && has_elem_redist_procs)
-                redistributor = make_unique<Redistributor>(*topo_[l], serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs);
-            else
+            // int has_elem_redist_procs = serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs.size(); // currently always 0
+            // MPI_Allreduce(MPI_IN_PLACE, &has_elem_redist_procs, 1, MPI_INT, MPI_SUM, comm_);
+            // if (use_geometric_coarsening && has_elem_redist_procs)
+            //     redistributor = make_unique<Redistributor>(*topo_[l], serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs);
+            // else
                 redistributor = make_unique<Redistributor>(*topo_[l], num_redist_procs);
 
             if (verbose_)

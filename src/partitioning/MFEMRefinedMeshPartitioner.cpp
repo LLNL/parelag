@@ -159,25 +159,28 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         MFEMRefinedMeshPartitioner partitioner(nDimensions);
         int num_elems = mesh.GetNE();
         int coarsening_factor = pow(2, nDimensions);
+        int num_partitioning_levels = num_ser_ref;
+        mfem::Array<int> partition0(num_elems);
+        std::generate(partition0.begin(), partition0.end(), [n = 0] () mutable { return n++; }); // fill with [0,num_elems)
         for (int l = 0; l < num_ser_ref; l++)
         {
+            if (num_elems / coarsening_factor < num_ranks)
+            {
+                num_partitioning_levels = l;
+                break;
+            }
             serial_refinements[l].partition.SetSize(num_elems);
             partitioner.Partition(num_elems, num_elems / coarsening_factor, serial_refinements[l].partition);
             num_elems /= coarsening_factor;
-            if (num_elems / coarsening_factor <= num_ranks)
-            {
-                num_ser_ref = l + 1;
-                break;
-            }
         }
-        serial_refinements.resize(num_ser_ref);
-        for (int l = 1; l < num_ser_ref; l++)
+        // serial_refinements.resize(num_ser_ref);
+        for (int l = 0; l < num_partitioning_levels; l++)
         {
-            for (auto &&a : serial_refinements[0].partition)
+            for (auto &&a : partition0)
                 a = serial_refinements[l].partition[a];
             serial_refinements[l].partition.SetSize(0);
         }
-        serial_refinements[0].partition.Copy(par_partitioning);
+        partition0.Copy(par_partitioning);
         serial_refinements[0].partition.SetSize(0);
         int nParts = par_partitioning.Max() + 1;
         if (nParts > num_ranks)
