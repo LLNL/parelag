@@ -114,7 +114,7 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         if (num_ranks > 1)
         {
             int num = num_ranks;
-            cartesian[2] = int(ceil(pow(num, 1. / 3)));
+            cartesian[2] = int(ceil(cbrt(num)));
             while( num_ranks % cartesian[2] != 0 && cartesian[2] < num_ranks)
                 cartesian[2]++;
             num /= cartesian[2];
@@ -152,15 +152,14 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
             }
         }
     }
-    else if ( part_type.compare("geometric") == 0 && (num_ser_ref = serial_refinements.size()))
+    else if ( part_type.compare("geometric") == 0 && ((num_ser_ref = serial_refinements.size()) > 0))
     {
-        // Array<int> renumber;
-        // serial_refinements[0].partition.Copy(renumber);
         MFEMRefinedMeshPartitioner partitioner(nDimensions);
         int num_elems = mesh.GetNE();
         int coarsening_factor = pow(2, nDimensions);
         int num_partitioning_levels = num_ser_ref;
         mfem::Array<int> partition0(num_elems);
+        std::vector<mfem::Array<int>> partitions(num_ser_ref);
         std::generate(partition0.begin(), partition0.end(), [n = 0] () mutable { return n++; }); // fill with [0,num_elems)
         for (int l = 0; l < num_ser_ref; l++)
         {
@@ -169,19 +168,16 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
                 num_partitioning_levels = l;
                 break;
             }
-            serial_refinements[l].partition.SetSize(num_elems);
-            partitioner.Partition(num_elems, num_elems / coarsening_factor, serial_refinements[l].partition);
+            partitions[l].SetSize(num_elems);
+            partitioner.Partition(num_elems, num_elems / coarsening_factor, partitions[l]);
             num_elems /= coarsening_factor;
         }
-        // serial_refinements.resize(num_ser_ref);
         for (int l = 0; l < num_partitioning_levels; l++)
         {
             for (auto &&a : partition0)
-                a = serial_refinements[l].partition[a];
-            serial_refinements[l].partition.SetSize(0);
+                a = partitions[l][a];
         }
         partition0.Copy(par_partitioning);
-        serial_refinements[0].partition.SetSize(0);
         int nParts = par_partitioning.Max() + 1;
         if (nParts > num_ranks)
         {
@@ -207,6 +203,7 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
     else
         PARELAG_NOT_IMPLEMENTED();
 
+    // TODO (aschaf 2023-12-19) : Add some checks to ensure topology is (re)distributable
     int proc_coarsen = parameter_list.Get("Processor coarsening factor", 2);
     int procNParts = num_ranks;
     for (int l = 0; l < serial_refinements.size(); l++)
@@ -215,6 +212,7 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         serial_refinements[l].num_redist_proc = procNParts;
     }
 
+#ifdef PARELAG_MANUAL_REDISTRIBUTION_FOR_EACH_LEVEL
     if (0 && serial_refinements.size())
     {
         auto timer = TimeManager::AddTimer("Mesh : build permutation map");
@@ -314,6 +312,7 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         }
 
     }
+#endif // PARELAG_MANUAL_REDISTRIBUTION_FOR_EACH_LEVEL
 
     return std::make_shared<mfem::ParMesh>(comm, mesh, par_partitioning);
 }
