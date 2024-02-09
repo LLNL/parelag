@@ -89,7 +89,10 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
     int num_nonempty_procs;
     MPI_Comm_size(comm_, &num_nonempty_procs);
     int num_redist_procs = num_nonempty_procs;
-
+    level_redist_procs.SetSize(num_levels);
+    level_redist_procs[0]=num_redist_procs;
+    for (int l = 0; l < num_elements.Size()-1; l++)
+        level_redist_procs[l+1]=num_redist_procs;
     StopWatch chrono;
     MetisGraphPartitioner partitioner;
     partitioner.setParELAGDefaultMetisOptions();
@@ -162,6 +165,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
         }
 
         if (verbose_) { PrintCoarseningTime(l, chrono.RealTime(), METIS); }
+        level_redist_procs[l+1]=num_redist_procs;
     }
 
     if (verbose_)
