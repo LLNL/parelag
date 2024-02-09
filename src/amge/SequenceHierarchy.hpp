@@ -49,6 +49,9 @@ class SequenceHierarchy
     void GeometricCoarsenings(const Array<int>& num_elems, int dim);
 
     int MinNonzeroNumLocalElements(int level, int zero_replace);
+
+    Array<int> level_redist_procs;
+
 public:
 
     /** \brief Constructor.
@@ -140,6 +143,13 @@ public:
     void ReplaceMassIntegrator(int form,
                                unique_ptr<BilinearFormIntegrator> integ,
                                bool recompute_mass);
+
+    /// Return Number of Active Processors on level=ilevel
+    inline int GetRedistNumProcs(int ilevel)
+    {
+        return level_redist_procs[ilevel];
+    }
+
 };
 
 }
