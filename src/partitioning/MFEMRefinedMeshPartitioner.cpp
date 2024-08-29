@@ -129,7 +129,15 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
                 std::cout << std::flush;
             }
         }
-        par_partitioning.MakeRef(mesh.CartesianPartitioning(cartesian), mesh.GetNE());
+        int *part = mesh.CartesianPartitioning(cartesian);
+        // if (myid == 0)
+        // {
+        //     std::ofstream ofile(std::string("cartesian-part_").append(std::to_string(mesh.GetNE())).append(".txt"));
+        //     for (int i=0; i < mesh.GetNE(); i++)
+        //         ofile << part[i] << "\n";
+        //     ofile.close();
+        // }
+        par_partitioning.MakeRef(part, mesh.GetNE());
     }
     else if (part_type.compare("metis") == 0)
     {
@@ -163,7 +171,7 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         std::generate(partition0.begin(), partition0.end(), [n = 0] () mutable { return n++; }); // fill with [0,num_elems)
         for (int l = 0; l < num_ser_ref; l++)
         {
-            if (num_elems / coarsening_factor < num_ranks)
+            if ((num_elems / coarsening_factor) < num_ranks)
             {
                 num_partitioning_levels = l;
                 break;
@@ -179,6 +187,7 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         }
         partition0.Copy(par_partitioning);
         int nParts = par_partitioning.Max() + 1;
+        // TODO (aschaf 08/26/24) This has to rewritten: when renumbering, we cannot break up the coarser groups of 8 elements, otherwise the coarsening will fail at some point, i.e. produce non-physical elements
         if (nParts > num_ranks)
         {
             int nLocalParts = nParts / num_ranks;
@@ -199,6 +208,17 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
             for (auto &&a : par_partitioning)
                 a = renumber[a];
         }
+        if (myid == 0)
+        {
+            std::cout << "-- Geometric partioning : finished!" << std::endl;
+        }
+        // if (myid == 0)
+        // {
+        //     std::ofstream ofile(std::string("geometric-part_").append(std::to_string(mesh.GetNE())).append(".txt"));
+        //     for (int i=0; i < mesh.GetNE(); i++)
+        //         ofile << par_partitioning[i] << "\n";
+        //     ofile.close();
+        // }
     }
     else
         PARELAG_NOT_IMPLEMENTED();
