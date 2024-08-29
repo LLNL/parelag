@@ -9,13 +9,13 @@
 
     <!-- Mesh name -->
     <Parameter name="Mesh file" type="string"
-               value="/g/g90/aschaf/sources/parelag/meshes/cube_tet-debug.mesh"/>
+               value="/g/g90/aschaf/sources/parelag/meshes/cube_hex-debug.mesh"/>
 
     <!-- Number of times to refine in serial. Set to -1 to refine the
          minimum amount of times to probably get a good parallel
          distribution (experimentally, until the number of elements is
          six times the number of processes in the communicator). -->
-    <Parameter name="Serial refinement levels" type="int" value="2"/>
+    <Parameter name="Serial refinement levels" type="int" value="3"/>
 
     <!-- Number of times to refine in parallel. This determines the
          number of levels in the AMGe hierarchy. -->
@@ -28,17 +28,17 @@
 
     <!-- List of problems to solve for. Choices: "Darcy,Hdiv,Hcurl,H1" -->
     <Parameter name="List of problems" type="list(string)" 
-                value="Hdiv,Hcurl,H1" />
+                value="Darcy,Hdiv,Hcurl,H1" />
 
     <!-- The linear solver to use to solve the problem at any level. -->
     <Parameter name="Linear solver Darcy" type="string"
                value="Hybridization-Darcy-CG-AMG"/>
     <Parameter name="Linear solver 0-Form" type="string"
                value="PCG with AMGe-GS Preconditioner"/>
-    <!-- <Parameter name="Linear solver 1-Form" type="string"
-               value="PCG with Auxiliary Space Preconditioner_1"/> -->
-    <!-- <Parameter name="Linear solver 2-Form" type="string"
-               value="PCG with Auxiliary Space Preconditioner_2"/> -->
+    <Parameter name="Linear solver 1-Form" type="string"
+               value="PCG with Auxiliary Space Preconditioner_1"/>
+    <Parameter name="Linear solver 2-Form" type="string"
+               value="PCG with Auxiliary Space Preconditioner_2"/>
 
     <!-- The order of the Hdiv and L2 finite element spaces. H1 and
          Hcurl will have order one higher than this. -->
@@ -48,14 +48,14 @@
     <Parameter name="Upscaling order" type="int" value="0"/>
 
     <!-- Max number of levels of the DeRhamSequence hierarchy. -->
-    <Parameter name="Hierarchy levels" type="int" value="3"/>
+    <Parameter name="Hierarchy levels" type="int" value="5"/>
 
     <!--  -->
     <Parameter name="Use geometric coarsening" type="bool" value="true" />
 
     <Parameter name="Unstructured coarsening" type="bool" value="false" />
 
-    <Parameter name="Parallel partitioning" type="string" value="cartesian" />
+    <Parameter name="Parallel partitioning" type="string" value="geometric" />
 
     <!-- Coarsening factor of processors if redistribution is triggered. -->
     <Parameter name="Processor coarsening factor" type="int" value="8"/>
@@ -71,7 +71,8 @@
   <ParameterList name="Output control">
     <!-- Control whether the solution should be displayed via GLVis. A
          GLVis server must be listening or this will fail. -->
-    <Parameter name="Visualize solution" type="bool" value="true"/>
+    <Parameter name="Visualize solution" type="bool" value="false"/>
+    <Parameter name="Visualize solution Darcy" type="bool" value="false"/>
 
     <!-- Control whether timing information is summarized at the end
          of a run. -->

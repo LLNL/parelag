@@ -460,8 +460,10 @@ double solve_darcy(int nDimensions, SequenceHierarchy &hierarchy, const int solv
     const int pform = 2 + 1;
     const int start_level = solve_level;
     auto &sequence = hierarchy.GetDeRhamSequences();
-    const bool print_progress_report = false;
-    const bool visualize = false;
+    const bool show_progress = master_list->Sublist("Output control").Get("Show progress Darcy", false);
+    const bool visualize = master_list->Sublist("Output control").Get("Visualize solution Darcy", false);
+    const bool print_progress_report = (!myid && show_progress);
+    double global_error;
 
     auto DRSequence_FE = sequence[0]->FemSequence();
     FiniteElementSpace *ufespace = DRSequence_FE->GetFeSpace(uform);
@@ -616,7 +618,7 @@ double solve_darcy(int nDimensions, SequenceHierarchy &hierarchy, const int solv
     auto lib = SolverLibrary::CreateLibrary(prec_list);
 
     // Get the factory
-    const std::string solver_type = prob_list.Get("Linear solver", "MINRES-BlkJacobi-GS-AMG");
+    const std::string solver_type = prob_list.Get("Linear solver Darcy", "MINRES-BlkJacobi-GS-AMG");
     auto prec_factory = lib->GetSolverFactory(solver_type);
     const int rescale_iter = prec_list.Sublist(solver_type).Sublist("Solver Parameters").Get("RescaleIteration", -20);
 
@@ -679,6 +681,8 @@ double solve_darcy(int nDimensions, SequenceHierarchy &hierarchy, const int solv
     }
 
     {
+        if (solver_type.compare("Hybridization-Darcy-CG-AMG") == 0)
+            psol.GetBlock(1) *= -1.;
         mfem::Vector tmp(A->Height());
         A->Mult(psol, tmp);
         tmp -= prhs;
@@ -700,8 +704,6 @@ double solve_darcy(int nDimensions, SequenceHierarchy &hierarchy, const int solv
         }
     }
     {
-        if (solver_type.compare("Hybridization-Darcy-CG-AMG") == 0)
-            psol.GetBlock(1) *= -1.;
         mfem::BlockVector perr(psol);
         perr -= ptruesol;
         auto M = hierarchy.GetDeRhamSequences()[start_level]->ComputeMassOperator(uform);
@@ -711,8 +713,8 @@ double solve_darcy(int nDimensions, SequenceHierarchy &hierarchy, const int solv
         mfem::Vector err(perr.GetData(), psol.BlockSize(0));
         mfem::Vector Merr(err.Size());
         pM->Mult(err, Merr);
-        double global_norm = sqrt(InnerProduct(comm, Merr, err));
-        if (!myid)
+        double global_norm = global_error = sqrt(InnerProduct(comm, Merr, err));
+        if (print_progress_report)
         {
             std::cout << "||u* - uh||_L2 : " << (global_norm) << std::endl;
         }
@@ -720,10 +722,12 @@ double solve_darcy(int nDimensions, SequenceHierarchy &hierarchy, const int solv
         Merr.SetSize(err.Size());
         pW->Mult(err, Merr);
         global_norm = sqrt(InnerProduct(comm, Merr, err));
-        if (!myid)
+        global_error = sqrt(global_error*global_error + global_norm*global_norm);
+        if (print_progress_report)
         {
             std::cout << "||p* - ph||_L2 : " << (global_norm) << std::endl;
 
+#ifdef PARELAG_DEBUG_darcy_output
             ofstream ofile;
             if (num_ranks > 1)
                 ofile.open("psol.darcy.parallel.00000");
@@ -737,37 +741,35 @@ double solve_darcy(int nDimensions, SequenceHierarchy &hierarchy, const int solv
                 ofile.open("prhs.darcy.serial.00000");
             prhs.Print_HYPRE(ofile);
             ofile.close();
+#endif // PARELAG_DEBUG_darcy_output
         }
     }
 
 
     if (visualize)
     {
-        // psol = 1.;
-        // psol.GetBlock(0) = *hdiv_const;
-        Vector tmp(hierarchy.GetDeRhamSequences()[start_level]->GetNumTrueDofs(nDimensions));
-        MultiVector u(psol.GetData(), 1, psol.BlockSize(0));
-        MultiVector p(psol.GetBlock(1).GetData(), 1, psol.BlockSize(1));
-        MultiVector elems(tmp.GetData(), 1, tmp.Size());
+        auto seql = hierarchy.GetDeRhamSequences()[start_level];
+        auto size = seql->GetNumTrueDofs(nDimensions);
+        MultiVector el_myids(1, size);
+        MultiVector el_nos(1, size);
 
-        int loc = psol.BlockSize(1);
+        int loc = size;
         int o = 0;
         MPI_Exscan(&loc, &o, 1, MPI_INT, MPI_SUM, comm);
-        for (auto &&pp : elems)
-            pp = o++;
-        for (auto &&pp : p)
-            pp = myid;
+        for (auto &&elno : el_nos)
+            elno = o++;
+        for (auto &&eid : el_myids)
+            eid = myid;
         {
-            // hierarchy.ShowTrueData(start_level, , groupid, uform, u);
-            // hierarchy.ShowTrueData(start_level, , groupid, pform, p);
-            // hierarchy.ShowTrueData(start_level, , groupid, nDimensions, elems);
+            seql->ShowTrueData(nDimensions, el_myids);
+            seql->ShowTrueData(nDimensions, el_nos);
         }
     }
 
     if (print_progress_report)
         std::cout << "-- Darcy Solver has exited.\n" << std::endl;
 
-    return 0;
+    return global_error;
 }
 
 double solve_Hcurl(int nDimensions, SequenceHierarchy &hierarchy, const int solve_level, MPI_Comm comm, ParameterList* master_list, ParameterList& prob_list, int myid, int num_ranks, std::vector<mfem::Array<int>> &ess_attr)
@@ -1052,6 +1054,7 @@ double solve_Hcurl(int nDimensions, SequenceHierarchy &hierarchy, const int solv
             {
                 std::cout << "||u* - uh||_L2 = " << (global_error) << std::endl;
 
+#ifdef PARELAG_DEBUG_1form_output
                 ofstream ofile;
                 if (num_ranks > 1)
                     ofile.open("psol.1form.parallel.00000");
@@ -1065,7 +1068,9 @@ double solve_Hcurl(int nDimensions, SequenceHierarchy &hierarchy, const int solv
                     ofile.open("prhs.1form.serial.00000");
                 prhs.Print_HYPRE(ofile);
                 ofile.close();
+#endif
             }
+#ifdef PARELAG_DEBUG_1form_output
             auto *topo = sequence[start_level]->GetTopology();
             if (num_ranks > 1)
             {
@@ -1077,6 +1082,7 @@ double solve_Hcurl(int nDimensions, SequenceHierarchy &hierarchy, const int solv
                 topo->TrueB(0).Print("trueB0.serial");
                 topo->TrueB(1).Print("trueB1.serial");
             }
+#endif
         }
     }
 
@@ -1351,6 +1357,7 @@ double solve_H1(int nDimensions, SequenceHierarchy &hierarchy, const int solve_l
         if (print_progress_report)
         {
             std::cout << "||u* - uh||_L2 : " << (global_error) << std::endl;
+#ifdef PARELAG_DEBUG_0form_output
             ofstream ofile;
             if (num_ranks > 1)
                 ofile.open("psol.0form.parallel.00000");
@@ -1370,6 +1377,7 @@ double solve_H1(int nDimensions, SequenceHierarchy &hierarchy, const int solve_l
                 ofile.open("truesol.0form.serial.00000");
             truesol->Print_HYPRE(ofile);
             ofile.close();
+#endif
         }
 
     }
@@ -1672,6 +1680,7 @@ double solve_Hdiv(int nDimensions, SequenceHierarchy &hierarchy, const int solve
             {
                 std::cout << "||u* - uh||_L2 = " << (global_error) << std::endl;
 
+#ifdef PARELAG_DEBUG_2form_output
                 ofstream ofile;
                 if (num_ranks > 1)
                     ofile.open("psol.2form.parallel.00000");
@@ -1685,6 +1694,7 @@ double solve_Hdiv(int nDimensions, SequenceHierarchy &hierarchy, const int solve
                     ofile.open("prhs.2form.serial.00000");
                 prhs.Print_HYPRE(ofile);
                 ofile.close();
+#endif
             }
         }
     }
