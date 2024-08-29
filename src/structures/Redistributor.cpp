@@ -117,6 +117,8 @@ std::vector<int> RedistributeElements(
     std::vector<int> out(elem_face.NumRows());
     if (elem_face.NumRows() > 0)
     {
+        PARELAG_ASSERT_DEBUG(IsConnected(globProc_globProc));
+
         mfem::Array<int> partition;
         MetisGraphPartitioner partitioner;
         partitioner.setParELAGDefaultMetisOptions();

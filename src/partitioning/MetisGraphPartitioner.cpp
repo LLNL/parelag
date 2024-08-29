@@ -665,4 +665,29 @@ void build_partitioning_from_table(int nrows,
     }
 }
 
+void DFS(int current_node, const mfem::SparseMatrix& adj_mat,
+         mfem::Array<int>& visited)
+{
+   visited[current_node] = 1;
+   for (int j = 0; j < adj_mat.RowSize(current_node); ++j)
+   {
+      const int neighbor = adj_mat.GetRowColumns(current_node)[j];
+      if (visited[neighbor] == 0)
+      {
+         DFS(neighbor, adj_mat, visited);
+      }
+   }
+}
+
+int IsConnected(const mfem::SparseMatrix& adj_mat)
+{
+    mfem::Array<int> visited(adj_mat.NumRows());
+    visited = 0;
+    if (adj_mat.NumRows() > 0)
+    {
+        DFS(0, adj_mat, visited);
+    }
+    return visited.Sum() == visited.Size();
+}
+
 }//namespace parelag

@@ -108,6 +108,10 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
     int num_redist_procs = num_nonempty_procs;
     int num_global_groups = 1;
 
+    level_redist_procs.SetSize(num_levels);
+    level_redist_procs[0]=num_redist_procs;
+    for (int l = 0; l < num_elements.Size()-1; l++)
+        level_redist_procs[l+1]=num_redist_procs;
     StopWatch chrono;
     MetisGraphPartitioner partitioner;
     partitioner.setParELAGDefaultMetisOptions();
@@ -270,6 +274,9 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             {
                 int num_aggs = ceil(((double)num_local_elems) / elem_coarsening_factor);
                 auto elem_elem = topo_[k_l][l]->LocalElementElementTable();
+
+                PARELAG_ASSERT_DEBUG(IsConnected(*elem_elem));
+
                 partitioner.setParELAGDefaultFlags(num_aggs);
                 partitioner.doPartition(*elem_elem, num_aggs, partition);
             }
@@ -280,6 +287,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
         }
 
         if (verbose_) { PrintCoarseningTime(l, chrono.RealTime(), METIS); }
+        level_redist_procs[l+1]=num_redist_procs;
     }
 
     if (verbose_)

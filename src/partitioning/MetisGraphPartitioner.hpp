@@ -74,6 +74,9 @@ void comparePartitioning(int nCoarsePart,
 int count_partitions(const int * const partitioning,
                      int num_vertexes);
 
+/// Check if the graph associated with the given adjacency matrix is connected.
+int IsConnected(const mfem::SparseMatrix& adj_mat);
+
 //! @class MetisGraphPartitioner
 /**
    @brief Basically wraps Metis, with key routine doPartition(), given a graph
