@@ -12,6 +12,7 @@
 */
 
 #include "MetisGraphPartitioner.hpp"
+#include "utilities/ParELAG_TimeManager.hpp"
 #include "utilities/elagError.hpp"
 
 namespace parelag
@@ -681,6 +682,7 @@ void DFS(int current_node, const mfem::SparseMatrix& adj_mat,
 
 int IsConnected(const mfem::SparseMatrix& adj_mat)
 {
+    auto timer = TimeManager::AddTimer("IsConnected");
     mfem::Array<int> visited(adj_mat.NumRows());
     visited = 0;
     if (adj_mat.NumRows() > 0)

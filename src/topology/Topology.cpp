@@ -13,6 +13,8 @@
 
 #include "Topology.hpp"
 
+#include <iomanip>
+#include <mpi.h>
 #include <numeric>
 
 #include "structures/connectedComponents.hpp"
@@ -452,7 +454,7 @@ int augment_ja_data_AF_f_boundary(int * ia_AF_face_startbnd, int * ja_AF_face, d
 
 int augment_ja_data_AF_f_inner(int * ia_AF_face, int * ja_AF_face, double * data_AF_face,
             int nAF_inner, SparseMatrix& AFinner_AE_face, SparseMatrix& AFinner_AE, TopologyTable& AE_fc);
-  
+
 std::unique_ptr<TopologyTable> AgglomeratedTopology::ComputeCoarseFacets(
         std::shared_ptr<AgglomeratedTopology> CoarseTopology,
         TopologyTable& AE_fc)
@@ -1379,7 +1381,7 @@ void AgglomeratedTopology::GetFacetNeighbors(int iAF, int & el1, int & el2)
     el1 = facet_element(iAF,0);
     el2 = facet_element(iAF,1);
 }
-  
+
 // Used in ComputeCoarseFacets only. Fills ia array for shared AFs for future AF_face table
 int augment_ia_AF_f_shared(int * ia_AF_face_startshd, SparseMatrix& AE_AEoffd, int * cmapAEAE,
                             SparseMatrix& fc_AEoffd, int * cmapfcAE, TopologyTable& AE_fc )

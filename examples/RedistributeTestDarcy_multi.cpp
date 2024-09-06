@@ -358,10 +358,10 @@ int main (int argc, char *argv[])
         auto lib = SolverLibrary::CreateLibrary(prec_list);
 
         // Get the factory
-        const std::string solver_type = prob_list.Get("Linear solver","Unknown");
+        const std::string solver_type = prob_list.Get("Linear solver","Hybridization");
         auto prec_factory = lib->GetSolverFactory(solver_type);
         const int rescale_iter = prec_list.Sublist(solver_type).Sublist(
-                "Solver Parameters").Get<int>("RescaleIteration");
+                "Solver Parameters").Get<int>("RescaleIteration", -20);
 
         auto solver_state = prec_factory->GetDefaultState();
         solver_state->SetDeRhamSequence(hierarchy.GetDeRhamSequences(hierarchy.GetRedistributionIndex(start_level))[start_level]);

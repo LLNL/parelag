@@ -13,6 +13,7 @@
 
 #include <amge/SequenceHierarchy.hpp>
 #include <amge/DeRhamSequenceFE.hpp>
+#include <iomanip>
 #include <structures/Redistributor.hpp>
 #include <partitioning/MFEMRefinedMeshPartitioner.hpp>
 #include <partitioning/MetisGraphPartitioner.hpp>
@@ -82,7 +83,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
     auto upscale_order = params_.Get("Upscaling order", 0);
     auto SVD_tol = params_.Get("SVD tolerance", 1e-6);
     auto multi_dist = params_.Get("Distribute multiple copies", false);
-    
+
     const int dim = mesh_->Dimension();
     const int start_form = dim-1; // TODO: read from ParameterList
 
@@ -177,7 +178,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
         {
             is_forced = other_sequence_hierarchy.level_is_redistributed_[l];
         }
-        
+
         if ((min_num_local_elems < num_local_elems_threshold) || is_forced)
         {
             num_redist_procs = max(num_nonempty_procs/proc_coarsening_factor, 1);
@@ -193,7 +194,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 seq_.push_back(vector<shared_ptr<DeRhamSequence>>(num_levels));
                 {
                     Timer redistribute = TimeManager::AddTimer(
-                        std::string("Redistribution: Redistribute Topology and DeRhamSequence -- Level ")
+                        std::string("Redistribution: Redistribute Topology + DeRhamSequence -- Level ")
                             .append(std::to_string(l)));
                     if (is_forced)
                         redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs, *(other_sequence_hierarchy.redistributors_[l]));
@@ -208,21 +209,22 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 {
                     if (is_forced)
                         std::cout << "SequenceHierarchy: redistributing"
-                            << " level " << l << " to " << num_global_groups << " groups of " 
+                            << " level " << l << " to " << num_global_groups << " groups of "
                             << num_redist_procs << " processors each\n";
                     else
                         std::cout << "SequenceHierarchy: minimal nonzero number of "
                             << "local elements (" << min_num_local_elems << ") on"
                             << " level " << l << " is below threshold ("
                             << num_local_elems_threshold << "), redistributing the"
-                            << " level to " << num_global_groups << " groups of " 
+                            << " level to " << num_global_groups << " groups of "
                             << num_redist_procs << " processors each\n";
+                    std::cout << std::flush;
                 }
                 int mycopy = multi_redistributor.GetMyCopy();
                 mycopy_[l+1] = mycopy;
                 {
                     Timer redistribute = TimeManager::AddTimer(
-                        std::string("Redistribution: Redistribute Topology and DeRhamSequence -- Level ")
+                        std::string("Redistribution: Redistribute Topology + DeRhamSequence -- Level ")
                             .append(std::to_string(l)));
                     auto redist_parent_topos = multi_redistributor.GetRedistributedTopologies();
                     auto redist_parent_seqs = multi_redistributor.Redistribute(seq_[k_l][l]);
@@ -239,6 +241,9 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 {
                     int num_aggs = max((tmp_num_local_elems) / elem_coarsening_factor, 1);
                     auto elem_elem = topo_[k_l+1][l]->LocalElementElementTable();
+
+                    PARELAG_ASSERT_DEBUG(IsConnected(*elem_elem));
+
                     partitioner.setParELAGDefaultFlags(num_aggs);
                     partitioner.doPartition(*elem_elem, num_aggs, partition);
                 }
@@ -258,6 +263,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                             << " level " << l << " is below threshold ("
                             << num_local_elems_threshold << "), redistributing the"
                             << " level to " << num_redist_procs << " processors\n";
+                    std::cout << std::flush;
                 }
 
                 topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partitioner,
@@ -297,7 +303,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
         {
             std::cout << "\tNumber of global elements on level " << i << " is "
                       << topo_[redistribution_index[i]][i]->GetNumberGlobalTrueEntities(elem_t_);
-                          
+
             if (num_global_copies_[redistribution_index[i]] == 1)
                 std::cout <<".\n";
             else
@@ -314,7 +320,7 @@ void SequenceHierarchy::ReplaceMassIntegrator(
 {
     mass_is_assembled_ = recompute_mass;
     DeRhamSequenceFE* seq = seq_[0][0]->FemSequence();
-    seq->ReplaceMassIntegrator(elem_t_, form, move(integ), recompute_mass);
+    seq->ReplaceMassIntegrator(elem_t_, form, std::move(integ), recompute_mass);
 }
 
 void SequenceHierarchy::GeometricCoarsenings(const Array<int>& num_elems, int dim)
