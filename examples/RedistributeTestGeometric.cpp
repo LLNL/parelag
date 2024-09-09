@@ -13,7 +13,7 @@
 
 #include <fstream>
 #include <sstream>
-#include <unistd.h> 
+#include <unistd.h>
 #include <csignal>
 
 #include <mpi.h>
@@ -177,6 +177,13 @@ int main(int argc, char *argv[])
             }
 
             mesh = make_unique<mfem::Mesh>(imesh, 1, 1);
+            {
+                auto hilbtimer = TimeManager::AddTimer("Mesh : reorder");
+                Array<int> hilb;
+                mesh->GetHilbertElementOrdering(hilb);
+                mesh->ReorderElements(hilb);
+            }
+            // mesh->EnsureNCMesh();
             imesh.close();
 
             if (print_progress_report)

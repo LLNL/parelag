@@ -147,9 +147,15 @@ public:
                                unique_ptr<BilinearFormIntegrator> integ,
                                bool recompute_mass);
 
+    /// Return Number of Active Processors on level=ilevel
+    inline int GetRedistNumProcs(int ilevel)
+    {
+        return number_of_nonempty_ranks_[ilevel];
+    }
+
     /**
      * @brief Set the number of serial refinements as well as the parallel partioning of the final serial refinement. Does not assume ownership of the array.
-     * 
+     *
      * @param serial_refinements number of serial refinements before distributing the mesh
      * @param partitioning_permutation map of the initial distribution to the original ordering
      */

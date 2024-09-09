@@ -212,13 +212,15 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         {
             std::cout << "-- Geometric partioning : finished!" << std::endl;
         }
-        // if (myid == 0)
-        // {
-        //     std::ofstream ofile(std::string("geometric-part_").append(std::to_string(mesh.GetNE())).append(".txt"));
-        //     for (int i=0; i < mesh.GetNE(); i++)
-        //         ofile << par_partitioning[i] << "\n";
-        //     ofile.close();
-        // }
+#ifdef PARELAG_DEBUG_BuildParallelMesh
+        if (myid == 0)
+        {
+            std::ofstream ofile(std::string("geometric-part_").append(std::to_string(mesh.GetNE())).append(".txt"));
+            for (int i=0; i < mesh.GetNE(); i++)
+                ofile << par_partitioning[i] << "\n";
+            ofile.close();
+        }
+#endif // PARELAG_DEBUG_BuildParallelMesh
     }
     else
         PARELAG_NOT_IMPLEMENTED();
@@ -246,7 +248,7 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
 
         for (int i = 0; i < par_partitioning.Size(); i++)
             tmp1[par_partitioning[i]]->Append(i);
-        
+
         mfem::Array<int> tmp2, elem_offsets(num_ranks + 1);
         elem_offsets[0] = 0;
         tmp2.Reserve(par_partitioning.Size());

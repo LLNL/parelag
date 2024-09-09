@@ -15,20 +15,20 @@
          minimum amount of times to probably get a good parallel
          distribution (experimentally, until the number of elements is
          six times the number of processes in the communicator). -->
-    <Parameter name="Serial refinement levels" type="int" value="3"/>
+    <Parameter name="Serial refinement levels" type="int" value="4"/>
 
     <!-- Number of times to refine in parallel. This determines the
          number of levels in the AMGe hierarchy. -->
     <Parameter name="Parallel refinement levels" type="int" value="1"/>
 
-    <Parameter name="Start form" type="int" value="0"/>
+    <Parameter name="Start form" type="int" value="2"/>
 
     <!-- Finest level in the AMGe hierarchy at which to start solve the problem. -->
     <Parameter name="Solve level" type="int" value="0"/>
 
     <!-- List of problems to solve for. Choices: "Darcy,Hdiv,Hcurl,H1" -->
-    <Parameter name="List of problems" type="list(string)" 
-                value="Darcy,Hdiv,Hcurl,H1" />
+    <Parameter name="List of problems" type="list(string)"
+                value="Darcy" />
 
     <!-- The linear solver to use to solve the problem at any level. -->
     <Parameter name="Linear solver Darcy" type="string"
@@ -48,7 +48,7 @@
     <Parameter name="Upscaling order" type="int" value="0"/>
 
     <!-- Max number of levels of the DeRhamSequence hierarchy. -->
-    <Parameter name="Hierarchy levels" type="int" value="5"/>
+    <Parameter name="Hierarchy levels" type="int" value="7"/>
 
     <!--  -->
     <Parameter name="Use geometric coarsening" type="bool" value="true" />
@@ -72,7 +72,7 @@
     <!-- Control whether the solution should be displayed via GLVis. A
          GLVis server must be listening or this will fail. -->
     <Parameter name="Visualize solution" type="bool" value="false"/>
-    <Parameter name="Visualize solution Darcy" type="bool" value="false"/>
+    <Parameter name="Visualize solution Darcy" type="bool" value="true"/>
 
     <!-- Control whether timing information is summarized at the end
          of a run. -->
