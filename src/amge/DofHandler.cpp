@@ -812,8 +812,9 @@ DofHandlerALG::~DofHandlerALG()
 int DofHandlerALG::MarkDofsOnSelectedBndr(
     const Array<int> & bndrAttributesMarker, Array<int> & dofMarker) const
 {
+    // FIXME (aschaf 09/25/23) Had to modify this check to circumvent "false positives" when being called from the trueP_.size() != 0 code path of DeRhamSequence::ComputeTrueP(int, Array<int> &), since this check implicitly assumes that dofMarker has to match the number of local dofs, whereas the above mentioned code path always passes an array of the size local trueDofs. Propably needs we need some separate function for this.
     PARELAG_TEST_FOR_EXCEPTION(
-        dofMarker.Size() != GetNDofs(),
+        (dofMarker.Size() != GetNDofs()) && (dofMarker.Size() != GetDofTrueDof().GetTrueLocalSize()),
         std::runtime_error,
         "DofHandlerALG::MarkDofsOnSelectedBndr(...): Incorrect array size!");
 

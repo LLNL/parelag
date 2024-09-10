@@ -16,6 +16,7 @@
 
 #include <mfem.hpp>
 #include "topology/Topology.hpp"
+#include "utilities/ParELAG_ParameterList.hpp"
 
 namespace parelag
 {
@@ -84,6 +85,22 @@ public:
 private:
     mfem::Array<int> partitioning;
 };
+
+// TODO (aschaf 2023-12-19) : replace with just num_redist_proc
+struct SerialRefinementInfo
+{
+    int num_redist_proc;
+    std::vector<int> elem_redist_procs;
+    mfem::Array<int> partition;
+};
+
+/// @brief Generates a partitioning and distributes the serial mesh across some communicator
+/// @param comm MPI communicator to distribute the mesh across
+/// @param mesh serial mesh
+/// @param serial_refinements 
+/// @param parameter_list parameter list 
+/// @return local part of the parallel mesh, if serial_refinements had non-zero length it contains the number of processors each serial refinement level can be redistributed
+std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mesh, std::vector<SerialRefinementInfo> &serial_refinements, ParameterList &parameter_list);
 
 }//namespace parelag
 #endif /* MFEMREFINEDMESHPARTITIONER_HPP_ */

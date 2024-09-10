@@ -16,6 +16,7 @@
 
 #include <amge/DeRhamSequenceFE.hpp>
 #include <utilities/ParELAG_SimpleXMLParameterListReader.hpp>
+#include <partitioning/MFEMRefinedMeshPartitioner.hpp>
 
 namespace parelag {
 
@@ -36,16 +37,16 @@ class SequenceHierarchy
 {
     // TODO (aschaf 09/21/22) Describe topo_ and seq_ layout
     /**
-     * The topologies and sequences are stored based on which communicator C_k they belong to, 
+     * The topologies and sequences are stored based on which communicator C_k they belong to,
      * with k the communicator or redistribution index. Hence, if multiple communicators are used,
-     * as is the case when we coarsen beyond the number of processors and want to have multiple 
-     * coarse copies. 
-     * 
-     * 
+     * as is the case when we coarsen beyond the number of processors and want to have multiple
+     * coarse copies.
+     *
+     *
      */
     vector<vector<shared_ptr<AgglomeratedTopology>>> topo_;
     vector<vector<shared_ptr<DeRhamSequence>>> seq_;
-    // 
+    //
     vector<unique_ptr<MultiRedistributor>> redistributors_;
     // TODO (aschaf 09/08/22): decide on a canonical way to store this information
     // tag indicating in which subgroup the level belongs in relation to the previous level
@@ -55,8 +56,8 @@ class SequenceHierarchy
     vector<int> num_copies_;
     /**
      * @brief Redistribution index \f$ k_\ell \f$
-     * 
-     * 
+     *
+     *
      */
     vector<int> redistribution_index;
     /// communicators C_k, C_0 is usually MPI_COMM_WORLD
@@ -78,6 +79,9 @@ class SequenceHierarchy
 
     Array<int> level_redist_procs;
 
+    int ser_ref_levels; // number of serial refinements (to undo)
+
+    std::vector<SerialRefinementInfo> serial_refinement_infos_;
 public:
 
     /** \brief Constructor.
@@ -252,28 +256,40 @@ public:
     // FIXME (aschaf 09/08/22) Find a better name for these functions
     /// Applies the TrueP matrix from a given level, projecting from level l to l+1
     /// If multiple copies are available, it redistributes a copy of the result to
-    /// each group of processors. 
+    /// each group of processors.
 
     void ApplyTruePi(int l, int jform, const Vector &x, Vector &y);
 
     void ApplyTruePTranspose(int level, int jform, const Vector &x, Vector &y);
 
     /**
-     * @brief 
-     * 
-     * @param level 
+     * @brief
+     *
+     * @param level
      * @param k redistribution index
      * @param groupid which group in communicator C_k
-     * @param jform 
-     * @param true_v 
+     * @param jform
+     * @param true_v
      */
     void ShowTrueData(int level, int k, int groupid, int jform, MultiVector & true_v);
+
     /// Return Number of Active Processors on level=ilevel
     inline int GetRedistNumProcs(int ilevel)
     {
         return level_redist_procs[ilevel];
     }
 
+    /**
+     * @brief Set the number of serial refinements as well as the parallel partioning of the final serial refinement. Does not assume ownership of the array.
+     *
+     * @param serial_refinements number of serial refinements before distributing the mesh
+     * @param partitioning_permutation map of the initial distribution to the original ordering
+     */
+    void SetSerialRefinementInfos(const std::vector<SerialRefinementInfo> &serial_refinements)
+    {
+        ser_ref_levels = serial_refinements.size();
+        this->serial_refinement_infos_.assign(serial_refinements.begin(), serial_refinements.end());
+    }
 };
 
 }

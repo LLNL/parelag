@@ -59,7 +59,7 @@ int SafeWidth(const Table & T)
         if(jval > w)
             w = jval;
     }
-    return w;
+    return w + 1; // XXX (aschaf 08/28/24) Tables contain indices, hence for the size we need one additional to the maximal index
 }
 
 TopologyTable::TopologyTable(const Table & T):

@@ -29,6 +29,8 @@ list(APPEND EXAMPLE_SRCS
   UpscalingMaxwell.cpp
   RedistributeTestDarcy.cpp
   RedistributeTestDarcy_multi.cpp
+  RedistributeTestGeometric.cpp
+  RedistributeTestMFEM.cpp
   )
 
 list(APPEND EXAMPLE_SRCS
