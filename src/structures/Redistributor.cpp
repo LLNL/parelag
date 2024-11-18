@@ -15,6 +15,7 @@
 #include <iterator>
 
 #include "Redistributor.hpp"
+#include "partitioning/MFEMRefinedMeshPartitioner.hpp"
 #include "utilities/MemoryUtils.hpp"
 #include "linalg/utilities/ParELAG_MatrixUtils.hpp"
 #include "utilities/mpiUtils.hpp"
@@ -56,77 +57,86 @@ void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int
 }
 
 std::vector<int> RedistributeElements(
-      ParallelCSRMatrix& elem_face, int& num_redist_procs)
+   ParallelCSRMatrix &elem_face, int &num_redist_procs, bool use_geometric_partitioning)
 {
-    MPI_Comm comm = elem_face.GetComm();
-    int myid;
-    MPI_Comm_rank(comm, &myid);
+   MPI_Comm comm = elem_face.GetComm();
+   int myid;
+   MPI_Comm_rank(comm, &myid);
 
-    mfem::Array<int> proc_starts, perm_rowstarts;
-    int num_procs_loc = elem_face.NumRows() > 0 ? 1 : 0;
-    ParPartialSums_AssumedPartitionCheck(comm, num_procs_loc, proc_starts);
+   mfem::Array<int> proc_starts, perm_rowstarts;
+   int num_procs_loc = elem_face.NumRows() > 0 ? 1 : 0;
+   ParPartialSums_AssumedPartitionCheck(comm, num_procs_loc, proc_starts);
 
-    int num_procs = proc_starts.Last();
-    ParPartialSums_AssumedPartitionCheck(comm, num_procs, perm_rowstarts);
+   int num_procs = proc_starts.Last();
+   ParPartialSums_AssumedPartitionCheck(comm, num_procs, perm_rowstarts);
 
-    SerialCSRMatrix proc_elem(num_procs_loc, elem_face.NumRows());
-    if (num_procs_loc == 1)
-    {
-       for (int j = 0 ; j < proc_elem.NumCols(); ++j)
-       {
-           proc_elem.Set(0, j, 1.0);
-       }
-    }
-    proc_elem.Finalize();
+   SerialCSRMatrix proc_elem(num_procs_loc, elem_face.NumRows());
+   if (num_procs_loc == 1)
+   {
+      for (int j = 0; j < proc_elem.NumCols(); ++j)
+      {
+         proc_elem.Set(0, j, 1.0);
+      }
+   }
+   proc_elem.Finalize();
 
-    unique_ptr<ParallelCSRMatrix> proc_face(
-             elem_face.LeftDiagMult(proc_elem, proc_starts));
-    unique_ptr<ParallelCSRMatrix> face_proc(proc_face->Transpose());
-    auto proc_proc = Mult(*proc_face, *face_proc, false);
+   unique_ptr<ParallelCSRMatrix> proc_face(
+      elem_face.LeftDiagMult(proc_elem, proc_starts));
+   unique_ptr<ParallelCSRMatrix> face_proc(proc_face->Transpose());
+   auto proc_proc = Mult(*proc_face, *face_proc, false);
 
-    mfem::Array<HYPRE_Int> proc_colmap(num_procs-num_procs_loc);
+   mfem::Array<HYPRE_Int> proc_colmap(num_procs - num_procs_loc);
 
-    SerialCSRMatrix perm_diag(num_procs, num_procs_loc);
-    SerialCSRMatrix perm_offd(num_procs, num_procs-num_procs_loc);
-    int offd_proc_count = 0;
-    for (int i = 0 ; i < num_procs; ++i)
-    {
-       if (i == myid)
-       {
-          perm_diag.Set(i, 0, 1.0);
-       }
-       else
-       {
-          perm_offd.Set(i, offd_proc_count, 1.0);
-          proc_colmap[offd_proc_count++] = i;
-       }
-    }
-    perm_diag.Finalize();
-    perm_offd.Finalize();
+   SerialCSRMatrix perm_diag(num_procs, num_procs_loc);
+   SerialCSRMatrix perm_offd(num_procs, num_procs - num_procs_loc);
+   int offd_proc_count = 0;
+   for (int i = 0; i < num_procs; ++i)
+   {
+      if (i == myid)
+      {
+         perm_diag.Set(i, 0, 1.0);
+      }
+      else
+      {
+         perm_offd.Set(i, offd_proc_count, 1.0);
+         proc_colmap[offd_proc_count++] = i;
+      }
+   }
+   perm_diag.Finalize();
+   perm_offd.Finalize();
 
-    int num_perm_rows = perm_rowstarts.Last();
-    ParallelCSRMatrix permute(comm, num_perm_rows, num_procs, perm_rowstarts,
-                              proc_starts, &perm_diag, &perm_offd, proc_colmap);
+   int num_perm_rows = perm_rowstarts.Last();
+   ParallelCSRMatrix permute(comm, num_perm_rows, num_procs, perm_rowstarts,
+                           proc_starts, &perm_diag, &perm_offd, proc_colmap);
 
-    unique_ptr<ParallelCSRMatrix> permuteT(permute.Transpose());
-    auto permProc_permProc = parelag::RAP(permute, *proc_proc, *permuteT);
+   unique_ptr<ParallelCSRMatrix> permuteT(permute.Transpose());
+   auto permProc_permProc = parelag::RAP(permute, *proc_proc, *permuteT);
 
-    SerialCSRMatrix globProc_globProc;
-    permProc_permProc->GetDiag(globProc_globProc);
+   SerialCSRMatrix globProc_globProc;
+   permProc_permProc->GetDiag(globProc_globProc);
 
-    std::vector<int> out(elem_face.NumRows());
-    if (elem_face.NumRows() > 0)
-    {
-        mfem::Array<int> partition;
-        MetisGraphPartitioner partitioner;
-        partitioner.setParELAGDefaultMetisOptions();
-        partitioner.setParELAGDefaultFlags(globProc_globProc.NumRows()/num_redist_procs);
-        partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
+   std::vector<int> out(elem_face.NumRows());
+   if (elem_face.NumRows() > 0)
+   {
+      mfem::Array<int> partition;
+      if (!use_geometric_partitioning)
+      {
+         MetisGraphPartitioner partitioner;
+         partitioner.setParELAGDefaultMetisOptions();
+         partitioner.setParELAGDefaultFlags(globProc_globProc.NumRows() / num_redist_procs);
+         partitioner.doPartition(globProc_globProc, num_redist_procs, partition);
+      }
+      else
+      {
+         MFEMRefinedMeshPartitioner partitioner(3);
+         partition.SetSize(globProc_globProc.Height());
+         partitioner.Partition(partition.Size(), num_redist_procs, partition);
+      }
 
-        PARELAG_ASSERT(myid < partition.Size());
-        std::fill_n(out.begin(), elem_face.NumRows(), partition[myid]);
-    }
-    return out;
+      PARELAG_ASSERT(myid < partition.Size());
+      std::fill_n(out.begin(), elem_face.NumRows(), partition[myid]);
+   }
+   return out;
 }
 
 Redistributor::Redistributor(
@@ -139,13 +149,13 @@ Redistributor::Redistributor(
    Init(topo, elem_redist_procs);
 }
 
-Redistributor::Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs)
+Redistributor::Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, bool use_geometric_redistribution)
    : redTrueEntity_trueEntity(topo.Codimensions()+1),
      redEntity_trueEntity(topo.Codimensions()+1),
      redTrueDof_trueDof(topo.Dimensions()+1),
      redDof_trueDof(topo.Dimensions()+1)
 {
-   auto elem_redist_procs = RedistributeElements(topo.TrueB(0), num_redist_procs);
+   auto elem_redist_procs = RedistributeElements(topo.TrueB(0), num_redist_procs, use_geometric_redistribution);
    Init(topo, elem_redist_procs);
 }
 

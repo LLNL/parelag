@@ -47,7 +47,7 @@ std::vector<int> RedistributeElements(
 /// A helper to redistribute AgglomeratedTopology, DofHandler, DeRhamSequence
 class Redistributor
 {
-    using ParMatrix = matred::ParMatrix;
+   using ParMatrix = matred::ParMatrix;
 
    // Enumeration convention follows the ones in AgglomeratedTopology/DofHandler
    std::vector<unique_ptr<ParallelCSRMatrix> > redTrueEntity_trueEntity;
@@ -92,7 +92,7 @@ public:
                  const std::vector<int>& elem_redist_procs);
 
    /// @param num_redist_procs number of processors to be redistributed to
-   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs);
+   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, bool use_geometric_redistribution = false);
 
    void Init(const AgglomeratedTopology& topo,
              const std::vector<int>& elem_redist_procs);

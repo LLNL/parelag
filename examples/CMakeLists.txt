@@ -29,7 +29,7 @@ list(APPEND EXAMPLE_SRCS
   UpscalingMaxwell.cpp
   RedistributeTestDarcy.cpp
   RedistributeTestGeometric.cpp
-  RedistributeTestMFEM.cpp
+  # RedistributeTestMFEM.cpp
   )
 
 list(APPEND EXAMPLE_SRCS

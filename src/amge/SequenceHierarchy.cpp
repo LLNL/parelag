@@ -163,7 +163,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
             // if (use_geometric_coarsening && has_elem_redist_procs)
             //     redistributor = make_unique<Redistributor>(*topo_[l], serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs);
             // else
-                redistributor = make_unique<Redistributor>(*topo_[l], num_redist_procs);
+                redistributor = make_unique<Redistributor>(*topo_[l], num_redist_procs, use_geometric_coarsening);
 
             if (verbose_)
             {
