@@ -18,6 +18,7 @@
 #include <mfem.hpp>
 
 #include "ParELAG_Config.h"
+#include "linalg/dense/ParELAG_MultiVector.hpp"
 #include "elag_typedefs.hpp"
 #include "utilities/HypreTraits.hpp"
 
@@ -131,6 +132,10 @@ public:
     /// dropping non local entries. (double version)
     int IgnoreNonLocal(const mfem::Vector & data, mfem::Vector & trueData) const;
 
+    /// From a MultiVector containing ghosts form the unique MultiVector by
+    /// dropping non local entries. (double version)
+    int IgnoreNonLocal(const MultiVector & data, MultiVector & trueData) const;
+
     /// From a vector containing ghosts form the unique vector by
     /// adding local and non-local entries. (Integer version)
     int Assemble(const mfem::Array<int> & data, mfem::Array<int> & trueData) const;
@@ -139,6 +144,10 @@ public:
     /// adding local and non-local entries. (double version)
     int Assemble(const mfem::Vector & data, mfem::Vector & trueData) const;
     //@}
+
+    /// Disassemble a "true" vector by keeping shared data only to owner.
+    /// This can be regarded as the reverse action of IgnoreNonLocal.
+    int DisAssemble(const mfem::Vector & trueData, mfem::Vector & data) const;
 
     /// out = A * entity_TrueEntity_entity * B.
     std::unique_ptr<ParallelCSRMatrix> ParMatmultAB(

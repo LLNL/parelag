@@ -151,7 +151,7 @@ struct MatrixMatrixHelper<mfem::HypreParMatrix>
     Add(mfem::HypreParMatrix* A, mfem::HypreParMatrix* B)
     {
         hypre_ParCSRMatrix * A_hyp = *A, * B_hyp = *B, * C_hyp;
-        auto ierr = hypre_ParCSRMatrixAdd(A_hyp,B_hyp,&C_hyp);
+        auto ierr = parelag_ParCSRMatrixAdd(A_hyp,B_hyp,&C_hyp);
 
         PARELAG_ASSERT_HYPRE_ERROR_FLAG(ierr);
 

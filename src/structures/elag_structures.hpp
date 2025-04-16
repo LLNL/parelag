@@ -24,4 +24,6 @@
 #include "minimalIntersectionSet.hpp"
 #include "transpose.hpp"
 
+#include "Redistributor.hpp"
+
 #endif //ELAG_STRUCTURES_HPP_

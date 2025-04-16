@@ -28,6 +28,7 @@ set(MODULES_TO_INSTALL
   modules/FindSuperLU.cmake
   modules/FindSuperLUDist.cmake
   modules/FindMARS.cmake
+  modules/FindMATRED.cmake
   modules/ParELAGCMakeUtilities.cmake
   modules/ParELAGTestForPrettyFunction.cmake
   modules/ResolveCompilerPaths.cmake

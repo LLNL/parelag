@@ -445,7 +445,7 @@ void DofAgglomeration::CheckAdof()
         for (const double * it = ADof_rDof_[i]->GetData(); it != end; ++it)
         {
             PARELAG_TEST_FOR_EXCEPTION(
-                fabs(*it-1.0) < 1e-6 && fabs(*it-1.0) > 1e-6,
+                fabs(*it+1.0) > 1e-6 && fabs(*it-1.0) > 1e-6,
                 std::runtime_error,
                 "DofAgglomeration::CheckAdof(): "
                 "ADof_rDof_[" << i << "] has an entry equal to " << *it << "\n"
@@ -456,7 +456,7 @@ void DofAgglomeration::CheckAdof()
         for (const double * it = ADof_Dof_[i]->GetData(); it != end; ++it)
         {
             PARELAG_TEST_FOR_EXCEPTION(
-                fabs(*it-1.0) < 1e-6 && fabs(*it-1.0) > 1e-6,
+                fabs(*it+1.0) > 1e-6 && fabs(*it-1.0) > 1e-6,
                 std::runtime_error,
                 "DofAgglomeration::CheckAdof(): "
                 "ADof_Dof_[" << i << "] has an entry equal to " << *it << "\n"

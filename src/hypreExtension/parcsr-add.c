@@ -18,11 +18,11 @@
 #include "hypreExtension.hpp"
 
 /*--------------------------------------------------------------------------
- * hypre_ParCSRMatrixAdd
+ * parelag_ParCSRMatrixAdd
  *
  * Add two ParCSR matrices: C = A + B.
  *--------------------------------------------------------------------------*/
-int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
+int parelag_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
                           hypre_ParCSRMatrix *B,
                           hypre_ParCSRMatrix **C_ptr)
 {

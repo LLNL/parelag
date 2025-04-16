@@ -19,6 +19,7 @@
 #include "utilities/elagError.hpp"
 #include "utilities/HypreTraits.hpp"
 #include "utilities/MemoryUtils.hpp"
+#include "utilities/mpiUtils.hpp"
 
 namespace parelag
 {
@@ -911,6 +912,24 @@ unique_ptr<mfem::HypreParMatrix> IgnoreNonLocalRange(
     hypre_ParCSRMatrixOwnsColStarts(out) = 0;
 
     return make_unique<mfem::HypreParMatrix>(out);
+}
+
+std::unique_ptr<mfem::HypreParMatrix>
+ToParMatrix(MPI_Comm comm, mfem::SparseMatrix A)
+{
+    mfem::Array<int> row_starts, col_starts;
+    int num_rows = A.NumRows();
+    int num_cols = A.NumCols();
+    ParPartialSums_AssumedPartitionCheck(comm, num_rows, row_starts);
+    ParPartialSums_AssumedPartitionCheck(comm, num_cols, col_starts);
+    auto pA = new mfem::HypreParMatrix(comm, row_starts.Last(), col_starts.Last(),
+                                       row_starts, col_starts, &A);
+    pA->CopyRowStarts();
+    pA->CopyColStarts();
+    pA->SetOwnerFlags(3, 0, 0);
+    A.SetGraphOwner(false);
+    A.SetDataOwner(false);
+    return std::unique_ptr<mfem::HypreParMatrix>(pA);
 }
 
 // Definition here in the CPP to prevent extraneous compilations

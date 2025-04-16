@@ -26,9 +26,13 @@
 #include "structures/SharingMap.hpp"
 #include "topology/TopologyTable.hpp"
 #include "utilities/elagError.hpp"
+#include "partitioning/MetisGraphPartitioner.hpp"
 
 namespace parelag
 {
+
+class Redistributor;
+
 //! @class
 /*!
  * @brief A structure to describe an (agglomerated) topology
@@ -369,6 +373,14 @@ public:
         bool checkTopology,
         bool preserveMaterialInterfaces);
 
+    /// Coarsen the redistributed topology locally. Construct inter-level
+    /// entity relations using the information given by redistributor.
+    std::shared_ptr<AgglomeratedTopology> Coarsen(
+          Redistributor& redistributor,
+          MetisGraphPartitioner& partitioner,
+          int coarsening_factor, bool check_topology,
+          bool preserve_material_interfaces);
+
     /// Split agglomerates that are deemed "bad" into agglomerates
     /// that are... "not bad"? (Hopefully)
     void DeAgglomerateBadAgglomeratedEntities(
@@ -399,6 +411,8 @@ public:
     }
 
     bool PerformGlobalAgglomeration() const { return globalAgglomeration; }
+
+    friend class Redistributor;
 
 protected:
 

@@ -20,6 +20,7 @@ list(APPEND SRCS
   HybridHdivL2.cpp
   LocalSpectralTargets.cpp
   bilinIntegrators.cpp
+  SequenceHierarchy.cpp
   )
 
 list(APPEND HDRS
@@ -33,6 +34,7 @@ list(APPEND HDRS
   HybridHdivL2.hpp
   LocalSpectralTargets.hpp
   bilinIntegrators.hpp
+  SequenceHierarchy.hpp
   elag_amge.hpp
   )
 

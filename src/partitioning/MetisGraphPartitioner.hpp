@@ -74,6 +74,9 @@ void comparePartitioning(int nCoarsePart,
 int count_partitions(const int * const partitioning,
                      int num_vertexes);
 
+/// Check if the graph associated with the given adjacency matrix is connected.
+int IsConnected(const mfem::SparseMatrix& adj_mat);
+
 //! @class MetisGraphPartitioner
 /**
    @brief Basically wraps Metis, with key routine doPartition(), given a graph
@@ -100,6 +103,9 @@ public:
     //! Set flags
     void setFlags(int _flags){flags = _flags;}
 
+    //! Set flags based on the desired number of partitions
+    void setParELAGDefaultFlags(int coarsening_factor);
+
     //! Set not default options for metis
     void setOption(const int i, const int val){options[i] = val;}
 
@@ -108,6 +114,9 @@ public:
 
     //! Reset the level of imbalance suggested in Metis manual
     void setDefaultUnbalanceToll(){ unbalance_toll = 1.001; }
+
+    //! Set ParELAG's default options of METIS
+    void setParELAGDefaultMetisOptions();
 
     //! Partition a graph with num_vertexes in num_partitions
     /*!

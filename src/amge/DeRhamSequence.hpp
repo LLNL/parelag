@@ -250,6 +250,9 @@ public:
         SVD_Tolerance_ = tol;
     }
 
+    /// Get the SVD tolerance
+    double GetSVDTol() const { return SVD_Tolerance_; }
+
     ///@}
     /// \name Math-y stuff
     ///@{
@@ -259,6 +262,8 @@ public:
     ///
     /// User is responsible for deleting the created object.
     std::shared_ptr<DeRhamSequence> Coarsen();
+
+    std::shared_ptr<DeRhamSequence> Coarsen(Redistributor& redistributor);
 
     /// Fills in dofAgg.
     void AgglomerateDofs();
@@ -500,6 +505,7 @@ public:
 
     ///@}
 
+    friend class Redistributor;
 protected:
     /// \name Routines called by CheckInvariants()
     ///@{

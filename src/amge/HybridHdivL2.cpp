@@ -232,9 +232,9 @@ void HybridHdivL2::AssembleHybridSystem()
     Array<int> HdivGlobalToLocalMap(elem_HdivDof.Width());
     HdivGlobalToLocalMap = -1;
 
-    // Determine whether to construct rescaling vector (CC^T)^{-1}CB^T1
-    // (rescaling works in fine level or if number of HdivDof on each facet = 1)
-    const bool do_rescale = !IsSameOrient || (nFacet == facet_HdivDof.NumCols());
+    // Always compute rescaling vector (CC^T)^{-1}CB^T1
+    // Determine whether to use the vector in the HybridizationSolverFactory
+    const bool do_rescale = true;
     mfem::Vector CCT_diag(do_rescale ? HybridSystem->NumRows() : 0);
     mfem::Vector CBT1(CCT_diag.Size());
     CCT_diag = 0.0;

@@ -15,6 +15,8 @@
 #define PARELAG_HYBRIDIZATIONSOLVER_HPP
 
 #include "linalg/solver_core/ParELAG_Solver.hpp"
+#include "linalg/solver_ops/ParELAG_KrylovSolver.hpp"
+#include "linalg/factories/ParELAG_HybridizationSolverFactory.hpp"
 #include "utilities/MemoryUtils.hpp"
 #include "amge/HybridHdivL2.hpp"
 
@@ -37,10 +39,11 @@ public:
 
     /// Constructor taking Operators to move
     HybridizationSolver(
-        std::shared_ptr<HybridHdivL2> Hybridization,
+        std::shared_ptr<HybridHdivL2> hybridization,
         std::shared_ptr<mfem::Solver> solver,
-        mfem::Array<int>& Offsets,
-        std::shared_ptr<mfem::SparseMatrix> D_Scale);
+        std::shared_ptr<DeRhamSequence> sequence,
+        std::shared_ptr<mfem::SparseMatrix> D_Scale,
+        bool act_on_trueDofs = false);
 
     /// Destructor
     ~HybridizationSolver() = default;
@@ -76,10 +79,18 @@ public:
     ///@{
 
     /// Set the convert-to-hybridized-form operator
-    void SetHybridization(std::shared_ptr<HybridHdivL2> Hybridization)
+    void SetHybridization(std::shared_ptr<HybridHdivL2> hybridization)
     {
-        PARELAG_ASSERT(Hybridization);
-        Hybridization_ = std::move(Hybridization);
+        PARELAG_ASSERT(hybridization);
+        hybridization_ = std::move(hybridization);
+    }
+
+    int GetNumIters() const
+    {
+        auto krylov_solver = dynamic_cast<KrylovSolver*>(Solver_.get());
+        if (krylov_solver) { return krylov_solver->GetNumIters(); }
+        auto pcg_solver = dynamic_cast<PCG*>(Solver_.get());
+        if (pcg_solver) { return pcg_solver->GetNumIters(); }
     }
 
     ///@}
@@ -87,7 +98,7 @@ public:
 private:
     /// Hybridization object containing transformation between
     /// non-hybridized form and hybridized form
-    std::shared_ptr<HybridHdivL2> Hybridization_;
+    std::shared_ptr<HybridHdivL2> hybridization_;
 
     /// The solver for the hybridized system
     std::shared_ptr<mfem::Solver> Solver_;
@@ -95,8 +106,11 @@ private:
     /// Auxiliary vectors for solving in the hybridized form
     mutable mfem::Vector pHybridRHS_, pHybridSol_;
 
+    bool act_on_trueDofs_;std::shared_ptr<DeRhamSequence> sequence_;
+
     // Offsets of the original block system
     mfem::Array<int> Offsets_;
+    mfem::Array<int> TrueOffsets_;
 
     std::shared_ptr<mfem::SparseMatrix> D_Scale_;
 };

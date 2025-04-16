@@ -30,6 +30,9 @@
 #include "solver_core/ParELAG_SymmetrizedUmfpack.hpp"
 #include "solver_core/ParELAG_SolverLibrary.hpp"
 
+#include "solver_ops/ParELAG_HybridizationSolver.hpp"
+#include "solver_ops/ParELAG_KrylovSolver.hpp"
+
 #include "utilities/ParELAG_MatrixUtils.hpp"
 #include "utilities/ParELAG_SubMatrixExtraction.hpp"
 #include "utilities/ParELAG_MfemBlockOperator.hpp"
