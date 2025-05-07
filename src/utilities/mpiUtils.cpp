@@ -20,6 +20,22 @@ using namespace mfem;
 namespace parelag
 {
 
+mpi_session::mpi_session(int argc, char** argv)
+{
+    MPI_Init(&argc,&argv);
+#if MFEM_HYPRE_VERSION >= 22900
+    HYPRE_Initialize();
+#endif
+}
+
+mpi_session::~mpi_session()
+{
+    MPI_Finalize();
+#if MFEM_HYPRE_VERSION >= 22900
+    HYPRE_Finalize();
+#endif
+}
+
 int ParPartialSums_Global(MPI_Comm comm, int& myVal, Array<int>& globalPartialSums)
 {
     int ierr(0);

@@ -129,9 +129,20 @@ mark_as_advanced(FORCE MFEM_LIBRARY)
 
 mark_as_advanced(FORCE MFEM_CONFIG_FILE)
 
+mark_as_advanced(FORCE MFEM_CONFIG_HEADER)
+
+
+# Start by finding the MFEM config.mk file
+find_file(MFEM_CONFIG_HEADER _config.hpp
+  HINTS ${MFEM_DIR} $ENV{MFEM_DIR}
+  HINTS ${MFEM_DIR} $ENV{MFEM_DIR} ${MFEM_DIR}/include/mfem $ENV{MFEM_DIR}/include/mfem
+  PATH_SUFFIXES config
+  NO_DEFAULT_PATH
+  DOC "The MFEM configuration header")
+find_file(MFEM_CONFIG_HEADER _config.hpp)
 
 # This handles "REQUIRED" etc keywords
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(MFEM
   DEFAULT_MSG
-  MFEM_CONFIG_FILE MFEM_USE_MPI MFEM_INCLUDE_DIRS)
+  MFEM_CONFIG_FILE MFEM_USE_MPI MFEM_INCLUDE_DIRS MFEM_CONFIG_HEADER)

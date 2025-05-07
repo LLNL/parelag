@@ -62,6 +62,7 @@ ADSSolverWrapper::ADSSolverWrapper(
 void ADSSolverWrapper::_do_set_parameters(ParameterList& Params)
 {
 
+#if MFEM_HYPRE_VERSION <= 22200
     // Ummm why?
     PARELAG_ASSERT(
         hypre_ParCSRMatrixOwnsRowStarts(
@@ -69,6 +70,7 @@ void ADSSolverWrapper::_do_set_parameters(ParameterList& Params)
     PARELAG_ASSERT(
         hypre_ParCSRMatrixOwnsColStarts(
             static_cast<hypre_ParCSRMatrix *>(*C_)) == 0 );
+#endif
 
     const auto cycle_type = Params.Get<int>("Cycle type",11);
 

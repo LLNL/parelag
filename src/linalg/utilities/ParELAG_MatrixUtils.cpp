@@ -906,9 +906,11 @@ unique_ptr<mfem::HypreParMatrix> IgnoreNonLocalRange(
     hypre_ParCSRMatrixOffd(RT) = hold_offd;
     hypre_ParCSRMatrixCommPkg(RT) = hold_commpkg;
 
+#if MFEM_HYPRE_VERSION <= 22200
     // These are owned elsewhere
     hypre_ParCSRMatrixOwnsRowStarts(out) = 0;
     hypre_ParCSRMatrixOwnsColStarts(out) = 0;
+#endif
 
     return make_unique<mfem::HypreParMatrix>(out);
 }
