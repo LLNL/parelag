@@ -25,6 +25,8 @@ mpi_session::mpi_session(int argc, char** argv)
     MPI_Init(&argc,&argv);
 #if MFEM_HYPRE_VERSION >= 22900
     HYPRE_Initialize();
+    // ParELAG currently does not support GPU
+    hypre_HandleMemoryLocation(hypre_handle()) = HYPRE_MEMORY_HOST;
 #endif
 }
 
