@@ -98,7 +98,7 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
    HYPRE_Int         ncols_B  = hypre_CSRMatrixNumCols(B);
    hypre_CSRMatrix  *C;
    double           *C_data;
-   HYPRE_Int	     *C_i;
+   HYPRE_Int        *C_i;
 #if MFEM_HYPRE_VERSION >= 21600
    HYPRE_BigInt     *C_j;
 #else
