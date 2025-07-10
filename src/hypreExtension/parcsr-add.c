@@ -12,6 +12,8 @@
 */
 
 #include <mpi.h>
+#include <limits.h>
+#include <assert.h>
 #include "seq_mv.h"
 #include "_hypre_parcsr_mv.h"
 #include "_hypre_parcsr_ls.h"
@@ -69,7 +71,8 @@ int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
 }
 
 /*--------------------------------------------------------------------------
- * For hypre v2.16 or later, hypre_CSRMatrixAdd2 assumes A and B use big_j
+ * For hypre v2.16 or later, hypre_CSRMatrixAdd2 assumes A and B use big_j.
+ * This function does not work if number of columns of A exceeds limit of int.
  *--------------------------------------------------------------------------*/
 hypre_CSRMatrix *
 hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
@@ -101,6 +104,8 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
 #else
    HYPRE_Int        *C_j;
 #endif
+
+   assert(ncols_A <= INT_MAX);
 
    HYPRE_Int         ia, ib, ic, num_nonzeros;
 #if MFEM_HYPRE_VERSION >= 21600
@@ -149,15 +154,7 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
    C = hypre_CSRMatrixCreate(nrows_A, ncols_A, num_nonzeros);
    hypre_CSRMatrixI(C) = C_i;
    hypre_CSRMatrixInitialize(C);
-#if MFEM_HYPRE_VERSION >= 21600
-   if (num_nonzeros)
-   {
-      hypre_CSRMatrixBigJ(C) = parelag_hypre_CTAlloc(HYPRE_BigInt, num_nonzeros);
-   }
-   C_j = hypre_CSRMatrixBigJ(C);
-#else
    C_j = hypre_CSRMatrixJ(C);
-#endif
    C_data = hypre_CSRMatrixData(C);
 
    for (ia = 0; ia < ncols_A; ia++)
