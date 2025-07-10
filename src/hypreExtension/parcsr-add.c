@@ -68,28 +68,44 @@ int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
    return hypre_error_flag;
 }
 
+/*--------------------------------------------------------------------------
+ * For hypre v2.16 or later, hypre_CSRMatrixAdd2 assumes A and B use big_j
+ *--------------------------------------------------------------------------*/
 hypre_CSRMatrix *
 hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
-              double b, hypre_CSRMatrix *B)
+                     double b, hypre_CSRMatrix *B)
 {
-   double     *A_data   = hypre_CSRMatrixData(A);
+   double           *A_data   = hypre_CSRMatrixData(A);
    HYPRE_Int        *A_i      = hypre_CSRMatrixI(A);
+#if MFEM_HYPRE_VERSION >= 21600
+   HYPRE_BigInt        *A_j      = hypre_CSRMatrixBigJ(A);
+#else
    HYPRE_Int        *A_j      = hypre_CSRMatrixJ(A);
+#endif
    HYPRE_Int         nrows_A  = hypre_CSRMatrixNumRows(A);
    HYPRE_Int         ncols_A  = hypre_CSRMatrixNumCols(A);
-   double     *B_data   = hypre_CSRMatrixData(B);
+   double           *B_data   = hypre_CSRMatrixData(B);
    HYPRE_Int        *B_i      = hypre_CSRMatrixI(B);
    HYPRE_Int        *B_j      = hypre_CSRMatrixJ(B);
+#if MFEM_HYPRE_VERSION >= 21600
+   HYPRE_BigInt        *B_j      = hypre_CSRMatrixBigJ(B);
+#else
+   HYPRE_Int        *B_j      = hypre_CSRMatrixJ(B);
+#endif
    HYPRE_Int         nrows_B  = hypre_CSRMatrixNumRows(B);
    HYPRE_Int         ncols_B  = hypre_CSRMatrixNumCols(B);
-   hypre_CSRMatrix *C;
-   double     *C_data;
-   HYPRE_Int	      *C_i;
+   hypre_CSRMatrix  *C;
+   double           *C_data;
+   HYPRE_Int	    *C_i;
+#if MFEM_HYPRE_VERSION >= 21600
+   HYPRE_BigInt     *C_j;
+#else
    HYPRE_Int        *C_j;
+#endif
 
    HYPRE_Int         ia, ib, ic, jcol, num_nonzeros;
-   HYPRE_Int	       pos;
-   HYPRE_Int         *marker;
+   HYPRE_Int	      pos;
+   HYPRE_Int        *marker;
 
    if (nrows_A != nrows_B || ncols_A != ncols_B)
    {
@@ -129,7 +145,11 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
    C = hypre_CSRMatrixCreate(nrows_A, ncols_A, num_nonzeros);
    hypre_CSRMatrixI(C) = C_i;
    hypre_CSRMatrixInitialize(C);
+#if MFEM_HYPRE_VERSION >= 21600
+   C_j = hypre_CSRMatrixBigJ(C);
+#else
    C_j = hypre_CSRMatrixJ(C);
+#endif
    C_data = hypre_CSRMatrixData(C);
 
    for (ia = 0; ia < ncols_A; ia++)
