@@ -42,7 +42,7 @@ void Mult(const ParallelCSRMatrix& A, const mfem::Array<int>& x, mfem::Array<int
 /// get a copy of the global matrix as a serial matrix locally (via permutation),
 /// and then call METIS to "partition processors" in each processor locally
 std::vector<int> RedistributeElements(
-      ParallelCSRMatrix& elem_face, int& num_redist_procs);
+      ParallelCSRMatrix& elem_face, int& num_redist_procs, bool geometric_partitioning = false);
 
 /// A helper to redistribute AgglomeratedTopology, DofHandler, DeRhamSequence
 class Redistributor
@@ -92,7 +92,7 @@ public:
                  const std::vector<int>& elem_redist_procs);
 
    /// @param num_redist_procs number of processors to be redistributed to
-   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs);
+   Redistributor(const AgglomeratedTopology& topo, int& num_redist_procs, bool geometric_redistribution = false);
 
    void Init(const AgglomeratedTopology& topo,
              const std::vector<int>& elem_redist_procs);
@@ -129,6 +129,8 @@ protected:
    int mycopy_;
    MPI_Comm child_comm_;
 
+   bool geometric_redistribution_;
+
    std::vector<std::vector<unique_ptr<ParallelCSRMatrix>>> trueDof_redTrueDof;
 
    void Init(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs);
@@ -139,7 +141,7 @@ public:
    /// A list of redistributed topologies will be constructed and stored in the class
    /// @param num_current_procs number of parent processors from which to redistribute
    /// @param num_redist_procs number of processors to be redistributed to
-   MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs);
+   MultiRedistributor(const AgglomeratedTopology& topo, const int num_current_procs, int& num_redist_procs, bool geometric_redistribution = false);
 
    /// @brief Constructor for MultiRedistributor
    /// A list of redistributed topologies will be constructed and stored in the class

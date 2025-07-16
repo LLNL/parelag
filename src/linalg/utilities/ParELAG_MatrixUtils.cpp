@@ -926,7 +926,7 @@ ToParMatrix(MPI_Comm comm, mfem::SparseMatrix A)
                                        row_starts, col_starts, &A);
     pA->CopyRowStarts();
     pA->CopyColStarts();
-    pA->SetOwnerFlags(3, 0, 0);
+    pA->SetOwnerFlags(3, -1, 0); // XXX (aschaf 2025-07-16) : I do not remember why I changed this
     A.SetGraphOwner(false);
     A.SetDataOwner(false);
     return std::unique_ptr<mfem::HypreParMatrix>(pA);

@@ -12,13 +12,22 @@
 */
 
 
+#include <algorithm>
+#include <cstdlib>
 #include <fstream>
+#include <iostream>
+#include <limits>
+#include <memory>
 #include <sstream>
 
 #include <mpi.h>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "elag.hpp"
 
+#include "linalg/dense/ParELAG_MultiVector.hpp"
 #include "linalg/utilities/ParELAG_MfemBlockOperator.hpp"
 #include "linalg/solver_core/ParELAG_SolverLibrary.hpp"
 #include "utilities/ParELAG_TimeManager.hpp"
@@ -27,20 +36,140 @@
 
 #include "testing_helpers/Build3DHexMesh.hpp"
 #include "testing_helpers/CreateDarcyParameterList.hpp"
+#include "utilities/elagError.hpp"
 
 using namespace mfem;
 using namespace parelag;
 using std::unique_ptr;
 using std::shared_ptr;
 using std::make_shared;
+namespace MPIErrorHandler
+{
+// subclass so we can specifically catch MPI errors
+class Exception : public std::exception
+{
+  public:
+    Exception(std::string const &what) : std::exception(), m_what(what) {}
+    virtual ~Exception() throw() {}
+    virtual const char *what() const throw()
+    {
+        return m_what.c_str();
+    }
 
+  protected:
+    std::string m_what;
+};
+
+void convertToException(MPI_Comm *comm, int *err, ...)
+{
+    throw Exception(std::string("MPI Error."));
+}
+} // namespace MPIErrorHandler
+
+class ParMeshExtension : public mfem::ParMesh
+{
+  public:
+    ParMeshExtension() = delete;
+
+    explicit ParMeshExtension(const ParMesh &pmesh) : ParMesh(pmesh)
+    {
+    }
+
+  public:
+    void PrepareRepartitioning(Array<int> &partitioning, const int group_offset)
+    {
+        ExchangeFaceNbrData();
+        const int nsharedfaces = this->GetNSharedFaces();
+        std::unique_ptr<Table> squad_group{Transpose(group_squad)};
+        // group_squad
+        const int num_face_nbrs = GetNFaceNeighbors();
+        vector<Array<int>> new_face_ranks_groups(num_face_nbrs);
+        Array<int> tmp;
+        for (int i = 0; i < num_face_nbrs; ++i)
+        {
+            group_squad.GetRow(i, tmp);
+            new_face_ranks_groups[i].SetSize(tmp.Size());
+            for (int j = 0; j < tmp.Size(); ++j)
+            {
+                const int face = this->GetSharedFace(tmp[j]);
+                new_face_ranks_groups[i][j] = partitioning[faces_info[face].Elem1No];
+            }
+            // std::cout << "with rank " << GetFaceNbrRank(i) << " : ";
+            // new_face_ranks_groups[i].Print(out, new_face_ranks_groups[i].Size());
+        }
+        vector<Array<int>> new_face_nbr_ranks_groups(num_face_nbrs);
+        {
+            MPI_Request *requests = new MPI_Request[2*num_face_nbrs];
+            MPI_Request *send_requests = requests;
+            MPI_Request *recv_requests = requests + num_face_nbrs;
+            MPI_Status  *statuses = new MPI_Status[num_face_nbrs];
+
+            for (int fn = 0; fn < num_face_nbrs; ++fn)
+            {
+                new_face_nbr_ranks_groups[fn].SetSize(group_squad.RowSize(fn));
+                int tag = 234;
+
+                MPI_Isend(new_face_ranks_groups[fn].GetData(), new_face_ranks_groups[fn].Size(), MPI_INT, GetFaceNbrRank(fn), tag, MyComm, &send_requests[fn]);
+
+                MPI_Irecv(new_face_nbr_ranks_groups[fn].GetData(), new_face_nbr_ranks_groups[fn].Size(), MPI_INT, GetFaceNbrRank(fn), tag, MyComm, &recv_requests[fn]);
+            }
+            MPI_Waitall(num_face_nbrs, recv_requests, statuses);
+        }
+        // for (int i = 0; i < num_face_nbrs; ++i)
+        // {
+        //     std::cout << "from rank " << GetFaceNbrRank(i) << " : ";
+        //     new_face_nbr_ranks_groups[i].Print(out, new_face_nbr_ranks_groups[i].Size());
+        // }
+
+
+        int partioningsize = partitioning.Size();
+        // for (int i = 0; i < num_face_nbrs; ++i)
+        //     partitioning.Append(GetFaceNbrRank(i));
+        std::map<int,int> tmpmap;
+
+        for (int fn = 0; fn < num_face_nbrs; ++fn)
+        {
+            group_squad.GetRow(fn, tmp);
+            for (auto j = 0; j < tmp.Size(); ++j)
+            {
+                const int face = this->GetSharedFace(tmp[j]);
+                if (tmpmap.count(new_face_nbr_ranks_groups[fn][j]) == 0)
+                {
+                    tmpmap[new_face_nbr_ranks_groups[fn][j]] = partioningsize++;
+                }
+                faces_info[face].Elem2No = tmpmap[new_face_nbr_ranks_groups[fn][j]];
+            }
+        }
+        partitioning.SetSize(partioningsize);
+        for (auto &p : tmpmap)
+        {
+            partitioning[p.second] = p.first;
+        }
+        // for (int i = 0; i < nsharedfaces; ++i)
+        // {
+        //     const int face = this->GetSharedFace(i);
+        //     // auto *vi = this->GetFace(face)->GetVertices();
+        //     // this->AddBdrQuad(vi, this->bdr_attributes.Max() + 1 + this->GetMyRank());
+        //     const int facegroup = squad_group->GetRow(i)[0];
+        //     faces_info[face].Elem2No = partioningsize + facegroup;
+
+        //     std::cout << "rank " << MyRank << " : face " << face << " : FaceNbrRank = " << GetFaceNbrRank(squad_group->GetRow(i)[0]) << std::endl;
+        //     // std::cout << "rank " << MyRank << " : face " << face << " : FaceNbrRank = " << GetFaceNbrElementTransformation()(squad_group->GetRow(i)[0]) << std::endl;
+        // }
+        // this->GetElementToFaceTable();
+    }
+};
 
 int main (int argc, char *argv[])
 {
     // 1. Initialize MPI
     mpi_session sess(argc, argv);
     MPI_Comm comm = MPI_COMM_WORLD;
-
+    MPI_Errhandler mpiErrorHandler;
+    // Set this up so we always get an exception that will stop TV
+    MPI_Comm_create_errhandler(MPIErrorHandler::convertToException,
+                               &mpiErrorHandler);
+    MPI_Comm_set_errhandler( comm, mpiErrorHandler );
     int num_ranks, myid;
     MPI_Comm_size(comm, &num_ranks);
     MPI_Comm_rank(comm, &myid);
@@ -107,6 +236,8 @@ int main (int argc, char *argv[])
     const bool show_progress = output_list.Get("Show progress",true);
     const bool visualize = output_list.Get("Visualize solution",false);
     const bool unstructured = prob_list.Get("Unstructured coarsening", false);
+    const bool geometric_coarsening = prob_list.Get("Use geometric coarsening", false);
+    const bool multiple_copies = prob_list.Get("Distribute multiple copies", false);
 
     const bool print_progress_report = (!myid && show_progress);
 
@@ -121,14 +252,250 @@ int main (int argc, char *argv[])
                  << "*  Mesh: " << meshfile << "\n*\n";
     }
 
-    int ser_ref_levels;
+    // precompute communicators
+    std::vector<MPI_Comm> comms(1);
+    Array<int> num_redist_procs;
+    Array<int> par_partitioning;
+    std::unique_ptr<mfem::Mesh> mesh;
     std::vector<SerialRefinementInfo> serial_refinements;
+
+    if (geometric_coarsening && multiple_copies)
+    {
+        const int ser_ref_levels = prob_list.Get("Serial refinement levels", 0);
+        const int par_ref_levels = prob_list.Get("Parallel refinement levels", 0);
+        // const int hierachy_levels = prob_list.Get("Hierarchy levels", ser_ref_levels + par_ref_levels + 1);
+        const int nLevels = ser_ref_levels + par_ref_levels + 1;
+        const int processor_coarsening_factor = prob_list.Get("Processor coarsening factor", 8);
+        comms[0] = MPI_COMM_WORLD;
+        int worldsize;
+        MPI_Comm_size(comms[0], &worldsize);
+        Array<int> k_l, mycopies;
+        k_l.SetSize(nLevels, 0);
+        mycopies.SetSize(1,0);
+        num_redist_procs.SetSize(nLevels, worldsize);
+        int num_procs = worldsize;
+        for (int level = par_ref_levels; level < nLevels - 1; ++level)
+        {
+            num_redist_procs[level] = num_procs;
+            num_procs = std::max(1, num_procs / processor_coarsening_factor);
+            if ((num_redist_procs[level] / processor_coarsening_factor) >= 1)
+            {
+                int num_copies = num_redist_procs[level] / num_procs;
+                int myid;
+                auto parent_comm = comms[k_l[level]];
+                MPI_Comm_rank(parent_comm, &myid);
+                int mycopy = myid / num_procs;
+                MPI_Comm child_comm;
+
+                MPI_Comm_split(parent_comm, mycopy, myid, &child_comm);
+                comms.push_back(std::move(child_comm));
+                mycopies.Append(mycopy);
+                k_l[level + 1] = k_l[level] + 1;
+            }
+            else
+            {
+                k_l[level + 1] = k_l[level];
+            }
+            num_redist_procs[level + 1] = num_procs;
+        }
+        if (myid == 0)
+        {
+            std::cout << "num_redist_procs = ";
+            num_redist_procs.Print(mfem::out, num_redist_procs.Size());
+            std::cout << "k_l = ";
+            k_l.Print(mfem::out, k_l.Size());
+        }
+        std::vector<std::vector<std::shared_ptr<mfem::ParMesh>>> pmeshes(k_l.Max()+1);
+        std::ifstream imesh(meshfile.c_str());
+        mesh = make_unique<mfem::Mesh>(imesh, 1, 1);
+        Array<int> new_numbering;
+        serial_refinements.resize(ser_ref_levels);
+
+        for (int level = num_redist_procs.Size() - 1; level >= 0 ; --level)
+        {
+            int klp1 = k_l[std::min(level + 1, num_redist_procs.Size() - 1)];
+            if (pmeshes[klp1].empty())
+                pmeshes[klp1].resize(num_redist_procs.Size());
+            if (level == num_redist_procs.Size() - 1)
+            {
+                int mysize;
+                MPI_Comm_size(comms[klp1], &mysize);
+
+                Array<int> partioning(mesh->GeneratePartitioning(mysize), mesh->GetNE());
+                auto pmesh = make_shared<mfem::ParMesh>(comms[klp1], *mesh, partioning);
+
+                pmeshes[klp1][level] = std::move(pmesh);
+                serial_refinements[num_redist_procs.Size() - 2 - par_ref_levels].num_redist_proc = num_redist_procs[level];
+                if (mycopies[klp1] == 0)
+                {
+                    char fname[256];
+                    sprintf(fname, "mesh_L%d_K%d", level, klp1);
+                    pmeshes[klp1][level]->Save(fname);
+                }
+                continue;
+            }
+            int kl = k_l[level];
+            pmeshes[klp1][level] = make_shared<mfem::ParMesh>(*pmeshes[klp1][level+1]);
+            pmeshes[klp1][level]->UniformRefinement();
+            if (mycopies[klp1] == 0)
+            {
+                char fname[256];
+                sprintf(fname, "mesh_L%d_K%d", level, klp1);
+                pmeshes[klp1][level]->Save(fname);
+            }
+            if (kl != klp1)
+            {
+                serial_refinements[level - par_ref_levels - 1].num_redist_proc = num_redist_procs[level];
+                if (new_numbering.Size())
+                    mesh->ReorderElements(new_numbering);
+                mesh->UniformRefinement();
+                int groupsize;
+                int mygroupid;
+                MPI_Comm_rank(comms[klp1], &mygroupid);
+                MPI_Comm_size(comms[klp1], &groupsize);
+                if (pmeshes[kl].empty())
+                    pmeshes[kl].resize(num_redist_procs.Size());
+                Array<int> partioning, local_ordering;
+                {
+                    Array<int> coarser_partitioning(pmeshes[klp1][level+1]->GeneratePartitioning(processor_coarsening_factor), pmeshes[klp1][level+1]->GetNE());
+                    partioning.SetSize(pmeshes[klp1][level]->GetNE());
+                    local_ordering.SetSize(pmeshes[klp1][level]->GetNE());
+                    int *partitioning_ptr = partioning.GetData();
+                    // int *local_ordering_ptr = local_ordering.GetData();
+                    PARELAG_ASSERT_DEBUG(partioning.Size() == 8 * coarser_partitioning.Size());
+                    for (int i = 0; i < coarser_partitioning.Size(); i++)
+                    {
+                        std::fill_n(partitioning_ptr + i * 8, 8, coarser_partitioning[i]);
+                        // std::fill_n(local_ordering_ptr + i * 8, 8, aggregates[coarser_partitioning[i]]++);
+                    }
+                }
+                std::for_each(partioning.begin(),partioning.end(), [&groupsize,mygroupid](int &a) -> void { a = (a * groupsize) + mygroupid; });
+
+                Array<int> global_partitioning(pmeshes[klp1][level]->GetGlobalNE());
+                global_partitioning = -1;
+                new_numbering.SetSize(global_partitioning.Size());
+                new_numbering = -1;
+                Array<int> redist_ordering(global_partitioning.Size());
+                redist_ordering = -1;
+                for (int i = 0; i < partioning.Size(); ++i)
+                {
+                    auto glob_i = static_cast<int>(pmeshes[klp1][level]->GetGlobalElementNum(i));
+                    global_partitioning[glob_i] = partioning[i];
+                    // redist_ordering[glob_i] = local_ordering[i];
+                }
+                MPI_Allreduce(MPI_IN_PLACE, global_partitioning.GetData(), global_partitioning.Size(), MPI_INT, MPI_MAX, comms[kl]);
+                // MPI_Allreduce(MPI_IN_PLACE, redist_ordering.GetData(), redist_ordering.Size(), MPI_INT, MPI_MAX, comms[kl]);
+                if (myid == 0)
+                {
+                    global_partitioning.Print(out, global_partitioning.Size());
+                    std::cout << std::string(40, '=') << std::endl;
+                }
+                const int nPartitions = global_partitioning.Max() + 1;
+                int o = 0;
+                for (int p = 0; p < nPartitions; ++p)
+                {
+                    int m = 0;
+                    for (int i = 0; i < global_partitioning.Size(); ++i)
+                    {
+                        if (global_partitioning[i] == p)
+                        {
+                            redist_ordering[o] = m++;
+                            new_numbering[i] = o++;
+                        }
+                    }
+                }
+                if (myid == 0)
+                {
+                    // redist_ordering.Print(out, redist_ordering.Size());
+                    new_numbering.Print(out, new_numbering.Size());
+                }
+                const int slice_size = new_numbering.Size() / groupsize;
+                serial_refinements[level - par_ref_levels].reordering.SetSize(slice_size);
+                serial_refinements[level - par_ref_levels].reordering.Assign(new_numbering.GetData() + mygroupid * slice_size);
+                // redist_ordering.Print(out, redist_ordering.Size());
+                global_partitioning.Copy(par_partitioning);
+                pmeshes[kl][level] = make_shared<mfem::ParMesh>(comms[kl], *mesh, global_partitioning);
+
+                serial_refinements[level - par_ref_levels].elem_redist_procs.resize(pmeshes[kl][level]->GetNE());
+                serial_refinements[level - par_ref_levels].num_elems = pmeshes[kl][level]->GetNE();
+                std::fill(serial_refinements[level - par_ref_levels].elem_redist_procs.begin(), serial_refinements[level - par_ref_levels].elem_redist_procs.end(), mygroupid);
+
+                if (mycopies[kl] == 0)
+                {
+                    char fname2[256];
+                    sprintf(fname2, "mesh_L%d_K%d", level, kl);
+                    pmeshes[kl][level]->Save(fname2);
+                }
+            }
+        }
+#ifdef TESTING
+        auto hdiv_fespace = std::make_unique<mfem::ParFiniteElementSpace>(pmeshes[0][0].get(), new RT_FECollection(0, 3));
+
+        mfem::ParBilinearForm a(hdiv_fespace.get());
+        a.AddDomainIntegrator(new DivDivIntegrator);
+        a.AddDomainIntegrator(new VectorFEMassIntegrator);
+        mfem::ParLinearForm b(hdiv_fespace.get());
+        // Vector tmp(3);
+        // tmp = 1.;
+        // mfem::VectorConstantCoefficient one_vec(tmp);
+        auto f_fun = [](const Vector &x, Vector &y) -> void
+        {
+            y(0) = (1. + M_PI * M_PI) * sin(x(0) * M_PI) * sin(x(1) * M_PI) * sin(x(2) * M_PI);
+            y(1) = -M_PI * M_PI * cos(x(0) * M_PI) * cos(x(1) * M_PI) * sin(x(2) * M_PI);
+            y(2) = -M_PI * M_PI * cos(x(0) * M_PI) * sin(x(1) * M_PI) * cos(x(2) * M_PI);
+        };
+        mfem::VectorFunctionCoefficient f_coeff(3, f_fun);
+        b.AddDomainIntegrator(new VectorFEDomainLFIntegrator(f_coeff));
+
+        a.Assemble();
+        b.Assemble();
+
+        auto u_fun = [](const Vector &x, Vector &y) -> void
+        {
+            y(0) = sin(x(0) * M_PI) * sin(x(1) * M_PI) * sin(x(2) * M_PI);
+            y(1) = y(2) = 0.;
+        };
+        mfem::VectorFunctionCoefficient u_coeff(3, u_fun);
+        ParGridFunction x(hdiv_fespace.get());
+        x = 0.;
+        x.ProjectCoefficient(u_coeff);
+
+        Array<int> ess_tdof_list, ess_bdr;
+        ess_bdr.SetSize(6, 1);
+        hdiv_fespace->GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+        Vector B, X;
+        OperatorHandle A;
+        a.FormLinearSystem(ess_tdof_list, x, b, A, X, B);
+
+        HypreADS ads(hdiv_fespace.get());
+        HyprePCG pcg(hdiv_fespace->GetComm());
+        pcg.SetTol(1e-9);
+        pcg.SetPreconditioner(ads);
+        pcg.SetOperator(*A);
+        pcg.Mult(B,X);
+
+        a.RecoverFEMSolution(X, b, x);
+
+        auto err = x.ComputeL2Error(u_coeff);
+        if (myid == 0)
+        {
+            std::cout << "L2-error = " << err << std::endl;
+        }
+
+        // x.Save("solution");
+#endif
+    }
+
+
+
+    // return EXIT_SUCCESS;
+
+    int ser_ref_levels;
     shared_ptr<ParMesh> pmesh;
     {
         if (print_progress_report)
             std::cout << "-- Building and refining serial mesh...\n";
 
-        std::unique_ptr<mfem::Mesh> mesh;
         if (meshfile == "TestingMesh")
         {
             mesh = testhelpers::Build3DHexMesh();
@@ -149,13 +516,13 @@ int main (int argc, char *argv[])
                 return EXIT_FAILURE;
             }
 
-            mesh = make_unique<mfem::Mesh>(imesh, 1, 1);
-            {
-                auto hilbtimer = TimeManager::AddTimer("Mesh : reorder");
-                Array<int> hilb;
-                mesh->GetHilbertElementOrdering(hilb);
-                mesh->ReorderElements(hilb);
-            }
+            // mesh = make_unique<mfem::Mesh>(imesh, 1, 1);
+            // {
+            //     auto hilbtimer = TimeManager::AddTimer("Mesh : reorder");
+            //     Array<int> hilb;
+            //     mesh->GetHilbertElementOrdering(hilb);
+            //     mesh->ReorderElements(hilb);
+            // }
             // mesh->EnsureNCMesh();
             imesh.close();
 
@@ -167,29 +534,19 @@ int main (int argc, char *argv[])
         ser_ref_levels =
             prob_list.Get("Serial refinement levels", -1);
 
-        // Array<int> part;
-        // if (part.Size() == 0 && mesh->GetNE() >= num_ranks)
+        // This will do no refs if ser_ref_levels <= 0.
+        // for (int l = 0; l < ser_ref_levels; l++)
         // {
-        //     part.MakeRef(mesh->GeneratePartitioning(num_ranks), mesh->GetNE());
+        //     mesh->UniformRefinement();
         // }
 
-        // This will do no refs if ser_ref_levels <= 0.
-        for (int l = 0; l < ser_ref_levels; l++)
-        {
-            mesh->UniformRefinement();
-            // if (part.Size() == 0 && mesh->GetNE() >= num_ranks)
-            // {
-            //     part.MakeRef(mesh->GeneratePartitioning(num_ranks), mesh->GetNE());
-            // }
-        }
-
         // Negative means refine until mesh is big enough to distribute!
-        if (ser_ref_levels < 0)
-        {
-            ser_ref_levels = 0;
-            for (; mesh->GetNE() < 6 * num_ranks; ++ser_ref_levels)
-                mesh->UniformRefinement();
-        }
+        // if (ser_ref_levels < 0)
+        // {
+        //     ser_ref_levels = 0;
+        //     for (; mesh->GetNE() < 6 * num_ranks; ++ser_ref_levels)
+        //         mesh->UniformRefinement();
+        // }
 
         if (print_progress_report)
         {
@@ -207,16 +564,16 @@ int main (int argc, char *argv[])
                       << std::flush;
 
         bool geometric_coarsening = prob_list.Get("Use geometric coarsening", false);
-        if (geometric_coarsening)
+
+        if (myid == 0)
         {
-            serial_refinements.resize(ser_ref_levels);
-            // if (ser_ref_levels)
-            //     part.Copy(serial_refinements[0].partition);
+            for (auto f : serial_refinements)
+                std::cout << f.num_redist_proc << endl;
         }
 
-
         // FIXME (aschaf 08/22/23) : when using METIS to generate the parallel distribution there are problems with processor boundaries when redistributing back to a single processor
-        pmesh = BuildParallelMesh(comm, *mesh, serial_refinements, prob_list);
+        // pmesh = BuildParallelMesh(comm, *mesh, serial_refinements, prob_list);
+        pmesh = make_shared<ParMesh>(comm, *mesh, par_partitioning);
 
         if (pmesh && print_progress_report)
             std::cout << "-- Built parallel mesh successfully.\n"
@@ -264,6 +621,8 @@ int main (int argc, char *argv[])
 
     ConstantCoefficient coeffL2(1.);
     ConstantCoefficient coeffHdiv(1.);
+
+    prob_list.Set("Distribute multiple copies", false);
 
     SequenceHierarchy hierarchy(pmesh, prob_list, print_progress_report);
     hierarchy.SetCoefficient(pform, coeffL2, false);
@@ -518,7 +877,7 @@ int main (int argc, char *argv[])
                 // hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, pform, p);
                 hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, pform, elemids);
                 hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, pform, ids);
-                // hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, pform, onlyone);
+                hierarchy.ShowTrueData(start_level, hierarchy.GetRedistributionIndex(start_level), groupid, pform, onlyone);
             }
         }
 

@@ -3487,7 +3487,9 @@ std::shared_ptr<DeRhamSequenceAlg> DeRhamSequenceAlg::RebuildOnDifferentComm(con
    }
 
    // FIXME (aschaf 09/20/22) Check if data is really owned
-   redist_seq->L2_const_rep_.SetDataAndSize(sequence.L2_const_rep_.StealData(), sequence.L2_const_rep_.Size());
+   auto tmp_size = sequence.L2_const_rep_.Size();
+   auto tmp_ptr = sequence.L2_const_rep_.StealData();
+   redist_seq->L2_const_rep_.SetDataAndSize(tmp_ptr, tmp_size);
    redist_seq->L2_const_rep_.MakeDataOwner();
 
    redist_seq->SetSVDTol(sequence.GetSVDTol());

@@ -15,6 +15,7 @@
 
 #include "utilities/elagError.hpp"
 #include "utilities/ParELAG_TimeManager.hpp"
+#include "LinearPartition.hpp"
 
 namespace parelag
 {
@@ -164,7 +165,9 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
     {
         MFEMRefinedMeshPartitioner partitioner(nDimensions);
         int num_elems = mesh.GetNE();
-        int coarsening_factor = pow(2, nDimensions);
+        const int coarsening_factor = pow(2, nDimensions);
+        // processor coarsening factor has to match derefinement factor
+        elag_assert(parameter_list.Get("Processor coarsening factor", coarsening_factor) == coarsening_factor);
         int num_partitioning_levels = num_ser_ref;
         mfem::Array<int> partition0(num_elems);
         std::vector<mfem::Array<int>> partitions(num_ser_ref);
@@ -222,11 +225,63 @@ std::shared_ptr<mfem::ParMesh> BuildParallelMesh(MPI_Comm &comm, mfem::Mesh &mes
         }
 #endif // PARELAG_DEBUG_BuildParallelMesh
     }
+    else if ( part_type.compare("linear") == 0 && ((num_ser_ref = serial_refinements.size()) > 0))
+    {
+        int num_elems = mesh.GetNE();
+        const int coarsening_factor = parameter_list.Get("Processor coarsening factor", 2);
+        int num_partitioning_levels = num_ser_ref;
+        mfem::Array<int> partition0(num_elems);
+        std::vector<mfem::Array<int>> partitions(num_ser_ref);
+        std::generate(partition0.begin(), partition0.end(), [n = 0] () mutable { return n++; }); // fill with [0,num_elems)
+        for (int l = 0; l < num_ser_ref; l++)
+        {
+            if ((num_elems / coarsening_factor) < num_ranks)
+            {
+                num_partitioning_levels = l;
+                break;
+            }
+            partitions[l].SetSize(num_elems);
+            DoLinearPartition(num_elems, num_elems / coarsening_factor, partitions[l]);
+            num_elems /= coarsening_factor;
+        }
+        for (int l = 0; l < num_partitioning_levels; l++)
+        {
+            for (auto &&a : partition0)
+                a = partitions[l][a];
+        }
+        // TODO (2024-12-02) : Ensure that on each level, each processor has a chunk that is a multiple of 8
+        partition0.Copy(par_partitioning);
+        int nParts = par_partitioning.Max() + 1;
+        if (nParts > num_ranks)
+        {
+            int nLocalParts = nParts / num_ranks;
+            int remainder = nParts - num_ranks * nLocalParts;
+            Array<int> renumber(nParts);
+            int o = 0;
+            for (int p = 0; p < num_ranks; p++)
+            {
+                int loc = nLocalParts;
+                if (remainder > 0)
+                {
+                    loc++;
+                    remainder--;
+                }
+                std::fill_n(renumber.GetData() + o, loc, p);
+                o += loc;
+            }
+            for (auto &&a : par_partitioning)
+                a = renumber[a];
+        }
+        if (myid == 0)
+        {
+            std::cout << "-- Linear partioning : finished!" << std::endl;
+        }
+    }
     else
         PARELAG_NOT_IMPLEMENTED();
 
     // TODO (aschaf 2023-12-19) : Add some checks to ensure topology is (re)distributable
-    int proc_coarsen = parameter_list.Get("Processor coarsening factor", 2);
+    const int proc_coarsen = parameter_list.Get("Processor coarsening factor", 2);
     int procNParts = num_ranks;
     for (int l = 0; l < serial_refinements.size(); l++)
     {

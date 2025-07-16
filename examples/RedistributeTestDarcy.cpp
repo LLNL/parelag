@@ -120,6 +120,8 @@ int main (int argc, char *argv[])
                  << "*  Mesh: " << meshfile << "\n*\n";
     }
 
+    int ser_ref_levels;
+    std::vector<SerialRefinementInfo> serial_refinements;
     shared_ptr<ParMesh> pmesh;
     {
         if (print_progress_report)
@@ -139,12 +141,21 @@ int main (int argc, char *argv[])
             if (!imesh)
             {
                 if (!myid)
-                    std::cerr << std::endl << "Cannot open mesh file: "
-                              << meshfile << std::endl << std::endl;
+                    std::cerr << std::endl
+                              << "Cannot open mesh file: "
+                              << meshfile << std::endl
+                              << std::endl;
                 return EXIT_FAILURE;
             }
 
             mesh = make_unique<mfem::Mesh>(imesh, 1, 1);
+            {
+                auto hilbtimer = TimeManager::AddTimer("Mesh : reorder");
+                Array<int> hilb;
+                mesh->GetHilbertElementOrdering(hilb);
+                mesh->ReorderElements(hilb);
+            }
+            // mesh->EnsureNCMesh();
             imesh.close();
 
             if (print_progress_report)
@@ -152,18 +163,30 @@ int main (int argc, char *argv[])
                           << "\" successfully.\n";
         }
 
-        int ser_ref_levels =
+        ser_ref_levels =
             prob_list.Get("Serial refinement levels", -1);
+
+        // Array<int> part;
+        // if (part.Size() == 0 && mesh->GetNE() >= num_ranks)
+        // {
+        //     part.MakeRef(mesh->GeneratePartitioning(num_ranks), mesh->GetNE());
+        // }
 
         // This will do no refs if ser_ref_levels <= 0.
         for (int l = 0; l < ser_ref_levels; l++)
+        {
             mesh->UniformRefinement();
+            // if (part.Size() == 0 && mesh->GetNE() >= num_ranks)
+            // {
+            //     part.MakeRef(mesh->GeneratePartitioning(num_ranks), mesh->GetNE());
+            // }
+        }
 
         // Negative means refine until mesh is big enough to distribute!
         if (ser_ref_levels < 0)
         {
             ser_ref_levels = 0;
-            for ( ; mesh->GetNE() < 6*num_ranks; ++ser_ref_levels)
+            for (; mesh->GetNE() < 6 * num_ranks; ++ser_ref_levels)
                 mesh->UniformRefinement();
         }
 
@@ -179,12 +202,24 @@ int main (int argc, char *argv[])
         }
 
         if (print_progress_report)
-            std::cout << "-- Building parallel mesh...\n";
+            std::cout << "-- Building parallel mesh...\n"
+                      << std::flush;
 
-        pmesh = make_shared<ParMesh>(comm, *mesh);
+        bool geometric_coarsening = prob_list.Get("Use geometric coarsening", false);
+        if (geometric_coarsening)
+        {
+            serial_refinements.resize(ser_ref_levels);
+            // if (ser_ref_levels)
+            //     part.Copy(serial_refinements[0].partition);
+        }
+
+
+        // FIXME (aschaf 08/22/23) : when using METIS to generate the parallel distribution there are problems with processor boundaries when redistributing back to a single processor
+        pmesh = BuildParallelMesh(comm, *mesh, serial_refinements, prob_list);
 
         if (pmesh && print_progress_report)
-            std::cout << "-- Built parallel mesh successfully.\n";
+            std::cout << "-- Built parallel mesh successfully.\n"
+                      << std::flush;
     }
 
     const int nDimensions = pmesh->Dimension();

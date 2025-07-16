@@ -14,6 +14,7 @@ list(APPEND SRCS
   MFEMRefinedMeshPartitioner.cpp
   MetisGraphPartitioner.cpp
   GeometricBoxPartitioner.cpp
+  LinearPartition.cpp
   )
 
 list(APPEND HDRS
@@ -24,6 +25,7 @@ list(APPEND HDRS
   GeometricBoxPartitioner.hpp
   CoarsenMetisMaterialId.hpp
   elag_partitioning.hpp
+  LinearPartition.hpp
   )
 
 if (${PROJECT_NAME}_ENABLE_PARMETIS)

@@ -129,6 +129,8 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
         chrono.Start();
         coarsen_type = partition_type::METIS;
         level_redist_procs[l] = num_nonempty_procs;
+        if (verbose_)
+            std::cout << std::flush;
 
         int num_global_elems = topo_[k_l][l]->GetNumberGlobalTrueEntities(elem_t_);
         if (num_global_elems < num_global_elems_threshold)
@@ -231,7 +233,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                     if (is_forced)
                         redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs, *(other_sequence_hierarchy.redistributors_[l]));
                     else
-                        redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs);
+                        redistributors_[l] = make_unique<MultiRedistributor>(*topo_[k_l][l], num_nonempty_procs, num_redist_procs, use_geometric_coarsening);
                 }
                 auto &multi_redistributor = *redistributors_[l];
                 num_copies_[l] = (num_nonempty_procs / num_redist_procs);
@@ -277,7 +279,8 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                 Array<int> partition(num_local_elems);
                 if (num_local_elems > 0)
                 {
-                    if (use_geometric_coarsening)
+                    bool geom_check{(num_local_elems % geom_elem_coarsening_factor) == 0};
+                    if (use_geometric_coarsening && geom_check)
                     {
                         if (serial_refinement_infos_[l - (num_elements.Size()-1)].partition.Size())
                         {
@@ -308,14 +311,26 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             }
             else
             {
-                Redistributor redistributor(*topo_[k_l][l], num_redist_procs);
-                // unique_ptr<Redistributor> redistributor;
-                // // int has_elem_redist_procs = serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs.size(); // currently always 0
-                // // MPI_Allreduce(MPI_IN_PLACE, &has_elem_redist_procs, 1, MPI_INT, MPI_SUM, comm_);
-                // // if (use_geometric_coarsening && has_elem_redist_procs)
-                // //     redistributor = make_unique<Redistributor>(*topo_[l], serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs);
-                // // else
-                //     redistributor = make_unique<Redistributor>(*topo_[l], num_redist_procs);
+                // Redistributor redistributor(*topo_[k_l][l], num_redist_procs);
+                unique_ptr<Redistributor> redistributor;
+                int has_elem_redist_procs_local = (serial_refinement_infos_.size()) ? serial_refinement_infos_[l - (num_elements.Size()-1)].elem_redist_procs.size() : 0; // currently always 0
+                int has_elem_redist_procs_global;
+                MPI_Allreduce(&has_elem_redist_procs_local, &has_elem_redist_procs_global, 1, MPI_INT, MPI_SUM, comm_);
+                if (use_geometric_coarsening && has_elem_redist_procs_global)
+                {
+                    serial_refinement_infos_[l - (num_elements.Size() - 1)].elem_redist_procs.resize(num_local_elems);
+                    {
+                        // printf("rank %d : level %d : num_local_elems = %d : elem_redist_procs = ", myid, l, num_local_elems);
+                        Array<int> tmp(serial_refinement_infos_[l - (num_elements.Size() - 1)].elem_redist_procs.data(), serial_refinement_infos_[l - (num_elements.Size() - 1)].elem_redist_procs.size());
+                        tmp.Print(out, serial_refinement_infos_[l - (num_elements.Size() - 1)].elem_redist_procs.size());
+                        // if (num_local_elems == 0)
+                        //     std::cout << '\n';
+                        std::cout << std::flush;
+                    }
+                    redistributor = make_unique<Redistributor>(*topo_[k_l][l], serial_refinement_infos_[l - (num_elements.Size() - 1)].elem_redist_procs);
+                }
+                else
+                    redistributor = make_unique<Redistributor>(*topo_[k_l][l], num_redist_procs, use_geometric_coarsening);
 
                 if (verbose_)
                 {
@@ -336,9 +351,12 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                     }
                 }
 
-                if (use_geometric_coarsening)
+                bool can_geometric_coarsen = use_geometric_coarsening;
+                if (!(num_local_elems % geom_elem_coarsening_factor == 0))
+                    can_geometric_coarsen = false;
+                if (can_geometric_coarsen)
                 {
-                    auto num_local_elems = redistributor.GetRedistributedTopology().GetNumberLocalEntities(elem_t_);
+                    auto num_local_elems = redistributor->GetRedistributedTopology().GetNumberLocalEntities(elem_t_);
                     Array<int> partition(num_local_elems);
                     if (num_local_elems > 0)
                     {
@@ -353,14 +371,14 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
                         }
                         coarsen_type = partition_type::MFEMRefined;
                     }
-                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partition, 0, 0);
+                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(*redistributor, partition, 0, 0);
                 }
                 else
                 {
-                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(redistributor, partitioner,
+                    topo_[k_l][l+1] = topo_[k_l][l]->Coarsen(*redistributor, partitioner,
                                             elem_coarsening_factor, 0, 0);
                 }
-                seq_[k_l][l+1] = seq_[k_l][l]->Coarsen(redistributor);
+                seq_[k_l][l+1] = seq_[k_l][l]->Coarsen(*redistributor);
                 redistribution_index[l+1] = k_l;
             }
             num_nonempty_procs = num_redist_procs;
@@ -374,7 +392,8 @@ void SequenceHierarchy::Build(const Array<int>& num_elements, const SequenceHier
             Array<int> partition(num_local_elems);
             if (num_local_elems > 0)
             {
-                if (use_geometric_coarsening && can_geom_deref)
+                bool geom_check{(num_local_elems % geom_elem_coarsening_factor) == 0};
+                if (use_geometric_coarsening && can_geom_deref && geom_check)
                 {
                     int num_coarse_elems = num_local_elems / geom_elem_coarsening_factor;
                     mfem_partitioner.Partition(num_local_elems, num_coarse_elems, partition);

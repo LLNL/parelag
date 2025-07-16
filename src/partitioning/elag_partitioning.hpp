@@ -20,6 +20,7 @@
 #include "MFEMRefinedMeshPartitioner.hpp"
 #include "GeometricBoxPartitioner.hpp"
 #include "CoarsenMetisMaterialId.hpp"
+#include "LinearPartition.hpp"
 
 #ifdef ParELAG_ENABLE_PARMETIS
 #include "ParmetisGraphPartitioner.hpp"
