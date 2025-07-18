@@ -12,6 +12,8 @@
 */
 
 #include <mpi.h>
+#include <limits.h>
+#include <assert.h>
 #include "seq_mv.h"
 #include "_hypre_parcsr_mv.h"
 #include "_hypre_parcsr_ls.h"
@@ -68,28 +70,51 @@ int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
    return hypre_error_flag;
 }
 
+/*--------------------------------------------------------------------------
+ * For hypre v2.16 or later, hypre_CSRMatrixAdd2 assumes A and B use big_j.
+ * This function does not work if number of columns of A exceeds limit of int.
+ *--------------------------------------------------------------------------*/
 hypre_CSRMatrix *
 hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
-              double b, hypre_CSRMatrix *B)
+                     double b, hypre_CSRMatrix *B)
 {
-   double     *A_data   = hypre_CSRMatrixData(A);
+   double           *A_data   = hypre_CSRMatrixData(A);
    HYPRE_Int        *A_i      = hypre_CSRMatrixI(A);
+#if MFEM_HYPRE_VERSION >= 21600
+   HYPRE_BigInt     *A_j      = hypre_CSRMatrixBigJ(A);
+#else
    HYPRE_Int        *A_j      = hypre_CSRMatrixJ(A);
+#endif
    HYPRE_Int         nrows_A  = hypre_CSRMatrixNumRows(A);
    HYPRE_Int         ncols_A  = hypre_CSRMatrixNumCols(A);
-   double     *B_data   = hypre_CSRMatrixData(B);
+   double           *B_data   = hypre_CSRMatrixData(B);
    HYPRE_Int        *B_i      = hypre_CSRMatrixI(B);
+#if MFEM_HYPRE_VERSION >= 21600
+   HYPRE_BigInt     *B_j      = hypre_CSRMatrixBigJ(B);
+#else
    HYPRE_Int        *B_j      = hypre_CSRMatrixJ(B);
+#endif
    HYPRE_Int         nrows_B  = hypre_CSRMatrixNumRows(B);
    HYPRE_Int         ncols_B  = hypre_CSRMatrixNumCols(B);
-   hypre_CSRMatrix *C;
-   double     *C_data;
-   HYPRE_Int	      *C_i;
+   hypre_CSRMatrix  *C;
+   double           *C_data;
+   HYPRE_Int        *C_i;
+#if MFEM_HYPRE_VERSION >= 21600
+   HYPRE_BigInt     *C_j;
+#else
    HYPRE_Int        *C_j;
+#endif
 
-   HYPRE_Int         ia, ib, ic, jcol, num_nonzeros;
-   HYPRE_Int	       pos;
-   HYPRE_Int         *marker;
+   assert(ncols_A <= INT_MAX);
+
+   HYPRE_Int         ia, ib, ic, num_nonzeros;
+#if MFEM_HYPRE_VERSION >= 21600
+   HYPRE_BigInt      jcol;
+#else
+   HYPRE_Int         jcol;
+#endif
+   HYPRE_Int	      pos;
+   HYPRE_Int        *marker;
 
    if (nrows_A != nrows_B || ncols_A != ncols_B)
    {
