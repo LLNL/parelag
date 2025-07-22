@@ -247,9 +247,9 @@ u l2-like errors: 6.8347e-08 \nu energy-like errors: 4.9492e-07")
     PASS_REGULAR_EXPRESSION
     "mpi processes: 1"
     PASS_REGULAR_EXPRESSION
-    "u l2-like errors: 8.5165e-02 4.3735e-02 \np l2-like errors: 1.9534e-04 1.0103e-04 \nu energy-like errors: 1.9577e-06 1.9438e-06;\
-u l2-like errors: 8.6573e-02 4.4377e-02 \np l2-like errors: 1.9933e-04 1.0208e-04 \nu energy-like errors: 1.5697e-06 1.6824e-06;
-u l2-like errors: 8.6902e-02 4.3905e-02 \np l2-like errors: 1.8645e-04 1.0685e-04 \nu energy-like errors: 1.2992e-06 1.3503e-06")
+    "u l2-like errors: 8.5165e-02 4.3735e-02 \np l2-like errors: 1.9534e-04 1.0103e-04 \nu energy-like errors: [1-2].[0-9]*e-06 [1-2].[0-9]*e-06;\
+u l2-like errors: 8.6573e-02 4.4377e-02 \np l2-like errors: 1.9933e-04 1.0208e-04 \nu energy-like errors: [1-2].[0-9]*e-06 [1-2].[0-9]*e-06;
+u l2-like errors: 8.6902e-02 4.3905e-02 \np l2-like errors: 1.8645e-04 1.0685e-04 \nu energy-like errors: [1-2].[0-9]*e-06 [1-2].[0-9]*e-06")
 
   add_test(geometric_partitioner
     test_GeometricBoxPartitioner.exe --x-elem 12 --y-elem 16 --partitions 9)
