@@ -133,7 +133,7 @@ int main(int argc, char * argv[])
         partitioning.Print(out, 1);
     }
 
-    const Array<int>& partition_sizes = gbp.GetPartitionSizes();
+    auto& partition_sizes = const_cast<Array<int>&>(gbp.GetPartitionSizes());
     int pmax = partition_sizes.Max();
     int pmin = partition_sizes.Min();
     int psum = 0;
