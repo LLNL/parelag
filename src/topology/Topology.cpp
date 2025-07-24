@@ -466,7 +466,10 @@ std::unique_ptr<TopologyTable> AgglomeratedTopology::ComputeCoarseFacets(
     const int nfacets = fc_Truefc->Height(); // used in the very end for output TopologyTable
 
     int * AErow_starts = CoarseTopology->entityTrueEntity[0]->get_entity_trueEntity()->GetRowStarts();
-    auto AE_Truefc = fc_Truefc->LeftDiagMult(AE_fc, AErow_starts );
+    int nAE = CoarseTopology->entityTrueEntity[0]->get_entity_trueEntity()->M();
+    int * fc_starts = fc_Truefc->GetRowStarts();
+    HypreParMatrix AE_fc_bd(Comm_, nAE, fc_Truefc->M(), AErow_starts, fc_starts, &AE_fc);
+    auto AE_Truefc = mfem::ParMult(&AE_fc_bd, fc_Truefc);
 
     auto Truefc_AE = AE_Truefc->Transpose();
 

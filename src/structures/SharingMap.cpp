@@ -95,8 +95,10 @@ void SharingMap::SetUp(unique_ptr<ParallelCSRMatrix> entity_trueEntity_)
 
     hypre_ParCSRMatrix * h_e_tE = *entity_trueEntity;
 
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(h_e_tE) == 1 );
     elag_assert( hypre_ParCSRMatrixOwnsColStarts(h_e_tE) == 1 );
+#endif
 
     entity_start[0] = entity_trueEntity->RowPart()[0];
     entity_start[1] = entity_trueEntity->RowPart()[1];
@@ -114,8 +116,10 @@ void SharingMap::SetUp(unique_ptr<ParallelCSRMatrix> entity_trueEntity_)
     hypre_ParCSRMatrixTranspose2(h_e_tE, &tE_e);
     elag_trace("Transpose entity_trueEntity - done!");
 
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(tE_e) == 0 );
     elag_assert( hypre_ParCSRMatrixOwnsColStarts(tE_e) == 0 );
+#endif
 
     elag_trace("Compute entity_trueEntity_entity");
     entity_trueEntity_entity = make_unique<ParallelCSRMatrix>(
@@ -125,8 +129,10 @@ void SharingMap::SetUp(unique_ptr<ParallelCSRMatrix> entity_trueEntity_)
     hypre_ParCSRMatrixDestroy(tE_e);
 
     hypre_ParCSRMatrix * h_e_tE_e = *entity_trueEntity_entity;
+#if MFEM_HYPRE_VERSION <= 22200
     PARELAG_ASSERT( hypre_ParCSRMatrixOwnsRowStarts(h_e_tE_e) == 0 );
     PARELAG_ASSERT( hypre_ParCSRMatrixOwnsColStarts(h_e_tE_e) == 0 );
+#endif
 
     resetHypreParVectors();
     storeSharedEntitiesIds();
@@ -151,6 +157,7 @@ void SharingMap::SetUp(Array<int> & entityStart,
     if (!hypre_ParCSRMatrixCommPkg(h_e_tE))
         hypre_MatvecCommPkgCreate(h_e_tE);
 
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(h_e_tE) == 0 );
     elag_assert( hypre_ParCSRMatrixOwnsColStarts(h_e_tE) == 0 );
 
@@ -158,6 +165,10 @@ void SharingMap::SetUp(Array<int> & entityStart,
         = entity_start.GetData();
     hypre_ParCSRMatrixColStarts(h_e_tE)
         = trueEntity_start.GetData();
+#else
+    std::copy_n(entity_start.GetData(), 2, hypre_ParCSRMatrixRowStarts(h_e_tE));
+    std::copy_n(trueEntity_start.GetData(), 2, hypre_ParCSRMatrixColStarts(h_e_tE));
+#endif
 
     hypre_ParCSRMatrix * tE_e;
 
@@ -165,8 +176,10 @@ void SharingMap::SetUp(Array<int> & entityStart,
     hypre_ParCSRMatrixTranspose2(h_e_tE, &tE_e);
     elag_trace("Transpose entity_trueEntity - done!");
 
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(tE_e) == 0 );
     elag_assert( hypre_ParCSRMatrixOwnsColStarts(tE_e) == 0 );
+#endif
 
     elag_trace("Compute entity_trueEntity_entity");
     entity_trueEntity_entity = make_unique<ParallelCSRMatrix>(
@@ -176,8 +189,10 @@ void SharingMap::SetUp(Array<int> & entityStart,
     hypre_ParCSRMatrixDestroy(tE_e);
 
     hypre_ParCSRMatrix * h_e_tE_e = *entity_trueEntity_entity;
+#if MFEM_HYPRE_VERSION <= 22200
     PARELAG_ASSERT( hypre_ParCSRMatrixOwnsRowStarts(h_e_tE_e) == 0 );
     PARELAG_ASSERT( hypre_ParCSRMatrixOwnsColStarts(h_e_tE_e) == 0 );
+#endif
 
     resetHypreParVectors();
     storeSharedEntitiesIds();
@@ -198,8 +213,10 @@ void SharingMap::resetHypreParVectors()
         hypre_ParVectorCreate(
             Comm_,entity_start[AssumedNumProc_],entity_start.GetData()));
 
+#if MFEM_HYPRE_VERSION <= 22200
     hypre_ParVectorSetPartitioningOwner(xTrue_.get(), 0);
     hypre_ParVectorSetPartitioningOwner(x_.get(), 0);
+#endif
     hypre_SeqVectorSetDataOwner(hypre_ParVectorLocalVector(xTrue_),0);
     hypre_SeqVectorSetDataOwner(hypre_ParVectorLocalVector(x_),0);
 
@@ -374,8 +391,10 @@ void SharingMap::SetUp(int localSize)
 
     hypre_ParCSRMatrixTranspose2(h_e_tE, &tE_e);
 
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert(hypre_ParCSRMatrixOwnsRowStarts(tE_e) == 0);
     elag_assert(hypre_ParCSRMatrixOwnsColStarts(tE_e) == 0);
+#endif
 
     entity_trueEntity_entity = make_unique<HypreParMatrix>(
         hypre_ParMatmul(h_e_tE, tE_e) );
@@ -383,8 +402,10 @@ void SharingMap::SetUp(int localSize)
     hypre_ParCSRMatrixDestroy(tE_e);
 
     hypre_ParCSRMatrix * h_e_tE_e = *entity_trueEntity_entity;
+#if MFEM_HYPRE_VERSION <= 22200
     PARELAG_ASSERT(hypre_ParCSRMatrixOwnsRowStarts(h_e_tE_e) == 0);
     PARELAG_ASSERT(hypre_ParCSRMatrixOwnsColStarts(h_e_tE_e) == 0);
+#endif
 
     resetHypreParVectors();
     storeSharedEntitiesIds();

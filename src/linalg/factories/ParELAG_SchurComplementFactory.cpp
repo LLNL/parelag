@@ -132,6 +132,7 @@ SchurComplementFactory::BuildOperator(
         auto product = std::unique_ptr<mfem::HypreParMatrix>{
             mfem::ParMult(A10,&tmp)};
 
+#if MFEM_HYPRE_VERSION <= 22200
         // Fix ownership of stuff
         {
             hypre_ParCSRMatrix* prod_h = *product;
@@ -146,6 +147,7 @@ SchurComplementFactory::BuildOperator(
             hypre_ParCSRMatrixOwnsRowStarts(prod_h) = 1;
             hypre_ParCSRMatrixOwnsColStarts(prod_h) = 1;
         }
+#endif
 
         if (A11)
         {

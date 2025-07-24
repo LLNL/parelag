@@ -237,6 +237,7 @@ HypreAMS::~HypreAMS()
 {
     HYPRE_AMSDestroy(ams);
 
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(static_cast<hypre_ParCSRMatrix *>(*G) ) == 0 );
     try
     {
@@ -246,6 +247,7 @@ HypreAMS::~HypreAMS()
     {
         hypre_ParCSRMatrixOwnsColStarts(static_cast<hypre_ParCSRMatrix *>(*G)) = 0;
     }
+#endif
 
     if(owns_G)
         delete G;
@@ -521,8 +523,10 @@ HypreADS::HypreADS(HypreParMatrix &A, DeRhamSequence * seq,
 
 void HypreADS::SetParameters( const HypreADSData & data )
 {
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(static_cast<hypre_ParCSRMatrix *>(*C)) == 0 );
     elag_assert( hypre_ParCSRMatrixOwnsColStarts(static_cast<hypre_ParCSRMatrix *>(*C)) == 0 );
+#endif
 
     HYPRE_ADSCreate(&ads);
 
@@ -606,6 +610,7 @@ HypreADS::~HypreADS()
 {
     HYPRE_ADSDestroy(ads);
 
+#if MFEM_HYPRE_VERSION <= 22200
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(static_cast<hypre_ParCSRMatrix *>(*G) ) == 0 );
     elag_assert( hypre_ParCSRMatrixOwnsColStarts(static_cast<hypre_ParCSRMatrix *>(*G)) == 0 );
     elag_assert( hypre_ParCSRMatrixOwnsRowStarts(static_cast<hypre_ParCSRMatrix *>(*C)) == 0 );
@@ -617,6 +622,7 @@ HypreADS::~HypreADS()
     {
         hypre_ParCSRMatrixOwnsColStarts(static_cast<hypre_ParCSRMatrix *>(*C)) = 0;
     }
+#endif
 
     if(owns_G)
         delete G;
@@ -648,15 +654,18 @@ HypreParMatrix * ParAdd(double a, HypreParMatrix *A, double b, HypreParMatrix *B
 
 HypreParMatrix * RAP(HypreParMatrix * Rt, HypreParMatrix * A, HypreParMatrix * P)
 {
+#if MFEM_HYPRE_VERSION <= 22200
     int P_owns_its_col_starts =
         hypre_ParCSRMatrixOwnsColStarts((hypre_ParCSRMatrix*)(*P));
     int Rt_owns_its_col_starts =
         hypre_ParCSRMatrixOwnsColStarts((hypre_ParCSRMatrix*)(*P));
+#endif
 
     hypre_ParCSRMatrix * rap;
     hypre_BoomerAMGBuildCoarseOperator(*Rt,*A,*P,&rap);
     hypre_ParCSRMatrixSetNumNonzeros(rap);
 
+#if MFEM_HYPRE_VERSION <= 22200
     /* Warning: hypre_BoomerAMGBuildCoarseOperator steals the col_starts
        from P (even if it does not own them)! */
     if (!P_owns_its_col_starts)
@@ -664,6 +673,7 @@ HypreParMatrix * RAP(HypreParMatrix * Rt, HypreParMatrix * A, HypreParMatrix * P
 
     if (!Rt_owns_its_col_starts)
         hypre_ParCSRMatrixSetRowStartsOwner(rap,0);
+#endif
 
     return new HypreParMatrix(rap);
 }

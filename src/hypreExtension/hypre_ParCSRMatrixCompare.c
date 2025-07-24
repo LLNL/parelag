@@ -11,28 +11,40 @@
   Software Foundation) version 2.1 dated February 1999.
 */
 
+#include <limits.h>
+#include <assert.h>
 #include "hypreExtension.hpp"
 
 hypre_CSRMatrix *hypre_CSRMatrixSubtract ( hypre_CSRMatrix *A , hypre_CSRMatrix *B )
 {
-       double     *A_data   = hypre_CSRMatrixData(A);
+       double           *A_data   = hypre_CSRMatrixData(A);
        HYPRE_Int        *A_i      = hypre_CSRMatrixI(A);
+#if MFEM_HYPRE_VERSION >= 21600
+       HYPRE_BigInt     *A_j      = hypre_CSRMatrixBigJ(A);
+#else
        HYPRE_Int        *A_j      = hypre_CSRMatrixJ(A);
+#endif
        HYPRE_Int         nrows_A  = hypre_CSRMatrixNumRows(A);
        HYPRE_Int         ncols_A  = hypre_CSRMatrixNumCols(A);
-       double     *B_data   = hypre_CSRMatrixData(B);
+       double           *B_data   = hypre_CSRMatrixData(B);
        HYPRE_Int        *B_i      = hypre_CSRMatrixI(B);
+#if MFEM_HYPRE_VERSION >= 21600
+       HYPRE_BigInt     *B_j      = hypre_CSRMatrixBigJ(B);
+#else
        HYPRE_Int        *B_j      = hypre_CSRMatrixJ(B);
+#endif
        HYPRE_Int         nrows_B  = hypre_CSRMatrixNumRows(B);
        HYPRE_Int         ncols_B  = hypre_CSRMatrixNumCols(B);
-       hypre_CSRMatrix *C;
-       double     *C_data;
-       HYPRE_Int	      *C_i;
+       hypre_CSRMatrix  *C;
+       double           *C_data;
+       HYPRE_Int	    *C_i;
        HYPRE_Int        *C_j;
 
        HYPRE_Int         ia, ib, ic, jcol, num_nonzeros;
-       HYPRE_Int	       pos;
-       HYPRE_Int         *marker;
+       HYPRE_Int	     pos;
+       HYPRE_Int        *marker;
+
+       assert(ncols_A <= INT_MAX);
 
        if (nrows_A != nrows_B || ncols_A != ncols_B)
        {

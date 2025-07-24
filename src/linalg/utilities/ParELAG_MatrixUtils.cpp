@@ -907,9 +907,11 @@ unique_ptr<mfem::HypreParMatrix> IgnoreNonLocalRange(
     hypre_ParCSRMatrixOffd(RT) = hold_offd;
     hypre_ParCSRMatrixCommPkg(RT) = hold_commpkg;
 
+#if MFEM_HYPRE_VERSION <= 22200
     // These are owned elsewhere
     hypre_ParCSRMatrixOwnsRowStarts(out) = 0;
     hypre_ParCSRMatrixOwnsColStarts(out) = 0;
+#endif
 
     return make_unique<mfem::HypreParMatrix>(out);
 }
@@ -1070,6 +1072,12 @@ void SplitMatrixHorizontally(const DenseMatrix &A, int middle_row,
 std::unique_ptr<mfem::HypreParMatrix>
 Mult(const mfem::HypreParMatrix& A, const mfem::HypreParMatrix& B, bool own_starts)
 {
-   return std::unique_ptr<mfem::HypreParMatrix>(mfem::ParMult(&A, &B, own_starts));
+    auto out = std::unique_ptr<mfem::HypreParMatrix>(mfem::ParMult(&A, &B));
+    if (own_starts)
+    {
+       out->CopyRowStarts();
+       out->CopyColStarts();
+    }
+    return out;
 }
 }//namespace parelag

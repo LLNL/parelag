@@ -29,8 +29,8 @@ namespace parelag
 /// This could be much expanded.
 struct mpi_session
 {
-    mpi_session(int argc, char** argv) { MPI_Init(&argc,&argv); }
-    ~mpi_session() { MPI_Finalize(); }
+    mpi_session(int argc, char** argv);
+    ~mpi_session();
 };
 
 /// Given one integer for each processors (myVal), each processor

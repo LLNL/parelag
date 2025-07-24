@@ -16,7 +16,10 @@
 
 namespace parelag
 {
-using namespace mfem;
+using mfem::Array;
+using mfem::Vector;
+using mfem::Table;
+using mfem::SparseMatrix;
 
 MetisGraphPartitioner::MetisGraphPartitioner()
 {
@@ -422,7 +425,7 @@ int MetisGraphPartitioner::doPartition(const Array<int> & i,
         else
         {
             edgecut = -1;//silence the compiler warning about initialization
-            mfem_error("invalid options");
+            mfem::mfem_error("invalid options");
         }
 
         if(flags & CHECKPARTITION)
