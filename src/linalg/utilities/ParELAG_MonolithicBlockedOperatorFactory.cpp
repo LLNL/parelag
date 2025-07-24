@@ -318,8 +318,10 @@ MonolithicBlockedOperatorFactory::BuildOperator(BlockedOperatorType& op)
     std::copy(all_gids.begin(),all_gids.end(),
               hypre_ParCSRMatrixColMapOffd(mono_mat));
 
+#if MFEM_HYPRE_VERSION <= 22200
     PARELAG_ASSERT(hypre_ParCSRMatrixOwnsRowStarts(mono_mat));
     PARELAG_ASSERT(hypre_ParCSRMatrixOwnsColStarts(mono_mat));
+#endif
 
     // Grab the pieces of the monolithic guy
     hypre_CSRMatrix* m_diag = hypre_ParCSRMatrixDiag(mono_mat),

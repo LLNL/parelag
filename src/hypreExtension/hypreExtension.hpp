@@ -14,7 +14,8 @@
 #ifndef HYPREEXTENSION_H_
 #define HYPREEXTENSION_H_
 
-#include <config/_config.hpp>
+#include "ParELAG_Config.h"
+#include PARELAG_MFEM_CONFIG_HEADER
 
 #include "seq_mv.h"
 #include "_hypre_parcsr_mv.h"
@@ -22,11 +23,16 @@
 
 #if MFEM_HYPRE_VERSION >= 21400
 #define parelag_hypre_CTAlloc(type, size) \
-   hypre_CTAlloc(type, size, HYPRE_MEMORY_HOST)
+    hypre_CTAlloc(type, size, HYPRE_MEMORY_HOST)
 #define parelag_hypre_TFree(ptr) hypre_TFree(ptr, HYPRE_MEMORY_HOST)
 #else // MFEM_HYPRE_VERSION < 21400
 #define parelag_hypre_CTAlloc(type, size) hypre_CTAlloc(type, size)
 #define parelag_hypre_TFree(ptr) hypre_TFree(ptr)
+#endif
+
+#if MFEM_HYPRE_VERSION > 22200
+#define hypre_ParCSRMatrixSetRowStartsOwner(A, own)
+#define hypre_ParCSRMatrixSetColStartsOwner(A, own)
 #endif
 
 #ifdef __cplusplus
@@ -81,7 +87,7 @@ void hypre_ParCSRDataTransformationSign(hypre_ParCSRMatrix * mat);
 HYPRE_Int hypre_ParCSRMatrixCompare(hypre_ParCSRMatrix * A, hypre_ParCSRMatrix * B, double tol, int verbose);
 
 
-int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
+int parelag_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
                           hypre_ParCSRMatrix *B,
                           hypre_ParCSRMatrix **C_ptr);
 

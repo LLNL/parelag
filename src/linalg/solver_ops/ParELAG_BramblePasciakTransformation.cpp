@@ -243,8 +243,10 @@ BramblePasciakTransformation::BuildOperator(
             }
             I[my_num_rows] = my_num_rows;
 
+#if MFEM_HYPRE_VERSION <= 22200
             hypre_ParCSRMatrixOwnsRowStarts(minus_I) = 1;
             hypre_ParCSRMatrixOwnsColStarts(minus_I) = 1;
+#endif
         }
 
         PARELAG_ASSERT(minus_I);

@@ -60,6 +60,7 @@ hypre_ParCSRMatrixTranspose2(hypre_ParCSRMatrix  *A,
 #else
     hypre_ParCSRMatrixTranspose(A,At,1);
 
+#if MFEM_HYPRE_VERSION <= 22200
     if(hypre_ParCSRMatrixOwnsRowStarts(*At))
         parelag_hypre_TFree(hypre_ParCSRMatrixRowStarts(*At));
 
@@ -71,6 +72,7 @@ hypre_ParCSRMatrixTranspose2(hypre_ParCSRMatrix  *A,
 
     hypre_ParCSRMatrixSetRowStartsOwner(*At, 0);
     hypre_ParCSRMatrixSetColStartsOwner(*At, 0);
+#endif
 
     return 0;
 #endif

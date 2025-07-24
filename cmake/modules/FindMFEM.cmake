@@ -24,7 +24,7 @@ find_package(HYPRE REQUIRED)
 
 # Start by finding the MFEM config.mk file
 find_file(MFEM_CONFIG_FILE config.mk
-  HINTS ${MFEM_DIR} $ENV{MFEM_DIR} 
+  HINTS ${MFEM_DIR} $ENV{MFEM_DIR}
   HINTS ${MFEM_DIR}/build $ENV{MFEM_DIR}/build ${MFEM_DIR} $ENV{MFEM_DIR} ${MFEM_DIR}/share/mfem $ENV{MFEM_DIR}/share/mfem
   PATH_SUFFIXES config
   NO_DEFAULT_PATH
@@ -37,32 +37,32 @@ if (MFEM_CONFIG_FILE)
 
   # Extract the relevant list of lines
   file(STRINGS ${MFEM_CONFIG_FILE} MFEM_CONFIG_STRINGS REGEX " = ")
-  
+
   # Now I need to parse this file; it's not pretty. Mayber there's a better way?
   foreach(MY_LINE IN LISTS MFEM_CONFIG_STRINGS)
     # Make the equals sign the list separator
     string(REPLACE "=" ";" MY_LINE_NO_EQ ${MY_LINE})
-    
+
     # Set the CMAKE variable name to the first thing; set the value to
     # the second thing.
     list(GET MY_LINE_NO_EQ 0 MY_VAR_NAME)
     list(GET MY_LINE_NO_EQ 1 MY_VAR_VALUE)
-    
+
     string(STRIP ${MY_VAR_NAME} MY_VAR_NAME)
     string(STRIP ${MY_VAR_VALUE} MY_VAR_VALUE)
-    
+
     set(${MY_VAR_NAME} ${MY_VAR_VALUE})
   endforeach(MY_LINE)
-  
+
   # Verify MFEM was built with MPI support
   if(NOT MFEM_USE_MPI)
     message(FATAL_ERROR "MFEM must be built with MPI support.")
   endif(NOT MFEM_USE_MPI)
-  
+
 else(MFEM_CONFIG_FILE)
   message(FATAL_ERROR "MFEM configuration file not found!")
 endif(MFEM_CONFIG_FILE)
-  
+
 # Find the header
 find_path(MFEM_INCLUDE_DIRS mfem.hpp
   HINTS ${MFEM_DIR}/build $ENV{MFEM_DIR}/build ${MFEM_CONFIG_DIR} ${MFEM_DIR} $ENV{MFEM_DIR}
@@ -111,7 +111,7 @@ endif (MFEM_USE_SUITESPARSE)
 
 # Add LAPACK, if used
 if (MFEM_USE_LAPACK)
-  set_property(TARGET MFEM::mfem APPEND 
+  set_property(TARGET MFEM::mfem APPEND
     PROPERTY INTERFACE_LINK_LIBRARIES ${LAPACK_LIBRARIES})
 endif (MFEM_USE_LAPACK)
 
@@ -129,9 +129,34 @@ mark_as_advanced(FORCE MFEM_LIBRARY)
 
 mark_as_advanced(FORCE MFEM_CONFIG_FILE)
 
+mark_as_advanced(FORCE MFEM_CONFIG_HEADER)
+
+
+# Start by finding the MFEM config.mk file
+find_file(MFEM_CONFIG_HEADER _config.hpp
+  HINTS ${MFEM_DIR} $ENV{MFEM_DIR}
+  HINTS ${MFEM_DIR} $ENV{MFEM_DIR} ${MFEM_DIR}/include/mfem $ENV{MFEM_DIR}/include/mfem
+  PATH_SUFFIXES config
+  NO_DEFAULT_PATH
+  DOC "The MFEM configuration header")
+find_file(MFEM_CONFIG_HEADER _config.hpp)
+
+# If could not find _config.hpp, look for config.hpp
+if(NOT MFEM_CONFIG_HEADER)
+  find_file(MFEM_CONFIG_HEADER config.hpp
+    HINTS ${MFEM_DIR} $ENV{MFEM_DIR}
+    HINTS ${MFEM_DIR} $ENV{MFEM_DIR} ${MFEM_DIR}/include/mfem $ENV{MFEM_DIR}/include/mfem
+    PATH_SUFFIXES config
+    NO_DEFAULT_PATH
+    DOC "The MFEM configuration header")
+  find_file(MFEM_CONFIG_HEADER config.hpp)
+  if(NOT MFEM_CONFIG_HEADER)
+    message(FATAL ERROR "MFEM Config Header File Not Found")
+  endif()
+endif()
 
 # This handles "REQUIRED" etc keywords
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(MFEM
   DEFAULT_MSG
-  MFEM_CONFIG_FILE MFEM_USE_MPI MFEM_INCLUDE_DIRS)
+  MFEM_CONFIG_FILE MFEM_USE_MPI MFEM_INCLUDE_DIRS MFEM_CONFIG_HEADER)

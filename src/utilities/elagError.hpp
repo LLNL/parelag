@@ -22,6 +22,7 @@
 
 #include "ParELAG_Config.h"
 #include "ParELAG_Exceptions.hpp"
+#include PARELAG_MFEM_CONFIG_HEADER
 
 namespace parelag
 {
@@ -41,8 +42,14 @@ void Debug_IncreaseThrowCount();
  * Global variable used in hypre error checking
  *--------------------------------------------------------------------------*/
 
+#if MFEM_HYPRE_VERSION >= 22900
+extern hypre_Error hypre__global_error;
+#define hypre_error_flag  hypre__global_error.error_flag
+#else
 extern HYPRE_Int hypre__global_error;
 #define hypre_error_flag  hypre__global_error
+#endif
+
 
 #define NOT_IMPLEMENTED_YET 999
 

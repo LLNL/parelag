@@ -24,7 +24,7 @@
  *
  * Add two ParCSR matrices: C = A + B.
  *--------------------------------------------------------------------------*/
-int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
+int parelag_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
                           hypre_ParCSRMatrix *B,
                           hypre_ParCSRMatrix **C_ptr)
 {
@@ -45,7 +45,11 @@ int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
 
    A_local = hypre_MergeDiagAndOffd(A);
    B_local = hypre_MergeDiagAndOffd(B);
+#if MFEM_HYPRE_VERSION >= 22200
+   C_local = hypre_CSRMatrixAdd(1.0, A_local, 1.0, B_local);
+#else
    C_local = hypre_CSRMatrixAdd(A_local, B_local);
+#endif
 
    C = hypre_ParCSRMatrixCreate (comm,
                                  global_num_rows,
@@ -58,8 +62,11 @@ int hypre_ParCSRMatrixAdd(hypre_ParCSRMatrix *A,
    GenerateDiagAndOffd(C_local, C,
                        hypre_ParCSRMatrixFirstColDiag(A),
                        hypre_ParCSRMatrixLastColDiag(A));
+
+#if MFEM_HYPRE_VERSION <= 22200
    hypre_ParCSRMatrixOwnsRowStarts(C) = 0;
    hypre_ParCSRMatrixOwnsColStarts(C) = 0;
+#endif
 
    hypre_CSRMatrixDestroy(A_local);
    hypre_CSRMatrixDestroy(B_local);
@@ -99,11 +106,7 @@ hypre_CSRMatrixAdd2( double a, hypre_CSRMatrix *A,
    hypre_CSRMatrix  *C;
    double           *C_data;
    HYPRE_Int        *C_i;
-#if MFEM_HYPRE_VERSION >= 21600
-   HYPRE_BigInt     *C_j;
-#else
    HYPRE_Int        *C_j;
-#endif
 
    assert(ncols_A <= INT_MAX);
 
@@ -227,8 +230,10 @@ int hypre_ParCSRMatrixAdd2(double a, hypre_ParCSRMatrix *A,
    GenerateDiagAndOffd(C_local, C,
                        hypre_ParCSRMatrixFirstColDiag(A),
                        hypre_ParCSRMatrixLastColDiag(A));
+#if MFEM_HYPRE_VERSION <= 22200
    hypre_ParCSRMatrixOwnsRowStarts(C) = 0;
    hypre_ParCSRMatrixOwnsColStarts(C) = 0;
+#endif
 
    hypre_CSRMatrixDestroy(A_local);
    hypre_CSRMatrixDestroy(B_local);

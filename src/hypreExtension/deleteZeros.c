@@ -115,16 +115,15 @@ HYPRE_Int hypre_ParCSRMatrixKeepEqualEntries(hypre_ParCSRMatrix * A, hypre_ParCS
     hypre_CSRMatrix * diag_A = hypre_ParCSRMatrixDiag(A);
     hypre_CSRMatrix * diag_B = hypre_ParCSRMatrixDiag(B);
 
-    {
 #ifndef NDEBUG
+    {
         HYPRE_Int * i_diag_A = hypre_CSRMatrixI(diag_A);
         HYPRE_Int * i_diag_B = hypre_CSRMatrixI(diag_B);
         HYPRE_Int * j_diag_A = hypre_CSRMatrixJ(diag_A);
         HYPRE_Int * j_diag_B = hypre_CSRMatrixJ(diag_B);
+        HYPRE_Int nrows_A = hypre_CSRMatrixNumRows(diag_A);
         HYPRE_Int nrows_B = hypre_CSRMatrixNumRows(diag_B);
         HYPRE_Int nnz_B = hypre_CSRMatrixNumNonzeros(diag_B);
-#endif
-        HYPRE_Int nrows_A = hypre_CSRMatrixNumRows(diag_A);
 
         hypre_assert(nrows_A == nrows_B);
 
@@ -139,6 +138,7 @@ HYPRE_Int hypre_ParCSRMatrixKeepEqualEntries(hypre_ParCSRMatrix * A, hypre_ParCS
         for(i = 0; i < nnz_A; ++i)
             hypre_assert(j_diag_A[i] == j_diag_B[i] );
     }
+#endif
 
     double * data_A = hypre_CSRMatrixData(diag_A);
     double * data_B = hypre_CSRMatrixData(diag_B);
@@ -157,16 +157,15 @@ HYPRE_Int hypre_ParCSRMatrixKeepEqualEntries(hypre_ParCSRMatrix * A, hypre_ParCS
     hypre_CSRMatrix * offd_A = hypre_ParCSRMatrixOffd(A);
     hypre_CSRMatrix * offd_B = hypre_ParCSRMatrixOffd(B);
 
-    {
 #ifndef NDEBUG
+    {
         HYPRE_Int * i_offd_A = hypre_CSRMatrixI(offd_A);
         HYPRE_Int * i_offd_B = hypre_CSRMatrixI(offd_B);
         HYPRE_Int * j_offd_A = hypre_CSRMatrixJ(offd_A);
         HYPRE_Int * j_offd_B = hypre_CSRMatrixJ(offd_B);
+        HYPRE_Int nrows_A = hypre_CSRMatrixNumRows(offd_A);
         HYPRE_Int nrows_B = hypre_CSRMatrixNumRows(offd_B);
         HYPRE_Int nnz_B = hypre_CSRMatrixNumNonzeros(offd_B);
-#endif
-        HYPRE_Int nrows_A = hypre_CSRMatrixNumRows(offd_A);
 
         hypre_assert(nrows_A == nrows_B);
 
@@ -181,6 +180,7 @@ HYPRE_Int hypre_ParCSRMatrixKeepEqualEntries(hypre_ParCSRMatrix * A, hypre_ParCS
         for(i = 0; i < nnz_A; ++i)
             hypre_assert(j_offd_A[i] == j_offd_B[i] );
     }
+#endif
 
     data_A = hypre_CSRMatrixData(offd_A);
     data_B = hypre_CSRMatrixData(offd_B);
