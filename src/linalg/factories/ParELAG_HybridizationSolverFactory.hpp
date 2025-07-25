@@ -19,6 +19,7 @@
 #include "utilities/MemoryUtils.hpp"
 #include "linalg/utilities/ParELAG_MfemBlockOperator.hpp"
 #include "amge/HybridHdivL2.hpp"
+#include "linalg/dense/ParELAG_LDLCalculator.hpp"
 
 namespace parelag
 {
@@ -73,6 +74,66 @@ private:
 
     /// The solver to be used for solving the transformed system
     std::shared_ptr<SolverFactory> SolverFact_;
+};
+
+/// Auxiliary space preconditioner
+class AuxSpacePrec : public mfem::Solver
+{
+public:
+    /// dofs are in true dofs numbering, aux_map: from orginal to aux space
+    AuxSpacePrec(ParallelCSRMatrix &op,
+                 std::unique_ptr<ParallelCSRMatrix> coarse_map);
+
+    virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const;
+    virtual void SetOperator(const Operator &op) { }
+
+private:
+    ParallelCSRMatrix& op_;
+    std::unique_ptr<ParallelCSRMatrix> aux_map_;
+    std::unique_ptr<ParallelCSRMatrix> aux_op_;
+    std::unique_ptr<mfem::HypreBoomerAMG> aux_solver_;
+    std::unique_ptr<mfem::HypreSmoother> smoother_;
+};
+
+/// assuming symmetric problems
+class pMultigrid : public mfem::Solver
+{
+public:
+    /// all inputs are in true dofs numbering
+    pMultigrid(ParallelCSRMatrix& op,
+               const std::vector<mfem::Array<int> >& local_dofs,
+               const mfem::Vector& scaling);
+
+    virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const;
+    virtual void SetOperator(const mfem::Operator& op) {}
+
+private:
+    mutable int level;
+    std::unique_ptr<mfem::HypreBoomerAMG> coarse_prec_;
+    std::vector<mfem::SparseMatrix> Ps_;
+    std::vector<std::unique_ptr<ParallelCSRMatrix>> ops_;
+    std::vector<std::unique_ptr<mfem::Solver>> solvers_;
+};
+
+class PCG : public mfem::Solver
+{
+public:
+    PCG(std::unique_ptr<ParallelCSRMatrix> op,
+        std::unique_ptr<mfem::Solver> prec,
+        ParameterList &params);
+
+    virtual void Mult(const mfem::Vector& x, mfem::Vector& y) const
+    {
+        cg_.Mult(x, y);
+    }
+
+    virtual void SetOperator(const mfem::Operator& op) {}
+    int GetNumIters() const { return cg_.GetNumIterations(); }
+
+private:
+    std::unique_ptr<ParallelCSRMatrix> op_;
+    std::unique_ptr<mfem::Solver> prec_;
+    mfem::CGSolver cg_;
 };
 
 }// namespace parelag

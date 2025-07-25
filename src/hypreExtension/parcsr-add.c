@@ -20,7 +20,7 @@
 #include "hypreExtension.hpp"
 
 /*--------------------------------------------------------------------------
- * hypre_ParCSRMatrixAdd
+ * parelag_ParCSRMatrixAdd
  *
  * Add two ParCSR matrices: C = A + B.
  *--------------------------------------------------------------------------*/

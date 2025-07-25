@@ -52,8 +52,8 @@ public:
     // This function assumes the offsets of RecoveredSol have been defined
     void RecoverOriginalSolution(const mfem::Vector & HybridSol,
                                  mfem::BlockVector & RecoveredSol);
-    mfem::SparseMatrix * GetHybridSystem() { return HybridSystem.get(); }
-    DofHandler * GetDofMultiplier() { return dofMultiplier.get(); }
+    const mfem::SparseMatrix& GetHybridSystem() const { return *HybridSystem; }
+    const DofHandler& GetDofMultiplier() const { return *dofMultiplier; }
 
     // So returning the address to a private data member is a good
     // idea? Ok.

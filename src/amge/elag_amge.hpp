@@ -24,5 +24,6 @@
 #include "ElementalMatricesContainer.hpp"
 #include "HybridHdivL2.hpp"
 #include "LocalSpectralTargets.hpp"
+#include "SequenceHierarchy.hpp"
 
 #endif // ELAG_AMGE_HPP_

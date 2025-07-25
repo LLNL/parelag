@@ -25,13 +25,27 @@ MetisGraphPartitioner::MetisGraphPartitioner()
 {
     options = new int[METIS_NOPTIONS];
     METIS_SetDefaultOptions(options);
-    options[METIS_OPTION_CONTIG] = 1;
+    options[METIS_OPTION_CONTIG] = 0;
     setDefaultUnbalanceToll();
 }
 
 MetisGraphPartitioner::~MetisGraphPartitioner()
 {
     delete[] options;
+}
+
+void MetisGraphPartitioner::setParELAGDefaultFlags(int coarsening_factor)
+{
+    const int flag = coarsening_factor <= 8 ? RECURSIVE : KWAY;
+    setFlags(flag);
+}
+
+void MetisGraphPartitioner::setParELAGDefaultMetisOptions()
+{
+    setOption(METIS_OPTION_SEED, 0);// Fix the seed
+    setOption(METIS_OPTION_CONTIG, 1);// Contiguous partitions
+    setOption(METIS_OPTION_MINCONN, 1);
+    setUnbalanceToll(1.05);
 }
 
 void MetisGraphPartitioner::doPartition(const Table & table,
@@ -652,6 +666,31 @@ void build_partitioning_from_table(int nrows,
         for( ; jcol != end; ++jcol)
             partitioning[*jcol] = i;
     }
+}
+
+void DFS(int current_node, const mfem::SparseMatrix& adj_mat,
+         mfem::Array<int>& visited)
+{
+   visited[current_node] = 1;
+   for (int j = 0; j < adj_mat.RowSize(current_node); ++j)
+   {
+      const int neighbor = adj_mat.GetRowColumns(current_node)[j];
+      if (visited[neighbor] == 0)
+      {
+         DFS(neighbor, adj_mat, visited);
+      }
+   }
+}
+
+int IsConnected(const mfem::SparseMatrix& adj_mat)
+{
+    mfem::Array<int> visited(adj_mat.NumRows());
+    visited = 0;
+    if (adj_mat.NumRows() > 0)
+    {
+        DFS(0, adj_mat, visited);
+    }
+    return visited.Sum() == visited.Size();
 }
 
 }//namespace parelag

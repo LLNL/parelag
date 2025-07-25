@@ -17,6 +17,7 @@ list(APPEND SRCS
   connectedComponents.cpp
   minimalIntersectionSet.cpp
   transpose.cpp
+  Redistributor.cpp
   )
 
 list(APPEND HDRS
@@ -29,6 +30,7 @@ list(APPEND HDRS
   elag_structures.hpp
   minimalIntersectionSet.hpp
   transpose.hpp
+  Redistributor.hpp
   )
 
 convert_filenames_to_full_paths(SRCS)

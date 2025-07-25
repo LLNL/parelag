@@ -94,6 +94,8 @@ public:
             _do_print_final_paragraph();
     }
 
+    int GetNumIters() const { return Solver_->GetNumIterations(); }
+
 private:
 
     /** \brief Print convergence information to std::cout. */

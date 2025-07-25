@@ -22,6 +22,7 @@
 #include "utilities/MemoryUtils.hpp"
 #include "utilities/mpiUtils.hpp"
 #include "utilities/Trace.hpp"
+#include "structures/Redistributor.hpp"
 
 // for book's algorithm in topology coarsening
 #include "linalg/utilities/ParELAG_SubMatrixExtraction.hpp"
@@ -827,6 +828,51 @@ AgglomeratedTopology::CoarsenLocalPartitioning(
     return CoarseTopology;
 }
 
+#ifdef ParELAG_ENABLE_MATRED
+std::shared_ptr<AgglomeratedTopology>
+AgglomeratedTopology::Coarsen(Redistributor& redistributor,
+                              MetisGraphPartitioner& partitioner,
+                              int coarsening_factor, bool check_topology,
+                              bool preserve_material_interfaces)
+{
+   // Coarsen redist_topo
+   auto& redist_topo = redistributor.GetRedistributedTopology();
+   const int num_local_redist_elems = redist_topo.GetNumberLocalEntities(ELEMENT);
+   Array<int> partitioning(num_local_redist_elems);
+   if (num_local_redist_elems > 0)
+   {
+      int num_partitions = max(num_local_redist_elems / coarsening_factor, 1);
+      auto elem_elem = redist_topo.LocalElementElementTable();
+      PARELAG_ASSERT_DEBUG(IsConnected(*elem_elem));
+      partitioner.setParELAGDefaultFlags(num_partitions);
+      partitioner.doPartition(*elem_elem, num_partitions, partitioning);
+   }
+
+   const int coarsefaces_algo = this->Dimensions() == 3 ? 2 : 0;
+   auto coarse_redist_topo = redist_topo.CoarsenLocalPartitioning(
+            partitioning, check_topology, preserve_material_interfaces, coarsefaces_algo);
+
+   coarse_redist_topo->BuildConnectivity();
+
+   // store intergrid operators
+   this->globalAgglomeration = true;
+   ATrueEntity_trueEntity.resize(nCodim_+1);
+   for (int i = 0; i < nCodim_+1; ++i)
+   {
+      auto& redAE_redTAE = coarse_redist_topo->EntityTrueEntity(i);
+      auto& redE_redTE = redist_topo.EntityTrueEntity(i);
+      auto redTAE_redTE = Assemble(redAE_redTAE, redist_topo.AEntityEntity(i), redE_redTE);
+      ATrueEntity_trueEntity[i].reset(
+               ParMult(redTAE_redTE.get(), &redistributor.TrueEntityRedistribution(i), true));
+   }
+
+   coarse_redist_topo->FinerTopology_ = shared_from_this();
+   CoarserTopology_ = coarse_redist_topo;
+   redist_topo.CoarserTopology_ = coarse_redist_topo;
+
+   return coarse_redist_topo;
+}
+#endif // ParELAG_ENABLE_MATRED
 
 #if 0
 // Input: fec = coarse level Finite-element collection

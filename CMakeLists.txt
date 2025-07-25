@@ -151,6 +151,10 @@ option(${PROJECT_NAME}_ENABLE_PETSC
   "Should Petsc content be enabled?"
   OFF)
 
+option(${PROJECT_NAME}_ENABLE_MATRED
+  "Should MATRED content be enabled?"
+  OFF)
+
 # On massively distributed systems on which it may be best/required to
 # use static executables, this option should be enabled to "force"
 # compilers to link everything as statically as possible.
@@ -383,6 +387,15 @@ if (${PROJECT_NAME}_ENABLE_STRUMPACK)
   endif()
 endif()
 
+# Look for MATRED if enabled
+if (${PROJECT_NAME}_ENABLE_MATRED)
+  if (CMAKE_CXX_STANDARD LESS 17)
+    set(CMAKE_CXX_STANDARD 17)
+  endif()
+  find_package(MATRED REQUIRED)
+  include_directories(${MATRED_INCLUDE_DIRS})
+endif()
+
 #
 # Build the TPL_LIBRARIES LIST
 #
@@ -396,6 +409,7 @@ list(APPEND TPL_LIBRARIES ${SCALAPACK_LIBRARIES})
 list(APPEND TPL_LIBRARIES ${SCOTCH_LIBRARIES})
 list(APPEND TPL_LIBRARIES ${ParMETIS_LIBRARIES})
 list(APPEND TPL_LIBRARIES ${METIS_LIBRARIES})
+list(APPEND TPL_LIBRARIES ${MATRED_LIBRARIES})
 list(APPEND TPL_LIBRARIES ${LAPACK_LIBRARIES})
 list(APPEND TPL_LIBRARIES ${BLAS_LIBRARIES})
 

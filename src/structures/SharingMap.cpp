@@ -453,13 +453,20 @@ void SharingMap::SetUp(SerialCSRMatrix & e_AE, SharingMap & e_Te)
     resetHypreParVectors();
     storeSharedEntitiesIds();
 
-    elag_assert( DebugCheck() == 0 );
+    // TODO CLS(1/21/2021): hypre_ParCSRMatrixCompare does not work with newer
+    // version of hypre (some issue with big_j), so I commented it out for now.
+//    elag_assert( DebugCheck() == 0 );
 }
 
 int SharingMap::DebugCheck()
 {
     PARELAG_ASSERT(entity_trueEntity);
     PARELAG_ASSERT(entity_trueEntity_entity);
+
+
+    // TODO (CSL 03/10/21): seg fault when accessing the j array
+    // temporarily disable the debug check
+    return 0;
 
 #ifdef ELAG_DEBUG
     hypre_ParCSRMatrix * h_e_tE_e = *entity_trueEntity_entity;
@@ -740,6 +747,17 @@ int SharingMap::IgnoreNonLocal(const Vector & data, Vector & trueData) const
     return ierr;
 }
 
+int SharingMap::IgnoreNonLocal(const MultiVector & data, MultiVector & trueData) const
+{
+    Vector local_view, true_view;
+    for(int i = 0; i < data.NumberOfVectors(); ++i)
+    {
+        const_cast<MultiVector &>(data).GetVectorView(i, local_view);
+        trueData.GetVectorView(i, true_view);
+        IgnoreNonLocal(local_view, true_view);
+    }
+}
+
 int SharingMap::Assemble(const Array<int> & data, Array<int> & trueData) const
 {
     elag_assert(GetTrueLocalSize() == trueData.Size());
@@ -775,6 +793,24 @@ int SharingMap::Assemble(const Vector & data, Vector & trueData) const
 
     hypre_VectorData(hypre_ParVectorLocalVector(xTrue_)) = nullptr;
     hypre_VectorData(hypre_ParVectorLocalVector(x_))     = nullptr;
+
+    return ierr;
+}
+
+int SharingMap::DisAssemble(const Vector & trueData, Vector & data) const
+{
+    hypre_VectorData(hypre_ParVectorLocalVector(xTrue_)) = trueData.GetData();
+    hypre_VectorData(hypre_ParVectorLocalVector(x_))     = data.GetData();
+
+    hypre_ParCSRMatrix * h_e_tE = *entity_trueEntity;
+    hypre_CSRMatrix * diag = hypre_ParCSRMatrixDiag(h_e_tE);
+
+    int ierr = hypre_CSRMatrixMatvec(
+        1.,diag,hypre_ParVectorLocalVector(xTrue_),
+        0.,hypre_ParVectorLocalVector(x_));
+
+    hypre_VectorData( hypre_ParVectorLocalVector(xTrue_) ) = nullptr;
+    hypre_VectorData( hypre_ParVectorLocalVector(x_) )     = nullptr;
 
     return ierr;
 }

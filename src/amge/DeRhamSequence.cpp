@@ -25,6 +25,7 @@
 #include "structures/SharedEntityCommunication.hpp"
 #include "utilities/MemoryUtils.hpp"
 #include "utilities/mpiUtils.hpp"
+#include "structures/Redistributor.hpp"
 
 #include <cmath>
 
@@ -691,6 +692,35 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
     return coarser_sequence;
 }
 
+#ifdef ParELAG_ENABLE_MATRED
+std::shared_ptr<DeRhamSequence>
+DeRhamSequence::Coarsen(Redistributor& redistributor)
+{
+   auto redist_sequence = redistributor.Redistribute(*this);
+   auto coarser_sequence = redist_sequence->Coarsen();
+
+   // Update the weak_ptrs
+   CoarserSequence_ = coarser_sequence;
+   coarser_sequence->FinerSequence_ = shared_from_this();
+
+   trueP_.resize(nForms_);
+   truePi_.resize(nForms_);
+   for (int jform = jformStart_; jform < nForms_; jform++)
+   {
+      auto& redTD_tD = redistributor.TrueDofRedistribution(jform);
+      unique_ptr<ParallelCSRMatrix> tD_redTD(redTD_tD.Transpose());
+
+      auto redist_trueP = redist_sequence->ComputeTrueP(jform);
+      trueP_[jform] = Mult(*tD_redTD, *redist_trueP);
+
+      auto redist_truePi = redist_sequence->ComputeTruePi(jform);
+      truePi_[jform] = Mult(*redist_truePi, redTD_tD);
+   }
+
+   return coarser_sequence;
+}
+#endif // ParELAG_ENABLE_MATRED
+
 void DeRhamSequence::CheckInvariants()
 {
     CheckCoarseMassMatrix();
@@ -1117,6 +1147,12 @@ DeRhamSequence::ComputeTrueM(int jform, Vector & elemMatrixScaling)
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTrueP(int jform) const
 {
+    PARELAG_ASSERT((trueP_.size() && trueP_[jform]) || P_[jform]);
+    if (trueP_.size() && trueP_[jform])
+    {
+        return ToUnique(mfem::Add(1.0, *trueP_[jform], 0.0, *trueP_[jform]));
+    }
+
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
@@ -1145,6 +1181,35 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
+    if (trueP_.size())
+    {
+        PARELAG_ASSERT(trueP_[jform]);
+        unique_ptr<ParallelCSRMatrix> truePT(trueP_[jform]->Transpose());
+        Array<int> marker(truePT->NumRows());
+        marker = 0;
+        const int num_marked =
+              coarser_sequence->Dof_[jform]->MarkDofsOnSelectedBndr(ess_label, marker);
+
+        auto dof_sharingmap = coarser_sequence->Dof_[jform]->GetDofTrueDof();
+        SerialCSRMatrix dof_trueDof_diag;
+        dof_sharingmap.get_entity_trueEntity()->GetDiag(dof_trueDof_diag);
+
+        Array<int> true_marker(num_marked);
+        int count = 0;
+        for (int i = 0 ; i < marker.Size(); ++i)
+        {
+            if (marker[i])
+            {
+                PARELAG_ASSERT_DEBUG(dof_sharingmap.IsShared(i) == 0);
+                const int true_dof = dof_trueDof_diag.GetRowColumns(i)[0];
+                true_marker[count++] = true_dof;
+            }
+        }
+
+        truePT->EliminateRows(true_marker);
+        return unique_ptr<ParallelCSRMatrix>(truePT->Transpose());
+    }
+
     auto Pj = GetP(jform, ess_label);
     return IgnoreNonLocalRange(
         Dof_[jform]->GetDofTrueDof(),
@@ -1154,6 +1219,12 @@ DeRhamSequence::ComputeTrueP(int jform, Array<int> & ess_label) const
 
 unique_ptr<ParallelCSRMatrix> DeRhamSequence::ComputeTruePi(int jform)
 {
+    PARELAG_ASSERT((truePi_.size() && truePi_[jform]) || Pi_[jform]);
+    if (truePi_.size() && truePi_[jform])
+    {
+        return ToUnique(mfem::Add(1.0, *truePi_[jform], 0.0, *truePi_[jform]));
+    }
+
     auto coarser_sequence = CoarserSequence_.lock();
     PARELAG_ASSERT(coarser_sequence);
 
@@ -1513,7 +1584,8 @@ int DeRhamSequence::EstimateUpperBoundNCoarseDof(int jform)
         }
     }
 
-    elag_assert(ret > 0);
+    // TODO: it's okay that ret == 0? (it will be the case in redistributed sequence)
+//    elag_assert(ret > 0);
     return ret;
 }
 
@@ -3298,6 +3370,13 @@ void DeRhamSequenceAlg::show(int jform, MultiVector & v)
 {
     auto finer_sequence = FinerSequence_.lock();
     PARELAG_ASSERT(finer_sequence);
+
+    PARELAG_TEST_FOR_EXCEPTION(
+             !finer_sequence->GetP(jform),
+             std::runtime_error,
+             "P_[" << jform << "] is not available, this can happen when some"
+             " of the levels has been redistributed during coarsening. "
+             "Use ShowTrueData instead.");
 
     MultiVector vFine(v.NumberOfVectors(), finer_sequence->GetP(jform)->Size() );
     MatrixTimesMultiVector(*(finer_sequence->GetP(jform) ), v, vFine);
