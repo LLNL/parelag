@@ -19,6 +19,8 @@
 #include "utilities/mpiUtils.hpp"
 #include "hypreExtension/hypreExtension.hpp"
 
+#ifdef ParELAG_ENABLE_MATRED
+
 namespace parelag
 {
 using namespace mfem;
@@ -554,3 +556,5 @@ Redistributor::Redistribute(const DeRhamSequence& sequence)
 }
 
 } // namespace parelag
+
+#endif // ParELAG_ENABLE_MATRED

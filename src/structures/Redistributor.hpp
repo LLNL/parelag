@@ -28,7 +28,7 @@
 //#include "amge/DofHandler.hpp"
 #include "amge/DeRhamSequence.hpp"
 
-
+#ifdef ParELAG_ENABLE_MATRED
 #include "matred.hpp"
 
 namespace parelag
@@ -113,5 +113,7 @@ public:
 };
 
 } // namespace parelag
+
+#endif // ParELAG_ENABLE_MATRED
 
 #endif // _REDISTRIBUTOR_HPP_

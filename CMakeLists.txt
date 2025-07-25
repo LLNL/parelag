@@ -389,6 +389,9 @@ endif()
 
 # Look for MATRED if enabled
 if (${PROJECT_NAME}_ENABLE_MATRED)
+  if (CMAKE_CXX_STANDARD LESS 17)
+    set(CMAKE_CXX_STANDARD 17)
+  endif()
   find_package(MATRED REQUIRED)
   include_directories(${MATRED_INCLUDE_DIRS})
 endif()

@@ -828,6 +828,7 @@ AgglomeratedTopology::CoarsenLocalPartitioning(
     return CoarseTopology;
 }
 
+#ifdef ParELAG_ENABLE_MATRED
 std::shared_ptr<AgglomeratedTopology>
 AgglomeratedTopology::Coarsen(Redistributor& redistributor,
                               MetisGraphPartitioner& partitioner,
@@ -871,6 +872,7 @@ AgglomeratedTopology::Coarsen(Redistributor& redistributor,
 
    return coarse_redist_topo;
 }
+#endif // ParELAG_ENABLE_MATRED
 
 #if 0
 // Input: fec = coarse level Finite-element collection

@@ -31,7 +31,9 @@
 namespace parelag
 {
 
+#ifdef ParELAG_ENABLE_MATRED
 class Redistributor;
+#endif // ParELAG_ENABLE_MATRED
 
 //! @class
 /*!
@@ -373,6 +375,7 @@ public:
         bool checkTopology,
         bool preserveMaterialInterfaces);
 
+#ifdef ParELAG_ENABLE_MATRED
     /// Coarsen the redistributed topology locally. Construct inter-level
     /// entity relations using the information given by redistributor.
     std::shared_ptr<AgglomeratedTopology> Coarsen(
@@ -380,6 +383,7 @@ public:
           MetisGraphPartitioner& partitioner,
           int coarsening_factor, bool check_topology,
           bool preserve_material_interfaces);
+#endif // ParELAG_ENABLE_MATRED
 
     /// Split agglomerates that are deemed "bad" into agglomerates
     /// that are... "not bad"? (Hopefully)

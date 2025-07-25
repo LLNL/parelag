@@ -120,6 +120,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
         seq_[l]->SetSVDTol(SVD_tol);
 
         const int num_local_elems = topo_[l]->GetNumberLocalEntities(elem_t_);
+#ifdef ParELAG_ENABLE_MATRED
         const int min_num_local_elems =
                 MinNonzeroNumLocalElements(l, num_local_elems_threshold);
 
@@ -147,6 +148,7 @@ void SequenceHierarchy::Build(const Array<int>& num_elements)
             num_nonempty_procs = num_redist_procs;
         }
         else
+#endif // ParELAG_ENABLE_MATRED
         {
             Array<int> partition(num_local_elems);
             if (num_local_elems > 0)

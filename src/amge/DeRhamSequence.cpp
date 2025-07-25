@@ -692,6 +692,7 @@ std::shared_ptr<DeRhamSequence> DeRhamSequence::Coarsen()
     return coarser_sequence;
 }
 
+#ifdef ParELAG_ENABLE_MATRED
 std::shared_ptr<DeRhamSequence>
 DeRhamSequence::Coarsen(Redistributor& redistributor)
 {
@@ -718,6 +719,7 @@ DeRhamSequence::Coarsen(Redistributor& redistributor)
 
    return coarser_sequence;
 }
+#endif // ParELAG_ENABLE_MATRED
 
 void DeRhamSequence::CheckInvariants()
 {

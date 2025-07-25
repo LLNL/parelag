@@ -263,7 +263,9 @@ public:
     /// User is responsible for deleting the created object.
     std::shared_ptr<DeRhamSequence> Coarsen();
 
+#ifdef ParELAG_ENABLE_MATRED
     std::shared_ptr<DeRhamSequence> Coarsen(Redistributor& redistributor);
+#endif // ParELAG_ENABLE_MATRED
 
     /// Fills in dofAgg.
     void AgglomerateDofs();
